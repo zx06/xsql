@@ -1,6 +1,6 @@
 # RFC 0001: SSH Proxy 采用 Driver Dial 优先
 
-Status: Accepted (Not Implemented)
+Status: Implemented
 
 ## 摘要
 xsql 的 SSH proxy 第一阶段采用 **driver 自定义 dial + sshClient.Dial** 的方式为 MySQL/PostgreSQL 建立到 DB 的网络连接，不开启本地监听端口；当未来扩展到不支持 dial hook 的 driver/场景时，提供本地端口转发作为回退方案。

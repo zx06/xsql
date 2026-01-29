@@ -1,0 +1,167 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        go-version: ['1.24']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Test (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+
+      - name: Test (Windows)
+        if: runner.os == 'Windows'
+        run: go test -v -race "-coverprofile=coverage.txt" ./...
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.txt
+          flags: unittests
+          name: codecov-${{ matrix.os }}
+          fail_ci_if_error: false
+          verbose: true
+
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: testdb
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Run integration tests
+        env:
+          XSQL_TEST_MYSQL_DSN: "root:root@tcp(127.0.0.1:3306)/testdb"
+          XSQL_TEST_PG_DSN: "postgres://postgres:postgres@127.0.0.1:5432/testdb?sslmode=disable"
+        run: go test -v -tags=integration -coverprofile=coverage-integration.txt -covermode=atomic ./tests/integration/...
+
+      - name: Run E2E tests
+        env:
+          XSQL_TEST_MYSQL_DSN: "root:root@tcp(127.0.0.1:3306)/testdb"
+          XSQL_TEST_PG_DSN: "postgres://postgres:postgres@127.0.0.1:5432/testdb?sslmode=disable"
+        run: go test -v -tags=e2e ./tests/e2e/...
+
+      - name: Upload integration coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage-integration.txt
+          flags: integration
+          name: codecov-integration
+          fail_ci_if_error: false
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.8.0
+
+  build:
+    name: Build binaries
+    runs-on: ubuntu-latest
+    needs: [test, integration, lint]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Build Linux
+        run: GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o xsql-linux-amd64 ./cmd/xsql
+
+      - name: Build Windows
+        run: GOOS=windows GOARCH=amd64 go build -ldflags "-s -w" -o xsql-windows-amd64.exe ./cmd/xsql
+
+      - name: Build macOS (amd64)
+        run: GOOS=darwin GOARCH=amd64 go build -ldflags "-s -w" -o xsql-darwin-amd64 ./cmd/xsql
+
+      - name: Build macOS (arm64)
+        run: GOOS=darwin GOARCH=arm64 go build -ldflags "-s -w" -o xsql-darwin-arm64 ./cmd/xsql
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: xsql-*
+          retention-days: 7
