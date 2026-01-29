@@ -1,6 +1,6 @@
 package config
 
-// File 表示 xsql.yaml 的配置结构（第一阶段仅定义 profiles）。
+// File 表示 xsql.yaml 的配置结构。
 // 约束：配置优先级为 CLI > ENV > Config。
 type File struct {
 	Profiles map[string]Profile `yaml:"profiles"`
@@ -8,12 +8,32 @@ type File struct {
 
 type Profile struct {
 	Format string `yaml:"format"`
+
+	// DB 连接
+	DB       string `yaml:"db"`  // mysql | pg
+	DSN      string `yaml:"dsn"` // 原生 DSN（优先）
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"` // 支持 keyring:xxx 引用
+	Database string `yaml:"database"`
+	ReadOnly bool   `yaml:"read_only"`
+
+	// SSH proxy（可选）
+	SSHHost           string `yaml:"ssh_host"`
+	SSHPort           int    `yaml:"ssh_port"`
+	SSHUser           string `yaml:"ssh_user"`
+	SSHIdentityFile   string `yaml:"ssh_identity_file"`
+	SSHPassphrase     string `yaml:"ssh_passphrase"` // 支持 keyring:xxx 引用
+	SSHKnownHostsFile string `yaml:"ssh_known_hosts_file"`
+	SSHSkipHostKey    bool   `yaml:"ssh_skip_host_key"` // 极不推荐
 }
 
 type Resolved struct {
 	ConfigPath  string
 	ProfileName string
 	Format      string
+	Profile     Profile // 完整 profile 供 query 使用
 }
 
 type Options struct {

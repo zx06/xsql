@@ -61,14 +61,18 @@ func Resolve(opts Options) (Resolved, *errors.XError) {
 		}
 	}
 
-	// 3) 合并 format：--format > XSQL_FORMAT > profile.format > auto
-	format := "auto"
+	// 3) 获取完整 profile
+	var selectedProfile Profile
 	if profile != "" {
 		if p, ok := cfg.Profiles[profile]; ok {
-			if p.Format != "" {
-				format = p.Format
-			}
+			selectedProfile = p
 		}
+	}
+
+	// 4) 合并 format：--format > XSQL_FORMAT > profile.format > auto
+	format := "auto"
+	if selectedProfile.Format != "" {
+		format = selectedProfile.Format
 	}
 	if opts.EnvFormat != "" {
 		format = opts.EnvFormat
@@ -77,5 +81,5 @@ func Resolve(opts Options) (Resolved, *errors.XError) {
 		format = opts.CLIFormat
 	}
 
-	return Resolved{ConfigPath: cfgPath, ProfileName: profile, Format: format}, nil
+	return Resolved{ConfigPath: cfgPath, ProfileName: profile, Format: format, Profile: selectedProfile}, nil
 }
