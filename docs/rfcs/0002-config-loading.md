@@ -1,6 +1,6 @@
 # RFC 0002: Config 文件加载与 Profile 选择
 
-Status: Draft
+Status: Implemented
 
 ## 摘要
 为 xsql 增加第一阶段的配置文件能力：默认从固定路径查找 YAML 配置，并支持通过 `--config` 指定路径；支持 `profiles.<name>` 多 profile，并通过 `--profile` / `XSQL_PROFILE` 选择；所有配置项遵循 **CLI > ENV > Config** 优先级。

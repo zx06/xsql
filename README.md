@@ -8,7 +8,67 @@ AI-first 的跨数据库 CLI 工具（Golang）。
 - 支持 SSH proxy（driver 自定义 dial，必要时回退本地端口转发）。
 
 ## 状态
-- 当前处于脚手架阶段：已建立文档/规范（AI-first 契约、RFC 流程等），并已实现最小 CLI 骨架（`xsql spec` / `xsql version`）用于验证输出与错误契约。
+- 已实现核心功能：
+  - `xsql query` - 执行只读 SQL 查询（支持 MySQL / PostgreSQL）
+  - `xsql spec` - 导出 tool spec（供 AI/agent 自动发现）
+  - `xsql version` - 版本信息
+- 支持 SSH tunnel（通过 driver dial hook）
+- 支持 keyring 密钥管理
+- 支持 YAML 配置文件 + profile
+
+## 快速开始
+
+```bash
+# 安装
+go install github.com/zx06/xsql/cmd/xsql@latest
+
+# 创建配置文件 xsql.yaml
+cat > xsql.yaml << 'EOF'
+profiles:
+  dev:
+    db: mysql
+    host: 127.0.0.1
+    port: 3306
+    user: root
+    password: "keyring:xsql/dev/password"  # 或明文（需 --allow-plaintext）
+    database: test
+    read_only: true
+EOF
+
+# 执行查询
+xsql query "SELECT 1" --profile dev --format json
+```
+
+### 通过 SSH tunnel 连接
+
+```yaml
+profiles:
+  prod:
+    db: pg
+    host: db.internal
+    port: 5432
+    user: app
+    password: "keyring:xsql/prod/password"
+    database: mydb
+    read_only: true
+    ssh_host: jump.example.com
+    ssh_user: admin
+    ssh_identity_file: ~/.ssh/id_ed25519
+```
+
+## 输出格式
+
+所有机器输出遵循统一契约：
+
+```json
+// 成功
+{"ok":true,"schema_version":1,"data":{...}}
+
+// 失败
+{"ok":false,"schema_version":1,"error":{"code":"XSQL_...","message":"...","details":{...}}}
+```
+
+支持格式：`--format json|yaml|table|csv|auto`（非 TTY 默认 json）
 
 ## 文档索引
 - 设计总览：`docs/architecture.md`
@@ -21,6 +81,3 @@ AI-first 的跨数据库 CLI 工具（Golang）。
 - 开发指南：`docs/dev.md`
 - AI-first 约定：`docs/ai.md`
 - 设计变更（RFC）：`docs/rfcs/README.md`
-
-## 规划
-详细实施计划见 Copilot session 的 `plan.md`（不提交到仓库）。
