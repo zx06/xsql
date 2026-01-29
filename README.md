@@ -8,7 +8,7 @@ AI-first 的跨数据库 CLI 工具（Golang）。
 - 支持 SSH proxy（driver 自定义 dial，必要时回退本地端口转发）。
 
 ## 状态
-- 当前处于脚手架阶段：已建立文档/规范（AI-first 契约、RFC 流程等），代码实现尚未开始。
+- 当前处于脚手架阶段：已建立文档/规范（AI-first 契约、RFC 流程等），并已实现最小 CLI 骨架（`xsql spec` / `xsql version`）用于验证输出与错误契约。
 
 ## 文档索引
 - 设计总览：`docs/architecture.md`
