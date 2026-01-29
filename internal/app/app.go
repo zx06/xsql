@@ -22,6 +22,8 @@ func (a App) BuildSpec() spec.Spec {
 				Name:        "spec",
 				Description: "Export tool spec for AI/agents",
 				Flags: []spec.FlagSpec{
+					{Name: "config", Default: "", Description: "Config file path (YAML); default: ./xsql.yaml or $HOME/.config/xsql/xsql.yaml"},
+					{Name: "profile", Env: "XSQL_PROFILE", Default: "", Description: "Profile name (config: profiles.<name>)"},
 					{Name: "format", Shorthand: "f", Env: "XSQL_FORMAT", Default: "auto", Description: "Output format: json|yaml|table|csv|auto"},
 				},
 			},
@@ -29,6 +31,8 @@ func (a App) BuildSpec() spec.Spec {
 				Name:        "version",
 				Description: "Print version information",
 				Flags: []spec.FlagSpec{
+					{Name: "config", Default: "", Description: "Config file path (YAML); default: ./xsql.yaml or $HOME/.config/xsql/xsql.yaml"},
+					{Name: "profile", Env: "XSQL_PROFILE", Default: "", Description: "Profile name (config: profiles.<name>)"},
 					{Name: "format", Shorthand: "f", Env: "XSQL_FORMAT", Default: "auto", Description: "Output format: json|yaml|table|csv|auto"},
 				},
 			},

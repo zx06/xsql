@@ -24,3 +24,7 @@
 
 ## 参数来源优先级
 - CLI > ENV > Config
+
+## 全局 flags（第一阶段）
+- `--config <path>`：显式指定 YAML 配置文件路径
+- `--profile <name>`：选择 profile（等价 ENV：`XSQL_PROFILE`）

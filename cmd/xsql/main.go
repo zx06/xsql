@@ -7,6 +7,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/zx06/xsql/internal/app"
+	"github.com/zx06/xsql/internal/config"
 	"github.com/zx06/xsql/internal/errors"
 	"github.com/zx06/xsql/internal/output"
 )
@@ -22,21 +23,45 @@ func run() int {
 	a := app.New(version)
 	w := output.New(os.Stdout, os.Stderr)
 
-	var formatStr string
+	var (
+		formatStr  string
+		configStr  string
+		profileStr string
+	)
 	root := &cobra.Command{
 		Use:           "xsql",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			// CLI > ENV > Config（本阶段仅落地 format 的 ENV 读取）
-			if !cmd.Flags().Changed("format") {
-				if v := os.Getenv("XSQL_FORMAT"); v != "" {
-					formatStr = v
-				}
+			// CLI > ENV > Config
+			formatSet := cmd.Flags().Changed("format")
+			profileSet := cmd.Flags().Changed("profile")
+			configSet := cmd.Flags().Changed("config")
+			if configSet && configStr == "" {
+				return errors.New(errors.CodeCfgInvalid, "config path is empty", nil)
 			}
+
+			resolved, xe := config.Resolve(config.Options{
+				ConfigPath:    configStr,
+				CLIProfile:    profileStr,
+				CLIProfileSet: profileSet,
+				CLIFormat:     formatStr,
+				CLIFormatSet:  formatSet,
+				EnvProfile:    os.Getenv("XSQL_PROFILE"),
+				EnvFormat:     os.Getenv("XSQL_FORMAT"),
+				WorkDir:       "",
+				HomeDir:       "",
+			})
+			if xe != nil {
+				return xe
+			}
+			formatStr = resolved.Format
+			profileStr = resolved.ProfileName
 			return nil
 		},
 	}
+	root.PersistentFlags().StringVar(&configStr, "config", "", "Config file path (YAML); default: ./xsql.yaml or $HOME/.config/xsql/xsql.yaml")
+	root.PersistentFlags().StringVar(&profileStr, "profile", "", "Profile name (config: profiles.<name>)")
 	root.PersistentFlags().StringVarP(&formatStr, "format", "f", "auto", "Output format: json|yaml|table|csv|auto")
 
 	specCmd := &cobra.Command{

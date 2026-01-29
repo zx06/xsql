@@ -18,5 +18,12 @@
 3) 否则若为交互式 TTY → 提示输入（不回显）
 4) 否则报错
 
+## Config 文件（第一阶段）
+> 见 RFC：`docs/rfcs/0002-config-loading.md`
+
+- 格式：YAML
+- 默认查找：`./xsql.yaml`、`$HOME/.config/xsql/xsql.yaml`
+- 可通过 `--config <path>` 显式指定（不存在则报错）
+
 ## ENV 约定
 见 `docs/env.md`（统一前缀 `XSQL_`，以及推荐变量集合）。
