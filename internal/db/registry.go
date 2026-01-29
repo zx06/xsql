@@ -1,12 +1,29 @@
 package db
 
 import (
+	"context"
+	"database/sql"
 	"sync"
+
+	"github.com/zx06/xsql/internal/errors"
 )
 
-// Driver 是数据库驱动的最小抽象；第一阶段仅用于注册/发现。
-// 后续会扩展为 query/exec 与连接能力。
-type Driver interface{}
+// Driver 是数据库驱动的最小抽象。
+type Driver interface {
+	// Open 返回 *sql.DB；由具体 driver 实现连接参数解析。
+	Open(ctx context.Context, opts ConnOptions) (*sql.DB, *errors.XError)
+}
+
+// ConnOptions 是通用连接参数（由 config/CLI/ENV 合并而来）。
+type ConnOptions struct {
+	DSN      string // 原生 DSN（优先级最高）
+	Host     string
+	Port     int
+	User     string
+	Password string
+	Database string
+	Params   map[string]string // 额外参数
+}
 
 var (
 	mu      sync.RWMutex
