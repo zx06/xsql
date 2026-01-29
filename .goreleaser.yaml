@@ -60,26 +60,25 @@ release:
   prerelease: auto
   name_template: "v{{.Version}}"
 
-# TODO: Enable after creating homebrew-tap and scoop-bucket repos with proper tokens
-# brews:
-#   - repository:
-#       owner: zx06
-#       name: homebrew-tap
-#       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-#     directory: Formula
-#     homepage: "https://github.com/zx06/xsql"
-#     description: "AI-first cross-database CLI tool with SSH proxy support"
-#     license: "MIT"
-#     install: |
-#       bin.install "xsql"
-#     test: |
-#       system "#{bin}/xsql", "version"
+brews:
+  - repository:
+      owner: zx06
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/zx06/xsql"
+    description: "AI-first cross-database CLI tool with SSH proxy support"
+    license: "MIT"
+    install: |
+      bin.install "xsql"
+    test: |
+      system "#{bin}/xsql", "version"
 
-# scoops:
-#   - repository:
-#       owner: zx06
-#       name: scoop-bucket
-#       token: "{{ .Env.SCOOP_BUCKET_TOKEN }}"
-#     homepage: "https://github.com/zx06/xsql"
-#     description: "AI-first cross-database CLI tool with SSH proxy support"
-#     license: "MIT"
+scoops:
+  - repository:
+      owner: zx06
+      name: scoop-bucket
+      token: "{{ .Env.SCOOP_BUCKET_TOKEN }}"
+    homepage: "https://github.com/zx06/xsql"
+    description: "AI-first cross-database CLI tool with SSH proxy support"
+    license: "MIT"
