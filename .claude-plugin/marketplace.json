@@ -1,0 +1,27 @@
+{
+  "name": "xsql",
+  "owner": {
+    "name": "zx06",
+    "email": "zx06@github.com"
+  },
+  "metadata": {
+    "description": "AI-first cross-database CLI tool for executing read-only SQL queries on MySQL/PostgreSQL with SSH proxy support",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "xsql",
+      "source": "./",
+      "description": "Execute read-only SQL queries on MySQL/PostgreSQL databases via SSH proxy",
+      "version": "1.0.0",
+      "author": {
+        "name": "zx06"
+      },
+      "homepage": "https://github.com/zx06/xsql",
+      "repository": "https://github.com/zx06/xsql",
+      "license": "MIT",
+      "keywords": ["xsql", "sql", "mysql", "postgresql", "database", "cli", "ssh", "query"],
+      "category": "database"
+    }
+  ]
+}
