@@ -173,11 +173,8 @@ func run() int {
 				User:     p.User,
 				Password: password,
 				Database: p.Database,
+				Dialer:   sshClient, // SSH tunnel（nil 时走直连）
 			}
-
-			// TODO: 集成 SSH dial 到 driver（需要 driver 支持 dial hook）
-			// 本阶段先验证无 SSH 场景；SSH 集成需要修改 mysql/pg driver
-			_ = sshClient
 
 			conn, xe := drv.Open(ctx, connOpts)
 			if xe != nil {

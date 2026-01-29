@@ -3,10 +3,16 @@ package db
 import (
 	"context"
 	"database/sql"
+	"net"
 	"sync"
 
 	"github.com/zx06/xsql/internal/errors"
 )
+
+// Dialer 用于自定义网络连接（如 SSH tunnel）。
+type Dialer interface {
+	DialContext(ctx context.Context, network, addr string) (net.Conn, error)
+}
 
 // Driver 是数据库驱动的最小抽象。
 type Driver interface {
@@ -23,6 +29,7 @@ type ConnOptions struct {
 	Password string
 	Database string
 	Params   map[string]string // 额外参数
+	Dialer   Dialer            // 自定义 dialer（如 SSH tunnel）
 }
 
 var (
