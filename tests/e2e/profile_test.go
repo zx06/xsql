@@ -98,10 +98,15 @@ func TestProfile_List_YAML(t *testing.T) {
 		t.Fatalf("expected exit code 0, got %d", exitCode)
 	}
 
+	type profileInfo struct {
+		Name string `yaml:"name"`
+		DB   string `yaml:"db"`
+		Mode string `yaml:"mode"`
+	}
 	var resp struct {
 		OK   bool `yaml:"ok"`
 		Data struct {
-			Profiles []string `yaml:"profiles"`
+			Profiles []profileInfo `yaml:"profiles"`
 		} `yaml:"data"`
 	}
 	if err := yaml.Unmarshal([]byte(stdout), &resp); err != nil {
