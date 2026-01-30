@@ -40,3 +40,10 @@ func As(err error) (*XError, bool) {
 	}
 	return nil, false
 }
+
+func AsOrWrap(err error) *XError {
+	if xe, ok := As(err); ok {
+		return xe
+	}
+	return Wrap(CodeInternal, err.Error(), nil, err)
+}

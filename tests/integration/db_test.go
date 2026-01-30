@@ -103,7 +103,7 @@ func TestMySQLDriver_Query(t *testing.T) {
 	defer conn.Close()
 
 	// Test basic query
-	result, xe := db.Query(ctx, conn, "SELECT 1 as num, 'hello' as msg", db.QueryOptions{ReadOnly: true, DBType: "mysql"})
+	result, xe := db.Query(ctx, conn, "SELECT 1 as num, 'hello' as msg", db.QueryOptions{DBType: "mysql"})
 	if xe != nil {
 		t.Fatalf("query failed: %v", xe)
 	}
@@ -138,7 +138,7 @@ func TestMySQLDriver_ReadOnlyEnforcement(t *testing.T) {
 	defer conn.Close()
 
 	// Write query should be blocked
-	_, xe = db.Query(ctx, conn, "INSERT INTO test VALUES (1)", db.QueryOptions{ReadOnly: true, DBType: "mysql"})
+	_, xe = db.Query(ctx, conn, "INSERT INTO test VALUES (1)", db.QueryOptions{DBType: "mysql"})
 	if xe == nil {
 		t.Fatal("expected error for INSERT in read-only mode")
 	}
@@ -169,7 +169,7 @@ func TestPgDriver_Query(t *testing.T) {
 	defer conn.Close()
 
 	// Test basic query
-	result, xe := db.Query(ctx, conn, "SELECT 1 as num, 'hello' as msg", db.QueryOptions{ReadOnly: true, DBType: "pg"})
+	result, xe := db.Query(ctx, conn, "SELECT 1 as num, 'hello' as msg", db.QueryOptions{DBType: "pg"})
 	if xe != nil {
 		t.Fatalf("query failed: %v", xe)
 	}
@@ -204,7 +204,7 @@ func TestPgDriver_ReadOnlyEnforcement(t *testing.T) {
 	defer conn.Close()
 
 	// Write query should be blocked
-	_, xe = db.Query(ctx, conn, "INSERT INTO test VALUES (1)", db.QueryOptions{ReadOnly: true, DBType: "pg"})
+	_, xe = db.Query(ctx, conn, "INSERT INTO test VALUES (1)", db.QueryOptions{DBType: "pg"})
 	if xe == nil {
 		t.Fatal("expected error for INSERT in read-only mode")
 	}
@@ -235,7 +235,7 @@ func TestMySQLDriver_ComplexQuery(t *testing.T) {
 	defer conn.Close()
 
 	// Test SHOW statement
-	result, xe := db.Query(ctx, conn, "SHOW DATABASES", db.QueryOptions{ReadOnly: true, DBType: "pg"})
+	result, xe := db.Query(ctx, conn, "SHOW DATABASES", db.QueryOptions{DBType: "pg"})
 	if xe != nil {
 		t.Fatalf("SHOW DATABASES failed: %v", xe)
 	}
@@ -244,7 +244,7 @@ func TestMySQLDriver_ComplexQuery(t *testing.T) {
 	}
 
 	// Test EXPLAIN
-	result, xe = db.Query(ctx, conn, "EXPLAIN SELECT 1", db.QueryOptions{ReadOnly: true, DBType: "pg"})
+	result, xe = db.Query(ctx, conn, "EXPLAIN SELECT 1", db.QueryOptions{DBType: "pg"})
 	if xe != nil {
 		t.Fatalf("EXPLAIN failed: %v", xe)
 	}
@@ -275,7 +275,7 @@ func TestPgDriver_ComplexQuery(t *testing.T) {
 	defer conn.Close()
 
 	// Test system catalog query
-	result, xe := db.Query(ctx, conn, "SELECT datname FROM pg_database LIMIT 5", db.QueryOptions{ReadOnly: true, DBType: "pg"})
+	result, xe := db.Query(ctx, conn, "SELECT datname FROM pg_database LIMIT 5", db.QueryOptions{DBType: "pg"})
 	if xe != nil {
 		t.Fatalf("pg_database query failed: %v", xe)
 	}
@@ -284,7 +284,7 @@ func TestPgDriver_ComplexQuery(t *testing.T) {
 	}
 
 	// Test EXPLAIN
-	result, xe = db.Query(ctx, conn, "EXPLAIN SELECT 1", db.QueryOptions{ReadOnly: true, DBType: "pg"})
+	result, xe = db.Query(ctx, conn, "EXPLAIN SELECT 1", db.QueryOptions{DBType: "pg"})
 	if xe != nil {
 		t.Fatalf("EXPLAIN failed: %v", xe)
 	}

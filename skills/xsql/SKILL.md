@@ -36,6 +36,34 @@ xsql version
 
 ## Commands
 
+### `xsql mcp server`
+
+Start MCP (Model Context Protocol) server for AI assistant integration.
+
+The MCP server exposes xsql's database query capabilities as MCP tools, allowing AI assistants (like Claude Desktop) to query databases through the standard MCP protocol.
+
+**Available MCP Tools:**
+- `query` - Execute SQL queries (profile required)
+- `profile_list` - List all configured profiles
+- `profile_show` - Show profile details
+
+**Usage with Claude Desktop:**
+```json
+{
+  "mcpServers": {
+    "xsql": {
+      "command": "xsql",
+      "args": ["mcp", "server"],
+      "env": {
+        "XSQL_CONFIG": "/path/to/xsql.yaml"
+      }
+    }
+  }
+}
+```
+
+For detailed MCP integration information, see `docs/ai.md`.
+
 ### `xsql query <SQL>`
 
 Execute a SQL query. **Read-only by default** to prevent accidental data modification.

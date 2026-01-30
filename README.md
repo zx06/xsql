@@ -110,7 +110,24 @@ xsql query "<SQL>" -p <profile> -f json
 
 </details>
 
-### 方式三：AGENTS.md / Rules（Cursor/Windsurf）
+### 方式三：MCP Server（Claude Desktop 等）
+
+在 Claude Desktop 配置中添加 xsql MCP server：
+
+```json
+{
+  "mcpServers": {
+    "xsql": {
+      "command": "xsql",
+      "args": ["mcp", "server", "--config", "/path/to/xsql.yaml"]
+    }
+  }
+}
+```
+
+启动后，Claude 可以直接通过 MCP 协议查询数据库。
+
+### 方式四：AGENTS.md / Rules（Cursor/Windsurf）
 
 在项目根目录创建 `.cursor/rules` 或编辑 `AGENTS.md`：
 
@@ -135,6 +152,7 @@ xsql query "<SQL>" -p <profile> -f json
 | `xsql query <SQL>` | 执行 SQL 查询（默认只读） |
 | `xsql profile list` | 列出所有 profile |
 | `xsql profile show <name>` | 查看 profile 详情（密码脱敏） |
+| `xsql mcp server` | 启动 MCP Server（AI 助手集成） |
 | `xsql spec` | 导出 AI Tool Spec |
 | `xsql version` | 显示版本信息 |
 
@@ -191,6 +209,8 @@ profiles:
 | [配置指南](docs/config.md) | 配置文件格式和选项 |
 | [SSH 代理](docs/ssh-proxy.md) | SSH 隧道配置 |
 | [错误处理](docs/error-contract.md) | 错误码和退出码 |
+| [AI 集成](docs/ai.md) | MCP Server 和 AI 助手集成 |
+| [RFC 文档](docs/rfcs/) | 设计变更记录 |
 | [开发指南](docs/dev.md) | 贡献和开发说明 |
 
 ---

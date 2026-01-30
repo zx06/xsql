@@ -16,3 +16,36 @@
 
 ## 兼容性
 - 对 JSON 输出字段做版本化（`schema_version`），新字段只增不改；详细契约见 `docs/error-contract.md`。
+
+## MCP Server
+xsql 提供了 MCP (Model Context Protocol) Server 模式，允许 AI 助手通过标准 MCP 协议访问数据库查询能力。
+
+### 启动方式
+```bash
+xsql mcp server
+```
+
+### MCP Tools
+MCP Server 提供以下 tools：
+- **query**: 执行 SQL 查询（支持只读模式）
+- **profile_list**: 列出所有配置的 profiles
+- **profile_show**: 查看 profile 详情
+
+### 集成示例
+在 Claude Desktop 配置中添加：
+```json
+{
+  "mcpServers": {
+    "xsql": {
+      "command": "xsql",
+      "args": ["mcp", "server"],
+      "env": {
+        "XSQL_CONFIG": "/path/to/config.yaml"
+      }
+    }
+  }
+}
+```
+
+### 详细规范
+详见 `docs/cli-spec.md` 中的 `xsql mcp server` 命令说明。

@@ -21,6 +21,7 @@
 - `docs/db.md`
 - `docs/ssh-proxy.md`
 - `docs/ai.md`
+- `docs/rfcs/` - RFC 文档目录
 
 若实现与文档冲突：优先更新文档并说明原因，再实现。
 
@@ -37,6 +38,7 @@
 - `internal/config`：配置加载/合并/校验 + profile
 - `internal/secret`：keyring/加密/明文兼容
 - `internal/db`：driver registry + 执行引擎
+- `internal/mcp`：MCP Server 实现
 - `internal/ssh`：SSH proxy（driver dial/端口转发）+ ssh_config（可选）
 - `internal/output`：json/yaml/table/csv + 流式写
 - `internal/errors`：错误码/退出码/结构化错误

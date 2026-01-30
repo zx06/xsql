@@ -170,5 +170,65 @@ xsql profile show dev --format json
 | `csv` | 数据导出/表格 | 不包含，直接显示数据 |
 | `auto` | 自动选择 | TTY→table，否则→json |
 
+### `xsql mcp server`
+
+启动 MCP (Model Context Protocol) server，提供数据库查询能力给 AI 助手。
+
+```bash
+# 启动 MCP server（使用 stdio 传输）
+xsql mcp server
+
+# 指定配置文件
+xsql mcp server --config /path/to/config.yaml
+```
+
+**MCP Tools:**
+
+1. **query**: 执行 SQL 查询
+   ```json
+   {
+     "name": "query",
+     "description": "Execute SQL query on database",
+     "inputSchema": {
+       "type": "object",
+       "properties": {
+         "sql": {"type": "string", "description": "SQL query to execute"},
+         "profile": {"type": "string", "description": "Profile name to use"}
+       },
+       "required": ["sql", "profile"]
+     }
+   }
+   ```
+
+2. **profile_list**: 列出所有 profiles
+   ```json
+   {
+     "name": "profile_list",
+     "description": "List all configured profiles",
+     "inputSchema": {"type": "object", "properties": {}}
+   }
+   ```
+
+3. **profile_show**: 查看 profile 详情
+   ```json
+   {
+     "name": "profile_show",
+     "description": "Show profile details",
+     "inputSchema": {
+       "type": "object",
+       "properties": {
+         "name": {"type": "string", "description": "Profile name"}
+       },
+       "required": ["name"]
+     }
+   }
+   ```
+
+**输出格式：** MCP tool 调用返回 JSON 格式，遵循 xsql 的标准输出契约（`ok`、`schema_version`、`data`/`error`）。
+
+**安全说明：**
+- query tool 默认只读模式（双重保护：SQL 静态分析 + DB 事务级只读）
+- 写操作需要显式设置 `unsafe_allow_write: true`
+
 ## 参数来源优先级
 - CLI > ENV > Config
