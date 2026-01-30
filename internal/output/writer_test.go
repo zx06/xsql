@@ -266,3 +266,133 @@ func TestWriteOK_InvalidFormat(t *testing.T) {
 		t.Error("expected error for invalid format")
 	}
 }
+
+func TestWriteOK_TableFormat_ProfileListWithDescription(t *testing.T) {
+	var out bytes.Buffer
+	w := New(&out, &bytes.Buffer{})
+
+	// 模拟 profile list 数据（包含 description）
+	data := map[string]any{
+		"config_path": "/path/to/config.yaml",
+		"profiles": []map[string]any{
+			{
+				"name":        "dev",
+				"description": "开发环境数据库",
+				"db":          "mysql",
+				"mode":        "read-only",
+			},
+			{
+				"name":        "prod",
+				"description": "生产环境数据库",
+				"db":          "pg",
+				"mode":        "read-write",
+			},
+		},
+	}
+
+	if err := w.WriteOK(FormatTable, data); err != nil {
+		t.Fatal(err)
+	}
+
+	result := out.String()
+
+	// 检查表头包含四列
+	if !strings.Contains(result, "NAME") || !strings.Contains(result, "DESCRIPTION") || !strings.Contains(result, "DB") || !strings.Contains(result, "MODE") {
+		t.Errorf("table should contain NAME, DESCRIPTION, DB, MODE columns, got: %s", result)
+	}
+
+	// 检查分隔线正确
+	if !strings.Contains(result, "----") || !strings.Contains(result, "-----------") {
+		t.Errorf("table should contain column separators, got: %s", result)
+	}
+
+	// 检查 profile 数据
+	if !strings.Contains(result, "dev") || !strings.Contains(result, "开发环境数据库") {
+		t.Errorf("table should contain dev profile with description, got: %s", result)
+	}
+	if !strings.Contains(result, "prod") || !strings.Contains(result, "生产环境数据库") {
+		t.Errorf("table should contain prod profile with description, got: %s", result)
+	}
+
+	// 检查 profiles 数量
+	if !strings.Contains(result, "(2 profiles)") {
+		t.Errorf("table should show 2 profiles, got: %s", result)
+	}
+}
+
+func TestWriteOK_TableFormat_ProfileListWithoutDescription(t *testing.T) {
+	var out bytes.Buffer
+	w := New(&out, &bytes.Buffer{})
+
+	// 模拟 profile list 数据（不包含 description，向后兼容）
+	data := map[string]any{
+		"config_path": "/path/to/config.yaml",
+		"profiles": []map[string]any{
+			{
+				"name": "old-style",
+				"db":   "mysql",
+				"mode": "read-only",
+			},
+		},
+	}
+
+	if err := w.WriteOK(FormatTable, data); err != nil {
+		t.Fatal(err)
+	}
+
+	result := out.String()
+
+	// 检查表头仍然包含四列（保持一致性）
+	if !strings.Contains(result, "NAME") || !strings.Contains(result, "DESCRIPTION") || !strings.Contains(result, "DB") || !strings.Contains(result, "MODE") {
+		t.Errorf("table should contain NAME, DESCRIPTION, DB, MODE columns even for profiles without description, got: %s", result)
+	}
+
+	// 检查 profile 数据（description 列应该为空）
+	if !strings.Contains(result, "old-style") {
+		t.Errorf("table should contain old-style profile, got: %s", result)
+	}
+
+	// 检查 profiles 数量
+	if !strings.Contains(result, "(1 profile)") {
+		t.Errorf("table should show 1 profile, got: %s", result)
+	}
+}
+
+func TestWriteOK_TableFormat_ProfileListWithEmptyDescription(t *testing.T) {
+	var out bytes.Buffer
+	w := New(&out, &bytes.Buffer{})
+
+	// 模拟 profile list 数据（包含空 description）
+	data := map[string]any{
+		"config_path": "/path/to/config.yaml",
+		"profiles": []map[string]any{
+			{
+				"name":        "empty-desc",
+				"description": "",
+				"db":          "mysql",
+				"mode":        "read-write",
+			},
+		},
+	}
+
+	if err := w.WriteOK(FormatTable, data); err != nil {
+		t.Fatal(err)
+	}
+
+	result := out.String()
+
+	// 检查表头
+	if !strings.Contains(result, "NAME") || !strings.Contains(result, "DESCRIPTION") {
+		t.Errorf("table should contain NAME, DESCRIPTION columns, got: %s", result)
+	}
+
+	// 检查 profile 数据
+	if !strings.Contains(result, "empty-desc") {
+		t.Errorf("table should contain empty-desc profile, got: %s", result)
+	}
+
+	// 检查 profiles 数量
+	if !strings.Contains(result, "(1 profile)") {
+		t.Errorf("table should show 1 profile, got: %s", result)
+	}
+}

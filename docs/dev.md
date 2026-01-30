@@ -25,9 +25,14 @@ go test ./...
 # 运行测试（带覆盖率）
 go test -cover ./...
 
+# 运行 E2E 测试
+go test -tags=e2e ./tests/e2e/...
+
 # 导出 spec
 ./xsql spec --format json
 ```
+
+> 详细测试指南见 [docs/testing.md](testing.md)
 
 ## 集成测试
 

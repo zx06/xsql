@@ -102,12 +102,17 @@ func writeTable(out io.Writer, env Envelope) error {
 					_, _ = fmt.Fprintf(tw, "Config: %s\n\n", cfgPath)
 				}
 				// 输出 profiles 表格
-				_, _ = fmt.Fprintln(tw, "NAME\tDB\tMODE")
-				_, _ = fmt.Fprintln(tw, "----\t--\t----")
+				_, _ = fmt.Fprintln(tw, "NAME\tDESCRIPTION\tDB\tMODE")
+				_, _ = fmt.Fprintln(tw, "----\t-----------\t--\t----")
 				for _, p := range profileList {
-					_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\n", p.name, p.db, p.mode)
+					_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", p.name, p.description, p.db, p.mode)
 				}
-				_, _ = fmt.Fprintf(tw, "\n(%d profiles)\n", len(profileList))
+				// 使用正确的单数/复数形式
+				suffix := "profiles"
+				if len(profileList) == 1 {
+					suffix = "profile"
+				}
+				_, _ = fmt.Fprintf(tw, "\n(%d %s)\n", len(profileList), suffix)
 				return tw.Flush()
 			}
 		}
@@ -134,9 +139,10 @@ func writeTable(out io.Writer, env Envelope) error {
 }
 
 type profileListItem struct {
-	name string
-	db   string
-	mode string
+	name        string
+	description string
+	db          string
+	mode        string
 }
 
 func tryAsProfileList(data any) ([]profileListItem, bool) {
@@ -160,12 +166,13 @@ func tryAsProfileList(data any) ([]profileListItem, bool) {
 			return nil, false
 		}
 		name, _ := m["name"].(string)
+		description, _ := m["description"].(string)
 		db, _ := m["db"].(string)
 		mode, _ := m["mode"].(string)
 		if name == "" {
 			return nil, false
 		}
-		result = append(result, profileListItem{name: name, db: db, mode: mode})
+		result = append(result, profileListItem{name: name, description: description, db: db, mode: mode})
 	}
 	return result, len(result) > 0
 }

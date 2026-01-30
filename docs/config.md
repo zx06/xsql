@@ -40,6 +40,7 @@ ssh_proxies:
 profiles:
   # 本地 MySQL 开发环境
   dev-mysql:
+    description: "本地开发 MySQL 数据库"
     db: mysql
     host: 127.0.0.1
     port: 3306
@@ -100,6 +101,7 @@ profiles:
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
+| `description` | string | 描述信息，用于区分不同数据库 |
 | `db` | string | 数据库类型：`mysql` 或 `pg` |
 | `dsn` | string | 原生 DSN（优先于 host/port/user 等） |
 | `host` | string | 数据库主机 |

@@ -18,15 +18,18 @@ import (
 func TestProfile_List_JSON(t *testing.T) {
 	config := createTempConfig(t, `profiles:
   dev:
+    description: "开发环境数据库"
     db: mysql
     host: localhost
     port: 3306
   staging:
+    description: "预发布环境"
     db: pg
     host: staging.example.com
     port: 5432
     unsafe_allow_write: true
   prod:
+    description: "生产环境数据库"
     db: mysql
     host: prod.example.com
     port: 3306
@@ -39,9 +42,10 @@ func TestProfile_List_JSON(t *testing.T) {
 	}
 
 	type profileInfo struct {
-		Name string `json:"name"`
-		DB   string `json:"db"`
-		Mode string `json:"mode"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		DB          string `json:"db"`
+		Mode        string `json:"mode"`
 	}
 	var resp struct {
 		OK            bool `json:"ok"`
@@ -68,27 +72,29 @@ func TestProfile_List_JSON(t *testing.T) {
 		t.Errorf("expected 3 profiles, got %d", len(resp.Data.Profiles))
 	}
 
-	// Check all profiles are present with correct mode
+	// Check all profiles are present with correct mode and description
 	profiles := make(map[string]profileInfo)
 	for _, p := range resp.Data.Profiles {
 		profiles[p.Name] = p
 	}
-	if p, ok := profiles["dev"]; !ok || p.Mode != "read-only" {
-		t.Errorf("expected dev profile with read-only mode, got %+v", p)
+	if p, ok := profiles["dev"]; !ok || p.Mode != "read-only" || p.Description != "开发环境数据库" {
+		t.Errorf("expected dev profile with read-only mode and description, got %+v", p)
 	}
-	if p, ok := profiles["staging"]; !ok || p.Mode != "read-write" {
-		t.Errorf("expected staging profile with read-write mode, got %+v", p)
+	if p, ok := profiles["staging"]; !ok || p.Mode != "read-write" || p.Description != "预发布环境" {
+		t.Errorf("expected staging profile with read-write mode and description, got %+v", p)
 	}
-	if p, ok := profiles["prod"]; !ok || p.Mode != "read-only" {
-		t.Errorf("expected prod profile with read-only mode, got %+v", p)
+	if p, ok := profiles["prod"]; !ok || p.Mode != "read-only" || p.Description != "生产环境数据库" {
+		t.Errorf("expected prod profile with read-only mode and description, got %+v", p)
 	}
 }
 
 func TestProfile_List_YAML(t *testing.T) {
 	config := createTempConfig(t, `profiles:
   test1:
+    description: "Test DB 1"
     db: mysql
   test2:
+    description: "Test DB 2"
     db: pg
 `)
 
@@ -99,9 +105,10 @@ func TestProfile_List_YAML(t *testing.T) {
 	}
 
 	type profileInfo struct {
-		Name string `yaml:"name"`
-		DB   string `yaml:"db"`
-		Mode string `yaml:"mode"`
+		Name        string `yaml:"name"`
+		Description string `yaml:"description"`
+		DB          string `yaml:"db"`
+		Mode        string `yaml:"mode"`
 	}
 	var resp struct {
 		OK   bool `yaml:"ok"`
@@ -119,13 +126,21 @@ func TestProfile_List_YAML(t *testing.T) {
 	if len(resp.Data.Profiles) != 2 {
 		t.Errorf("expected 2 profiles, got %d", len(resp.Data.Profiles))
 	}
+	// Verify descriptions
+	for _, p := range resp.Data.Profiles {
+		if p.Description == "" {
+			t.Errorf("expected description for profile %s", p.Name)
+		}
+	}
 }
 
 func TestProfile_List_Table(t *testing.T) {
 	config := createTempConfig(t, `profiles:
   dev:
+    description: "Dev Database"
     db: mysql
   prod:
+    description: "Prod Database"
     db: pg
 `)
 
@@ -141,6 +156,17 @@ func TestProfile_List_Table(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "prod") {
 		t.Errorf("expected output to contain 'prod', got: %s", stdout)
+	}
+	// Table format should contain DESCRIPTION header
+	if !strings.Contains(stdout, "DESCRIPTION") {
+		t.Errorf("expected table header to contain 'DESCRIPTION', got: %s", stdout)
+	}
+	// Table format should contain description values
+	if !strings.Contains(stdout, "Dev Database") {
+		t.Errorf("expected output to contain 'Dev Database', got: %s", stdout)
+	}
+	if !strings.Contains(stdout, "Prod Database") {
+		t.Errorf("expected output to contain 'Prod Database', got: %s", stdout)
 	}
 }
 
@@ -204,6 +230,7 @@ func TestProfile_List_NoConfig(t *testing.T) {
 func TestProfile_Show_JSON(t *testing.T) {
 	config := createTempConfig(t, `profiles:
   dev:
+    description: "开发环境 MySQL"
     db: mysql
     host: localhost
     port: 3306
@@ -225,6 +252,7 @@ func TestProfile_Show_JSON(t *testing.T) {
 		Data          struct {
 			ConfigPath       string `json:"config_path"`
 			Name             string `json:"name"`
+			Description      string `json:"description"`
 			DB               string `json:"db"`
 			Host             string `json:"host"`
 			Port             int    `json:"port"`
@@ -244,6 +272,9 @@ func TestProfile_Show_JSON(t *testing.T) {
 	}
 	if resp.Data.Name != "dev" {
 		t.Errorf("expected name=dev, got %q", resp.Data.Name)
+	}
+	if resp.Data.Description != "开发环境 MySQL" {
+		t.Errorf("expected description='开发环境 MySQL', got %q", resp.Data.Description)
 	}
 	if resp.Data.DB != "mysql" {
 		t.Errorf("expected db=mysql, got %q", resp.Data.DB)

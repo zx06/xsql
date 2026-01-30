@@ -100,22 +100,24 @@ jobs:
         env:
           XSQL_TEST_MYSQL_DSN: "root:root@tcp(127.0.0.1:3306)/testdb"
           XSQL_TEST_PG_DSN: "postgres://postgres:postgres@127.0.0.1:5432/testdb?sslmode=disable"
-        run: go test -v -tags=integration -coverprofile=coverage-integration.txt -covermode=atomic ./tests/integration/...
+        run: go test -v -tags=integration -coverprofile=coverage-integration.txt -covermode=atomic -coverpkg=github.com/zx06/xsql/internal/... ./tests/integration/...
 
       - name: Run E2E tests
         env:
           XSQL_TEST_MYSQL_DSN: "root:root@tcp(127.0.0.1:3306)/testdb"
           XSQL_TEST_PG_DSN: "postgres://postgres:postgres@127.0.0.1:5432/testdb?sslmode=disable"
-        run: go test -v -tags=e2e ./tests/e2e/...
+        run: go test -v -tags=e2e -coverprofile=coverage-e2e.txt -covermode=atomic -coverpkg=github.com/zx06/xsql/internal/... ./tests/e2e/...
 
       - name: Upload integration coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage-integration.txt
-          flags: integration
+          files: coverage-integration.txt,coverage-e2e.txt
+          flags: integration,e2e
           name: codecov-integration
           fail_ci_if_error: false
+          verbose: true
+          disable_search: true
 
   lint:
     name: Lint

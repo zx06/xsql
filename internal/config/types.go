@@ -19,7 +19,8 @@ type SSHProxy struct {
 }
 
 type Profile struct {
-	Format string `yaml:"format"`
+	Description string `yaml:"description"` // 描述，用于区分不同数据库
+	Format      string `yaml:"format"`
 
 	// DB 连接
 	DB       string `yaml:"db"`  // mysql | pg

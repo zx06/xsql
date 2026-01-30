@@ -117,7 +117,10 @@ xsql profile list --format json
   "schema_version": 1,
   "data": {
     "config_path": "/home/user/.config/xsql/xsql.yaml",
-    "profiles": ["dev", "prod", "test"]
+    "profiles": [
+      {"name": "dev", "description": "开发环境数据库", "db": "mysql", "mode": "read-only"},
+      {"name": "prod", "description": "生产环境数据库", "db": "pg", "mode": "read-only"}
+    ]
   }
 }
 ```
@@ -138,6 +141,7 @@ xsql profile show dev --format json
   "data": {
     "config_path": "/home/user/.config/xsql/xsql.yaml",
     "name": "dev",
+    "description": "开发环境数据库",
     "db": "mysql",
     "host": "localhost",
     "port": 3306,
