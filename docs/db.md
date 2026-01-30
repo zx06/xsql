@@ -6,17 +6,23 @@
 
 ## 只读（RO）策略
 
-### 当前实现：SQL 判定
-- 基于 SQL 关键字判定（非 AST 解析）
-- 默认允许：`SELECT`、`WITH`、`EXPLAIN`、`SHOW`、`DESCRIBE`
-- 默认拒绝：`INSERT/UPDATE/DELETE`、`CREATE/ALTER/DROP/TRUNCATE` 等
-- 提供 `--unsafe-allow-write` 逃生阀
+### 双重保护机制（默认启用）
+xsql 采用双重保护防止误操作写数据库：
 
-### 计划中：DB 原生只读
-> 后续版本可能增加 DB 原生只读模式，作为额外安全层。
+1. **SQL 静态分析**（客户端）
+   - 基于 SQL 关键字判定（非 AST 解析）
+   - 默认允许：`SELECT`、`WITH`、`EXPLAIN`、`SHOW`、`DESCRIBE`
+   - 默认拒绝：`INSERT/UPDATE/DELETE`、`CREATE/ALTER/DROP/TRUNCATE` 等
 
-- PostgreSQL：会话/事务只读（如 `SET default_transaction_read_only=on`）
-- MySQL：`SET SESSION TRANSACTION READ ONLY`
+2. **数据库事务级只读**（服务端）
+   - PostgreSQL/MySQL：使用 `BEGIN READ ONLY` 事务执行查询
+   - 数据库层面阻止任何写操作
+
+### 写操作控制
+- 默认：只读模式（双重保护都启用）
+- 允许写操作：使用 `--unsafe-allow-write` 标志或配置 `unsafe_allow_write: true`
+  - 绕过 SQL 静态分析检查
+  - 绕过数据库事务级只读限制
 
 ## SSH Proxy 与 driver dial
 - `database/sql` 不提供通用替换 `net.Conn` 的入口；需要依赖各 driver 的 dial hook。

@@ -98,6 +98,7 @@ internal/
     pg/            # PostgreSQL driver
   errors/          # 错误码/退出码
   log/             # slog 日志
+  mcp/             # MCP Server 实现
   output/          # json/yaml/table/csv 输出
   secret/          # keyring + 明文策略
   spec/            # tool spec 导出

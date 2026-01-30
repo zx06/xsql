@@ -15,13 +15,12 @@ type QueryResult struct {
 
 // QueryOptions 包含查询执行的选项。
 type QueryOptions struct {
-	ReadOnly         bool   // 启用只读保护（默认 true）
 	UnsafeAllowWrite bool   // 允许写操作（绕过只读保护）
 	DBType           string // 数据库类型：mysql 或 pg
 }
 
 // Query 执行 SQL 查询并返回结果。
-// 当 opts.ReadOnly=true 且 opts.UnsafeAllowWrite=false 时，会启用双重保护：
+// 当 opts.UnsafeAllowWrite=false 时，会启用双重只读保护：
 // 1. SQL 语句静态分析（客户端）
 // 2. 数据库事务级只读模式（服务端）
 // 当 opts.UnsafeAllowWrite=true 时，绕过所有只读保护。
@@ -31,17 +30,13 @@ func Query(ctx context.Context, db *sql.DB, query string, opts QueryOptions) (*Q
 		return executeQuery(ctx, db, query)
 	}
 
-	if opts.ReadOnly {
-		// 第一层保护：SQL 静态分析
-		if xe := EnforceReadOnly(query, false); xe != nil {
-			return nil, xe
-		}
-		// 第二层保护：数据库事务级只读
-		return queryWithReadOnlyTx(ctx, db, query, opts.DBType)
+	// 默认启用双重只读保护
+	// 第一层保护：SQL 静态分析
+	if xe := EnforceReadOnly(query, false); xe != nil {
+		return nil, xe
 	}
-
-	// 非只读模式：直接执行
-	return executeQuery(ctx, db, query)
+	// 第二层保护：数据库事务级只读
+	return queryWithReadOnlyTx(ctx, db, query, opts.DBType)
 }
 
 // queryWithReadOnlyTx 在只读事务中执行查询。
