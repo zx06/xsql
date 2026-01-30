@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -204,7 +205,7 @@ func TestProfileList(t *testing.T) {
 	// Create a mock request
 	req := &mcp.CallToolRequest{}
 
-	result, _, err := handler.ProfileList(nil, req, struct{}{})
+	result, _, err := handler.ProfileList(context.TODO(), req, struct{}{})
 	if err != nil {
 		t.Fatalf("ProfileList failed: %v", err)
 	}
@@ -234,7 +235,7 @@ func TestProfileShow_ProfileNotFound(t *testing.T) {
 	handler := NewToolHandler(cfg)
 
 	// Test with non-existent profile
-	result, _, err := handler.ProfileShow(nil, &mcp.CallToolRequest{}, ProfileShowInput{Name: "nonexistent"})
+	result, _, err := handler.ProfileShow(context.TODO(), &mcp.CallToolRequest{}, ProfileShowInput{Name: "nonexistent"})
 	if err != nil {
 		t.Fatalf("ProfileShow failed: %v", err)
 	}
@@ -256,7 +257,7 @@ func TestQuery_MissingSQL(t *testing.T) {
 	handler := NewToolHandler(cfg)
 
 	// Test with missing SQL parameter
-	result, _, err := handler.Query(nil, &mcp.CallToolRequest{}, QueryInput{Profile: "dev"})
+	result, _, err := handler.Query(context.TODO(), &mcp.CallToolRequest{}, QueryInput{Profile: "dev"})
 	if err != nil {
 		t.Fatalf("Query failed: %v", err)
 	}

@@ -32,7 +32,7 @@ func TestMySQL_Query_SelectBasic(t *testing.T) {
 	defer conn.Close()
 
 	// Use simple NULL without alias for MySQL 8.0 compatibility
-	result, xe := db.Query(ctx, conn, "SELECT 1 as num, 'hello' as msg", db.QueryOptions{ReadOnly: true, DBType: "mysql"})
+	result, xe := db.Query(ctx, conn, "SELECT 1 as num, 'hello' as msg", db.QueryOptions{DBType: "mysql"})
 	if xe != nil {
 		t.Fatalf("query failed: %v", xe)
 	}
@@ -73,7 +73,7 @@ func TestMySQL_Query_MultipleRows(t *testing.T) {
 	}
 	defer conn.Close()
 
-	result, xe := db.Query(ctx, conn, "SELECT 1 as n UNION SELECT 2 UNION SELECT 3", db.QueryOptions{ReadOnly: true, DBType: "mysql"})
+	result, xe := db.Query(ctx, conn, "SELECT 1 as n UNION SELECT 2 UNION SELECT 3", db.QueryOptions{DBType: "mysql"})
 	if xe != nil {
 		t.Fatalf("query failed: %v", xe)
 	}
@@ -99,7 +99,7 @@ func TestMySQL_Query_EmptyResult(t *testing.T) {
 	}
 	defer conn.Close()
 
-	result, xe := db.Query(ctx, conn, "SELECT 1 as n FROM (SELECT 1) t WHERE 1=0", db.QueryOptions{ReadOnly: true, DBType: "mysql"})
+	result, xe := db.Query(ctx, conn, "SELECT 1 as n FROM (SELECT 1) t WHERE 1=0", db.QueryOptions{DBType: "mysql"})
 	if xe != nil {
 		t.Fatalf("query failed: %v", xe)
 	}
@@ -129,7 +129,7 @@ func TestMySQL_Query_ShowDatabases(t *testing.T) {
 	}
 	defer conn.Close()
 
-	result, xe := db.Query(ctx, conn, "SHOW DATABASES", db.QueryOptions{ReadOnly: true, DBType: "mysql"})
+	result, xe := db.Query(ctx, conn, "SHOW DATABASES", db.QueryOptions{DBType: "mysql"})
 	if xe != nil {
 		t.Fatalf("SHOW DATABASES failed: %v", xe)
 	}
@@ -155,7 +155,7 @@ func TestMySQL_Query_Explain(t *testing.T) {
 	}
 	defer conn.Close()
 
-	result, xe := db.Query(ctx, conn, "EXPLAIN SELECT 1", db.QueryOptions{ReadOnly: true, DBType: "mysql"})
+	result, xe := db.Query(ctx, conn, "EXPLAIN SELECT 1", db.QueryOptions{DBType: "mysql"})
 	if xe != nil {
 		t.Fatalf("EXPLAIN failed: %v", xe)
 	}
@@ -182,7 +182,7 @@ func TestMySQL_Query_ReadOnlyBlocked(t *testing.T) {
 	defer conn.Close()
 
 	// INSERT should be blocked by read-only check (before hitting DB)
-	_, xe = db.Query(ctx, conn, "INSERT INTO nonexistent VALUES (1)", db.QueryOptions{ReadOnly: true, DBType: "mysql"})
+	_, xe = db.Query(ctx, conn, "INSERT INTO nonexistent VALUES (1)", db.QueryOptions{DBType: "mysql"})
 	if xe == nil {
 		t.Fatal("expected error for INSERT in read-only mode")
 	}
@@ -191,25 +191,25 @@ func TestMySQL_Query_ReadOnlyBlocked(t *testing.T) {
 	}
 
 	// UPDATE should be blocked
-	_, xe = db.Query(ctx, conn, "UPDATE nonexistent SET x=1", db.QueryOptions{ReadOnly: true, DBType: "mysql"})
+	_, xe = db.Query(ctx, conn, "UPDATE nonexistent SET x=1", db.QueryOptions{DBType: "mysql"})
 	if xe == nil || xe.Code != "XSQL_RO_BLOCKED" {
 		t.Error("UPDATE should be blocked")
 	}
 
 	// DELETE should be blocked
-	_, xe = db.Query(ctx, conn, "DELETE FROM nonexistent", db.QueryOptions{ReadOnly: true, DBType: "mysql"})
+	_, xe = db.Query(ctx, conn, "DELETE FROM nonexistent", db.QueryOptions{DBType: "mysql"})
 	if xe == nil || xe.Code != "XSQL_RO_BLOCKED" {
 		t.Error("DELETE should be blocked")
 	}
 
 	// DROP should be blocked
-	_, xe = db.Query(ctx, conn, "DROP TABLE nonexistent", db.QueryOptions{ReadOnly: true, DBType: "mysql"})
+	_, xe = db.Query(ctx, conn, "DROP TABLE nonexistent", db.QueryOptions{DBType: "mysql"})
 	if xe == nil || xe.Code != "XSQL_RO_BLOCKED" {
 		t.Error("DROP should be blocked")
 	}
 
 	// CREATE should be blocked
-	_, xe = db.Query(ctx, conn, "CREATE TABLE test (id INT)", db.QueryOptions{ReadOnly: true, DBType: "mysql"})
+	_, xe = db.Query(ctx, conn, "CREATE TABLE test (id INT)", db.QueryOptions{DBType: "mysql"})
 	if xe == nil || xe.Code != "XSQL_RO_BLOCKED" {
 		t.Error("CREATE should be blocked")
 	}
@@ -231,7 +231,7 @@ func TestMySQL_Query_InvalidSQL(t *testing.T) {
 	}
 	defer conn.Close()
 
-	_, xe = db.Query(ctx, conn, "SELECT * FROM definitely_nonexistent_table_12345", db.QueryOptions{ReadOnly: true, DBType: "mysql"})
+	_, xe = db.Query(ctx, conn, "SELECT * FROM definitely_nonexistent_table_12345", db.QueryOptions{DBType: "mysql"})
 	if xe == nil {
 		t.Fatal("expected error for invalid SQL")
 	}
@@ -263,7 +263,7 @@ func TestMySQL_Query_DataTypes(t *testing.T) {
 			'text' as str_val,
 			TRUE as bool_val,
 			NOW() as time_val
-	`, db.QueryOptions{ReadOnly: true, DBType: "mysql"})
+	`, db.QueryOptions{DBType: "mysql"})
 	if xe != nil {
 		t.Fatalf("query failed: %v", xe)
 	}
@@ -296,7 +296,7 @@ func TestPg_Query_SelectBasic(t *testing.T) {
 	}
 	defer conn.Close()
 
-	result, xe := db.Query(ctx, conn, "SELECT 1 as num, 'hello' as msg, NULL as empty", db.QueryOptions{ReadOnly: true, DBType: "pg"})
+	result, xe := db.Query(ctx, conn, "SELECT 1 as num, 'hello' as msg, NULL as empty", db.QueryOptions{DBType: "pg"})
 	if xe != nil {
 		t.Fatalf("query failed: %v", xe)
 	}
@@ -332,7 +332,7 @@ func TestPg_Query_MultipleRows(t *testing.T) {
 	}
 	defer conn.Close()
 
-	result, xe := db.Query(ctx, conn, "SELECT generate_series(1,5) as n", db.QueryOptions{ReadOnly: true, DBType: "pg"})
+	result, xe := db.Query(ctx, conn, "SELECT generate_series(1,5) as n", db.QueryOptions{DBType: "pg"})
 	if xe != nil {
 		t.Fatalf("query failed: %v", xe)
 	}
@@ -358,7 +358,7 @@ func TestPg_Query_EmptyResult(t *testing.T) {
 	}
 	defer conn.Close()
 
-	result, xe := db.Query(ctx, conn, "SELECT 1 as n WHERE 1=0", db.QueryOptions{ReadOnly: true, DBType: "pg"})
+	result, xe := db.Query(ctx, conn, "SELECT 1 as n WHERE 1=0", db.QueryOptions{DBType: "pg"})
 	if xe != nil {
 		t.Fatalf("query failed: %v", xe)
 	}
@@ -387,7 +387,7 @@ func TestPg_Query_SystemCatalog(t *testing.T) {
 	}
 	defer conn.Close()
 
-	result, xe := db.Query(ctx, conn, "SELECT datname FROM pg_database LIMIT 5", db.QueryOptions{ReadOnly: true, DBType: "pg"})
+	result, xe := db.Query(ctx, conn, "SELECT datname FROM pg_database LIMIT 5", db.QueryOptions{DBType: "pg"})
 	if xe != nil {
 		t.Fatalf("pg_database query failed: %v", xe)
 	}
@@ -413,7 +413,7 @@ func TestPg_Query_Explain(t *testing.T) {
 	}
 	defer conn.Close()
 
-	result, xe := db.Query(ctx, conn, "EXPLAIN SELECT 1", db.QueryOptions{ReadOnly: true, DBType: "pg"})
+	result, xe := db.Query(ctx, conn, "EXPLAIN SELECT 1", db.QueryOptions{DBType: "pg"})
 	if xe != nil {
 		t.Fatalf("EXPLAIN failed: %v", xe)
 	}
@@ -440,19 +440,19 @@ func TestPg_Query_ReadOnlyBlocked(t *testing.T) {
 	defer conn.Close()
 
 	// INSERT should be blocked
-	_, xe = db.Query(ctx, conn, "INSERT INTO nonexistent VALUES (1)", db.QueryOptions{ReadOnly: true, DBType: "pg"})
+	_, xe = db.Query(ctx, conn, "INSERT INTO nonexistent VALUES (1)", db.QueryOptions{DBType: "pg"})
 	if xe == nil || xe.Code != "XSQL_RO_BLOCKED" {
 		t.Error("INSERT should be blocked")
 	}
 
 	// UPDATE should be blocked
-	_, xe = db.Query(ctx, conn, "UPDATE nonexistent SET x=1", db.QueryOptions{ReadOnly: true, DBType: "pg"})
+	_, xe = db.Query(ctx, conn, "UPDATE nonexistent SET x=1", db.QueryOptions{DBType: "pg"})
 	if xe == nil || xe.Code != "XSQL_RO_BLOCKED" {
 		t.Error("UPDATE should be blocked")
 	}
 
 	// DELETE should be blocked
-	_, xe = db.Query(ctx, conn, "DELETE FROM nonexistent", db.QueryOptions{ReadOnly: true, DBType: "pg"})
+	_, xe = db.Query(ctx, conn, "DELETE FROM nonexistent", db.QueryOptions{DBType: "pg"})
 	if xe == nil || xe.Code != "XSQL_RO_BLOCKED" {
 		t.Error("DELETE should be blocked")
 	}
@@ -474,7 +474,7 @@ func TestPg_Query_InvalidSQL(t *testing.T) {
 	}
 	defer conn.Close()
 
-	_, xe = db.Query(ctx, conn, "SELECT * FROM definitely_nonexistent_table_12345", db.QueryOptions{ReadOnly: true, DBType: "pg"})
+	_, xe = db.Query(ctx, conn, "SELECT * FROM definitely_nonexistent_table_12345", db.QueryOptions{DBType: "pg"})
 	if xe == nil {
 		t.Fatal("expected error for invalid SQL")
 	}
@@ -507,7 +507,7 @@ func TestPg_Query_DataTypes(t *testing.T) {
 			TRUE as bool_val,
 			NOW() as time_val,
 			'{"key": "value"}'::json as json_val
-	`, db.QueryOptions{ReadOnly: true, DBType: "pg"})
+	`, db.QueryOptions{DBType: "pg"})
 	if xe != nil {
 		t.Fatalf("query failed: %v", xe)
 	}
@@ -547,7 +547,7 @@ func TestPg_Query_CTE(t *testing.T) {
 			SELECT generate_series(1, 3) as n
 		)
 		SELECT n * 2 as doubled FROM numbers
-	`, db.QueryOptions{ReadOnly: true, DBType: "pg"})
+	`, db.QueryOptions{DBType: "pg"})
 	if xe != nil {
 		t.Fatalf("CTE query failed: %v", xe)
 	}
