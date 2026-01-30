@@ -232,9 +232,10 @@ func run() int {
 			}
 
 			type profileInfo struct {
-				Name string `json:"name"`
-				DB   string `json:"db"`
-				Mode string `json:"mode"` // "read-only" or "read-write"
+				Name        string `json:"name"`
+				Description string `json:"description,omitempty"`
+				DB          string `json:"db"`
+				Mode        string `json:"mode"` // "read-only" or "read-write"
 			}
 			profiles := make([]profileInfo, 0, len(cfg.Profiles))
 			for name, p := range cfg.Profiles {
@@ -243,9 +244,10 @@ func run() int {
 					mode = "read-write"
 				}
 				profiles = append(profiles, profileInfo{
-					Name: name,
-					DB:   p.DB,
-					Mode: mode,
+					Name:        name,
+					Description: p.Description,
+					DB:          p.DB,
+					Mode:        mode,
 				})
 			}
 
@@ -284,6 +286,7 @@ func run() int {
 			result := map[string]any{
 				"config_path":        cfgPath,
 				"name":               name,
+				"description":        profile.Description,
 				"db":                 profile.DB,
 				"host":               profile.Host,
 				"port":               profile.Port,

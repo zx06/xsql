@@ -122,6 +122,177 @@ func TestMain_Help(t *testing.T) {
 	}
 }
 
+// TestMain_ProfileListCommand 测试 profile list 命令
+func TestMain_ProfileListCommand(t *testing.T) {
+	binary := buildTestBinary(t)
+
+	// 创建测试配置文件
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "xsql.yaml")
+	configContent := `
+profiles:
+  test-db:
+    description: "测试数据库"
+    db: mysql
+    host: localhost
+    port: 3306
+    user: root
+    database: testdb
+  prod-db:
+    description: "生产环境数据库"
+    db: pg
+    host: prod.example.com
+    port: 5432
+    user: admin
+    database: proddb
+    unsafe_allow_write: true
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cmd := exec.Command(binary, "profile", "list", "--config", configPath, "--format", "json")
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("profile list command failed: %v", err)
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(out, &resp); err != nil {
+		t.Fatalf("failed to parse JSON: %v\noutput: %s", err, out)
+	}
+
+	if ok, _ := resp["ok"].(bool); !ok {
+		t.Errorf("expected ok=true, got %v", resp["ok"])
+	}
+
+	data, ok := resp["data"].(map[string]any)
+	if !ok {
+		t.Fatal("expected data map")
+	}
+
+	profiles, ok := data["profiles"].([]any)
+	if !ok {
+		t.Fatal("expected profiles array")
+	}
+
+	if len(profiles) != 2 {
+		t.Errorf("expected 2 profiles, got %d", len(profiles))
+	}
+
+	// 验证每个 profile 的 description 字段
+	expectedDescriptions := map[string]string{
+		"test-db": "测试数据库",
+		"prod-db": "生产环境数据库",
+	}
+	for _, p := range profiles {
+		pm, ok := p.(map[string]any)
+		if !ok {
+			t.Fatal("expected profile to be a map")
+		}
+		name, _ := pm["name"].(string)
+		expectedDesc, exists := expectedDescriptions[name]
+		if !exists {
+			t.Errorf("unexpected profile name: %s", name)
+			continue
+		}
+		desc, ok := pm["description"].(string)
+		if !ok || desc != expectedDesc {
+			t.Errorf("profile %s: expected description=%q, got %q (ok=%v)", name, expectedDesc, desc, ok)
+		}
+	}
+}
+
+// TestMain_ProfileShowCommand 测试 profile show 命令
+func TestMain_ProfileShowCommand(t *testing.T) {
+	binary := buildTestBinary(t)
+
+	// 创建测试配置文件
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "xsql.yaml")
+	configContent := `
+profiles:
+  test-db:
+    description: "测试数据库描述"
+    db: mysql
+    host: localhost
+    port: 3306
+    user: root
+    password: "secret"
+    database: testdb
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cmd := exec.Command(binary, "profile", "show", "test-db", "--config", configPath, "--format", "json")
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("profile show command failed: %v", err)
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(out, &resp); err != nil {
+		t.Fatalf("failed to parse JSON: %v\noutput: %s", err, out)
+	}
+
+	if ok, _ := resp["ok"].(bool); !ok {
+		t.Errorf("expected ok=true, got %v", resp["ok"])
+	}
+
+	data, ok := resp["data"].(map[string]any)
+	if !ok {
+		t.Fatal("expected data map")
+	}
+
+	// 验证 description 字段
+	if desc, ok := data["description"].(string); !ok || desc != "测试数据库描述" {
+		t.Errorf("expected description='测试数据库描述', got %v", data["description"])
+	}
+
+	// 验证密码被脱敏
+	if pwd, ok := data["password"].(string); !ok || pwd != "***" {
+		t.Errorf("expected password='***', got %v", data["password"])
+	}
+
+	// 验证其他字段
+	if data["db"] != "mysql" {
+		t.Errorf("expected db='mysql', got %v", data["db"])
+	}
+	if data["host"] != "localhost" {
+		t.Errorf("expected host='localhost', got %v", data["host"])
+	}
+}
+
+// TestMain_ProfileShowCommand_NotFound 测试 profile show 命令（profile 不存在）
+func TestMain_ProfileShowCommand_NotFound(t *testing.T) {
+	binary := buildTestBinary(t)
+
+	// 创建测试配置文件
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "xsql.yaml")
+	configContent := `
+profiles:
+  test-db:
+    db: mysql
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	cmd := exec.Command(binary, "profile", "show", "non-existent", "--config", configPath, "--format", "json")
+	out, _ := cmd.Output()
+
+	if len(out) > 0 {
+		var resp map[string]any
+		if err := json.Unmarshal(out, &resp); err == nil {
+			if ok, _ := resp["ok"].(bool); ok {
+				t.Error("expected ok=false for non-existent profile")
+			}
+		}
+	}
+}
+
 func buildTestBinary(t *testing.T) string {
 	t.Helper()
 

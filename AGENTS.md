@@ -86,13 +86,38 @@
 - 任何新增依赖都要说明用途与替代方案。
 
 ## 9. 测试与验证（提交前必须）
-最低要求：
-- 单元测试覆盖：
+
+> 详细测试指南见 `docs/testing.md`
+
+### 9.1 测试层次
+| 层次 | 位置 | Build Tag | 运行命令 |
+|------|------|-----------|----------|
+| 单元测试 | `internal/*/`、`cmd/xsql/` | 无 | `go test ./...` |
+| 集成测试 | `tests/integration/` | `integration` | `go test -tags=integration ./tests/integration/...` |
+| E2E 测试 | `tests/e2e/` | `e2e` | `go test -tags=e2e ./tests/e2e/...` |
+
+### 9.2 最低覆盖要求
+- **单元测试**（`internal/*/`）：
   - 配置优先级合并
   - 连接参数解析（dsn/url）
   - 只读 SQL 判定（允许/拒绝用例）
-  - 输出序列化（json/yaml/csv）
-- 确保日志不会污染 stdout。
+  - 输出序列化（json/yaml/csv/table）
+- **E2E 测试**（`tests/e2e/`）：
+  - 新命令/flag 的 JSON 和 Table 输出验证
+  - 错误场景的退出码验证
+- **集成测试**（`tests/integration/`，涉及数据库时）：
+  - 实际数据库连接与查询
+
+### 9.3 新功能测试清单
+1. 在 `internal/*/` 添加单元测试
+2. 在 `tests/e2e/` 添加 E2E 测试（验证 CLI 输出）
+3. 如涉及数据库，在 `tests/integration/` 添加集成测试
+4. 运行全部测试：`go test ./... && go test -tags=e2e ./tests/e2e/...`
+
+### 9.4 验证要点
+- 确保日志不会污染 stdout
+- JSON 输出包含 `ok`、`schema_version`、`data`/`error`
+- Table 输出格式人类可读
 
 ## 10. 安全与隐私（红线）
 - 不把任何 secret 写入仓库（包括示例配置中的真实值）。
