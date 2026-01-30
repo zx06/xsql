@@ -1,0 +1,21 @@
+# Codecov 配置
+# 文档: https://docs.codecov.com/docs/codecovyml-reference
+
+coverage:
+  status:
+    # 项目整体覆盖率
+    project:
+      default:
+        target: auto        # 使用基准分支的覆盖率作为目标
+        threshold: 5%       # 允许覆盖率下降 5%
+        if_ci_failed: error
+    # 新增代码（patch）覆盖率
+    patch:
+      default:
+        target: 60%         # 新代码至少 60% 覆盖
+        threshold: 10%      # 允许偏差 10%
+
+# 忽略的文件/目录
+ignore:
+  - "tests/**/*"            # 测试文件本身不计入覆盖率
+  - "**/*_test.go"
