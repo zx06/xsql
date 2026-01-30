@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/zx06/xsql/internal/config"
 	"github.com/zx06/xsql/internal/db"
 	_ "github.com/zx06/xsql/internal/db/mysql"
@@ -200,9 +201,9 @@ func (h *ToolHandler) Query(ctx context.Context, req *mcp.CallToolRequest, input
 	}
 
 	output := map[string]interface{}{
-		"ok":            true,
+		"ok":             true,
 		"schema_version": 1,
-		"data":          result,
+		"data":           result,
 	}
 	jsonData, err := json.MarshalIndent(output, "", "  ")
 	if err != nil {
@@ -246,7 +247,7 @@ func (h *ToolHandler) ProfileList(ctx context.Context, req *mcp.CallToolRequest,
 	}
 
 	output := map[string]interface{}{
-		"ok":            true,
+		"ok":             true,
 		"schema_version": 1,
 		"data": map[string]interface{}{
 			"profiles": profiles,
@@ -313,9 +314,9 @@ func (h *ToolHandler) ProfileShow(ctx context.Context, req *mcp.CallToolRequest,
 	}
 
 	output := map[string]interface{}{
-		"ok":            true,
+		"ok":             true,
 		"schema_version": 1,
-		"data":          result,
+		"data":           result,
 	}
 	jsonData, err := json.MarshalIndent(output, "", "  ")
 	if err != nil {
@@ -361,7 +362,7 @@ func (h *ToolHandler) formatError(err error) string {
 		xe = errors.New(errors.CodeInternal, "unknown error", nil)
 	}
 	output := map[string]interface{}{
-		"ok":            false,
+		"ok":             false,
 		"schema_version": 1,
 		"error": map[string]interface{}{
 			"code":    xe.Code,

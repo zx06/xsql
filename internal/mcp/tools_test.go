@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/zx06/xsql/internal/config"
 	"github.com/zx06/xsql/internal/errors"
 )
@@ -14,10 +15,10 @@ func TestCreateServer(t *testing.T) {
 	cfg := &config.File{
 		Profiles: map[string]config.Profile{
 			"test": {
-				DB:     "mysql",
-				Host:   "localhost",
-				Port:   3306,
-				User:   "test",
+				DB:   "mysql",
+				Host: "localhost",
+				Port: 3306,
+				User: "test",
 			},
 		},
 	}
@@ -36,13 +37,13 @@ func TestNewToolHandler(t *testing.T) {
 	cfg := &config.File{
 		Profiles: map[string]config.Profile{
 			"dev": {
-				DB:              "mysql",
-				Description:     "Dev database",
+				DB:               "mysql",
+				Description:      "Dev database",
 				UnsafeAllowWrite: false,
 			},
 			"prod": {
-				DB:              "pg",
-				Description:     "Prod database",
+				DB:               "pg",
+				Description:      "Prod database",
 				UnsafeAllowWrite: true,
 			},
 		},
@@ -188,13 +189,13 @@ func TestProfileList(t *testing.T) {
 	cfg := &config.File{
 		Profiles: map[string]config.Profile{
 			"dev": {
-				DB:              "mysql",
-				Description:     "Dev database",
+				DB:               "mysql",
+				Description:      "Dev database",
 				UnsafeAllowWrite: false,
 			},
 			"prod": {
-				DB:              "pg",
-				Description:     "Prod database",
+				DB:               "pg",
+				Description:      "Prod database",
 				UnsafeAllowWrite: true,
 			},
 		},
@@ -279,7 +280,7 @@ func TestQuery_MissingProfile(t *testing.T) {
 	handler := NewToolHandler(cfg)
 
 	// Test with missing profile parameter
-	result, _, err := handler.Query(nil, &mcp.CallToolRequest{}, QueryInput{SQL: "SELECT 1"})
+	result, _, err := handler.Query(context.TODO(), &mcp.CallToolRequest{}, QueryInput{SQL: "SELECT 1"})
 	if err != nil {
 		t.Fatalf("Query failed: %v", err)
 	}
@@ -300,7 +301,7 @@ func TestQuery_ProfileNotFound(t *testing.T) {
 
 	handler := NewToolHandler(cfg)
 
-	result, _, err := handler.Query(nil, &mcp.CallToolRequest{}, QueryInput{
+	result, _, err := handler.Query(context.TODO(), &mcp.CallToolRequest{}, QueryInput{
 		SQL:     "SELECT 1",
 		Profile: "nonexistent",
 	})
@@ -324,7 +325,7 @@ func TestQuery_MissingDBType(t *testing.T) {
 
 	handler := NewToolHandler(cfg)
 
-	result, _, err := handler.Query(nil, &mcp.CallToolRequest{}, QueryInput{
+	result, _, err := handler.Query(context.TODO(), &mcp.CallToolRequest{}, QueryInput{
 		SQL:     "SELECT 1",
 		Profile: "dev",
 	})
@@ -348,7 +349,7 @@ func TestQuery_UnsupportedDBType(t *testing.T) {
 
 	handler := NewToolHandler(cfg)
 
-	result, _, err := handler.Query(nil, &mcp.CallToolRequest{}, QueryInput{
+	result, _, err := handler.Query(context.TODO(), &mcp.CallToolRequest{}, QueryInput{
 		SQL:     "SELECT 1",
 		Profile: "dev",
 	})
@@ -373,7 +374,7 @@ func TestQuery_InvalidPasswordFormat(t *testing.T) {
 
 	handler := NewToolHandler(cfg)
 
-	result, _, err := handler.Query(nil, &mcp.CallToolRequest{}, QueryInput{
+	result, _, err := handler.Query(context.TODO(), &mcp.CallToolRequest{}, QueryInput{
 		SQL:     "SELECT 1",
 		Profile: "dev",
 	})
@@ -403,7 +404,7 @@ func TestQuery_WithSSHConfig(t *testing.T) {
 
 	handler := NewToolHandler(cfg)
 
-	result, _, err := handler.Query(nil, &mcp.CallToolRequest{}, QueryInput{
+	result, _, err := handler.Query(context.TODO(), &mcp.CallToolRequest{}, QueryInput{
 		SQL:     "SELECT 1",
 		Profile: "dev",
 	})
@@ -434,7 +435,7 @@ func TestQuery_WithSSHInvalidPassphrase(t *testing.T) {
 
 	handler := NewToolHandler(cfg)
 
-	result, _, err := handler.Query(nil, &mcp.CallToolRequest{}, QueryInput{
+	result, _, err := handler.Query(context.TODO(), &mcp.CallToolRequest{}, QueryInput{
 		SQL:     "SELECT 1",
 		Profile: "dev",
 	})
@@ -472,7 +473,7 @@ func TestProfileShow_WithSSHProxy(t *testing.T) {
 
 	handler := NewToolHandler(cfg)
 
-	result, _, err := handler.ProfileShow(nil, &mcp.CallToolRequest{}, ProfileShowInput{Name: "dev"})
+	result, _, err := handler.ProfileShow(context.TODO(), &mcp.CallToolRequest{}, ProfileShowInput{Name: "dev"})
 	if err != nil {
 		t.Fatalf("ProfileShow failed: %v", err)
 	}
@@ -499,7 +500,7 @@ func TestProfileShow_WithDSN(t *testing.T) {
 
 	handler := NewToolHandler(cfg)
 
-	result, _, err := handler.ProfileShow(nil, &mcp.CallToolRequest{}, ProfileShowInput{Name: "dev"})
+	result, _, err := handler.ProfileShow(context.TODO(), &mcp.CallToolRequest{}, ProfileShowInput{Name: "dev"})
 	if err != nil {
 		t.Fatalf("ProfileShow failed: %v", err)
 	}
@@ -527,7 +528,7 @@ func TestProfileShow_WithPassword(t *testing.T) {
 
 	handler := NewToolHandler(cfg)
 
-	result, _, err := handler.ProfileShow(nil, &mcp.CallToolRequest{}, ProfileShowInput{Name: "dev"})
+	result, _, err := handler.ProfileShow(context.TODO(), &mcp.CallToolRequest{}, ProfileShowInput{Name: "dev"})
 	if err != nil {
 		t.Fatalf("ProfileShow failed: %v", err)
 	}
@@ -552,13 +553,13 @@ func TestProfileList_WithReadWriteProfile(t *testing.T) {
 	cfg := &config.File{
 		Profiles: map[string]config.Profile{
 			"readonly": {
-				DB:              "mysql",
-				Description:     "Read-only database",
+				DB:               "mysql",
+				Description:      "Read-only database",
 				UnsafeAllowWrite: false,
 			},
 			"readwrite": {
-				DB:              "pg",
-				Description:     "Read-write database",
+				DB:               "pg",
+				Description:      "Read-write database",
 				UnsafeAllowWrite: true,
 			},
 		},
@@ -566,7 +567,7 @@ func TestProfileList_WithReadWriteProfile(t *testing.T) {
 
 	handler := NewToolHandler(cfg)
 
-	result, _, err := handler.ProfileList(nil, &mcp.CallToolRequest{}, struct{}{})
+	result, _, err := handler.ProfileList(context.TODO(), &mcp.CallToolRequest{}, struct{}{})
 	if err != nil {
 		t.Fatalf("ProfileList failed: %v", err)
 	}

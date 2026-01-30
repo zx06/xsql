@@ -1,6 +1,7 @@
 package ssh
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -9,33 +10,33 @@ import (
 
 func TestExpandPath(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
+		name      string
+		input     string
 		wantTilde bool
 	}{
 		{
-			name:     "tilde expansion",
-			input:    "~/.ssh/id_rsa",
+			name:      "tilde expansion",
+			input:     "~/.ssh/id_rsa",
 			wantTilde: true,
 		},
 		{
-			name:     "no tilde",
-			input:    "/etc/ssh/ssh_config",
+			name:      "no tilde",
+			input:     "/etc/ssh/ssh_config",
 			wantTilde: false,
 		},
 		{
-			name:     "relative path",
-			input:    "./id_rsa",
+			name:      "relative path",
+			input:     "./id_rsa",
 			wantTilde: false,
 		},
 		{
-			name:     "absolute path",
-			input:    "/home/user/.ssh/id_rsa",
+			name:      "absolute path",
+			input:     "/home/user/.ssh/id_rsa",
 			wantTilde: false,
 		},
 		{
-			name:     "tilde without slash - not expanded by current implementation",
-			input:    "~",
+			name:      "tilde without slash - not expanded by current implementation",
+			input:     "~",
 			wantTilde: false, // Current implementation only expands ~/... not ~
 		},
 	}
@@ -74,7 +75,7 @@ func TestConnect_MissingHost(t *testing.T) {
 		User: "test",
 	}
 
-	_, xe := Connect(nil, opts)
+	_, xe := Connect(context.TODO(), opts)
 	if xe == nil {
 		t.Fatal("expected error for missing host")
 	}
@@ -93,7 +94,7 @@ func TestConnect_DefaultPort(t *testing.T) {
 
 	// Note: This will fail due to missing auth, but that's expected
 	// We just want to verify the port is handled correctly
-	_, xe := Connect(nil, opts)
+	_, xe := Connect(context.TODO(), opts)
 	// Should fail due to no auth methods, not due to port
 	if xe != nil && xe.Code == errors.CodeCfgInvalid {
 		t.Errorf("unexpected validation error: %v", xe)
@@ -105,18 +106,18 @@ func TestConnect_DefaultUser(t *testing.T) {
 	originalUser := os.Getenv("USER")
 	originalUsername := os.Getenv("USERNAME")
 	defer func() {
-		os.Setenv("USER", originalUser)
-		os.Setenv("USERNAME", originalUsername)
+		_ = os.Setenv("USER", originalUser)
+		_ = os.Setenv("USERNAME", originalUsername)
 	}()
 
-	os.Setenv("USER", "testuser")
-	os.Setenv("USERNAME", "")
+	_ = os.Setenv("USER", "testuser")
+	_ = os.Setenv("USERNAME", "")
 
 	opts := Options{
 		Host: "example.com",
 	}
 
-	_, xe := Connect(nil, opts)
+	_, xe := Connect(context.TODO(), opts)
 	// Should fail due to no auth methods, not due to user
 	if xe != nil && xe.Code == errors.CodeCfgInvalid {
 		t.Errorf("unexpected validation error: %v", xe)
@@ -130,7 +131,7 @@ func TestConnect_NoAuthMethods(t *testing.T) {
 		IdentityFile: "/nonexistent/key",
 	}
 
-	_, xe := Connect(nil, opts)
+	_, xe := Connect(context.TODO(), opts)
 	if xe == nil {
 		t.Fatal("expected error for no auth methods")
 	}
