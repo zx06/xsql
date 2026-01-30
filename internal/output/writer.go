@@ -107,7 +107,12 @@ func writeTable(out io.Writer, env Envelope) error {
 				for _, p := range profileList {
 					_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", p.name, p.description, p.db, p.mode)
 				}
-				_, _ = fmt.Fprintf(tw, "\n(%d profiles)\n", len(profileList))
+				// 使用正确的单数/复数形式
+				suffix := "profiles"
+				if len(profileList) == 1 {
+					suffix = "profile"
+				}
+				_, _ = fmt.Fprintf(tw, "\n(%d %s)\n", len(profileList), suffix)
 				return tw.Flush()
 			}
 		}

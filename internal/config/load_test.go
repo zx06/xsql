@@ -251,3 +251,91 @@ profiles:
 		t.Errorf("expected password=keyring:test/password, got %q", p.Password)
 	}
 }
+
+func TestLoadConfig_ProfileWithDescription(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := []byte(`profiles:
+  dev:
+    description: "开发环境数据库"
+    db: mysql
+    host: localhost
+    port: 3306
+  prod:
+    description: "生产环境数据库"
+    db: pg
+    host: prod.example.com
+    port: 5432
+`)
+	path := filepath.Join(tmp, "xsql.yaml")
+	if err := os.WriteFile(path, cfg, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	file, _, xe := LoadConfig(Options{WorkDir: tmp, HomeDir: tmp})
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+
+	// Verify dev profile
+	dev := file.Profiles["dev"]
+	if dev.Description != "开发环境数据库" {
+		t.Errorf("expected description='开发环境数据库', got %q", dev.Description)
+	}
+
+	// Verify prod profile
+	prod := file.Profiles["prod"]
+	if prod.Description != "生产环境数据库" {
+		t.Errorf("expected description='生产环境数据库', got %q", prod.Description)
+	}
+}
+
+func TestLoadConfig_ProfileWithoutDescription(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := []byte(`profiles:
+  old-style:
+    db: mysql
+    host: localhost
+    port: 3306
+`)
+	path := filepath.Join(tmp, "xsql.yaml")
+	if err := os.WriteFile(path, cfg, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	file, _, xe := LoadConfig(Options{WorkDir: tmp, HomeDir: tmp})
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+
+	// Verify profile without description (backward compatibility)
+	profile := file.Profiles["old-style"]
+	if profile.Description != "" {
+		t.Errorf("expected empty description for backward compatibility, got %q", profile.Description)
+	}
+}
+
+func TestLoadConfig_ProfileWithEmptyDescription(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := []byte(`profiles:
+  empty-desc:
+    description: ""
+    db: mysql
+    host: localhost
+    port: 3306
+`)
+	path := filepath.Join(tmp, "xsql.yaml")
+	if err := os.WriteFile(path, cfg, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	file, _, xe := LoadConfig(Options{WorkDir: tmp, HomeDir: tmp})
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+
+	// Verify profile with empty description
+	profile := file.Profiles["empty-desc"]
+	if profile.Description != "" {
+		t.Errorf("expected empty description, got %q", profile.Description)
+	}
+}
