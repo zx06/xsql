@@ -284,7 +284,7 @@ profiles:
     host: db.internal
     port: 5432
     user: app
-    password: keyring:xsql/prod/password
+    password: keyring:prod/password
     database: production
     ssh_proxy: bastion
 `)

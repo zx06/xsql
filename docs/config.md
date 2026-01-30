@@ -17,7 +17,7 @@ ssh_proxies:
     port: 22
     user: admin
     identity_file: ~/.ssh/id_ed25519
-    passphrase: "keyring:xsql/ssh/passphrase"
+    passphrase: "keyring:ssh/passphrase"
     known_hosts_file: ~/.ssh/known_hosts
 
   internal-jump:
@@ -44,7 +44,7 @@ profiles:
     host: 127.0.0.1
     port: 3306
     user: root
-    password: "keyring:xsql/dev/mysql_password"  # 使用 keyring
+    password: "keyring:dev/mysql_password"  # 使用 keyring
     database: myapp_dev
     format: table
 
@@ -64,7 +64,7 @@ profiles:
     host: db.internal.example.com  # 数据库内网地址
     port: 3306
     user: app_readonly
-    password: "keyring:xsql/prod/mysql_password"
+    password: "keyring:prod/mysql_password"
     database: myapp_prod
     ssh_proxy: bastion  # 引用预定义的 SSH 代理
 
@@ -74,7 +74,7 @@ profiles:
     host: analytics.internal.example.com
     port: 5432
     user: readonly
-    password: "keyring:xsql/prod/analytics_password"
+    password: "keyring:prod/analytics_password"
     database: analytics
     ssh_proxy: bastion  # 复用同一个 SSH 代理
 
@@ -115,27 +115,33 @@ profiles:
 ## Secrets
 
 - 默认：使用 OS keyring 保存密码/私钥 passphrase。
-- config 中使用引用格式：`keyring:<service>/<account>`
-  - 示例：`password: "keyring:xsql/prod/db_password"`
+- config 中使用引用格式：`keyring:<account>`
+  - 示例：`password: "keyring:prod/db_password"`
 - 明文密码需要显式允许：
   - 配置文件中设置 `allow_plaintext: true`
   - 或使用 CLI 标志 `--allow-plaintext`
 
 ### 设置 keyring 密码
 
+keyring 引用格式为 `keyring:<account>`，其中：
+- **service** 固定为 `xsql`
+- **account** 是你指定的标识符（可包含 `/`）
+
+例如 `keyring:prod/db_password` 表示 service=`xsql`，account=`prod/db_password`。
+
 ```bash
 # macOS
-security add-generic-password -s "xsql/prod/db_password" -a "xsql" -w "your_password"
+security add-generic-password -s "xsql" -a "prod/db_password" -w "your_password"
 
 # Linux (需要 secret-tool)
-secret-tool store --label="xsql prod db" service "xsql/prod/db_password" account "xsql"
+secret-tool store --label="xsql prod db" service "xsql" account "prod/db_password"
 
 # Windows (PowerShell)
-cmdkey /generic:xsql/prod/db_password /user:xsql /pass:your_password
+cmdkey /generic:xsql:prod/db_password /user:xsql /pass:your_password
 ```
 
 ### Secret 解析顺序
-1. 若值是 `keyring:` 引用 → 从 OS keyring 读取
+1. 若值是 `keyring:` 引用 → 从 OS keyring 读取（service 固定为 `xsql`）
 2. 否则若为明文且允许明文 → 直接使用
 3. 否则报错
 

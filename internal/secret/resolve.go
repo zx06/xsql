@@ -14,22 +14,41 @@ type Options struct {
 	Keyring        KeyringAPI // 可注入的 keyring 实现（nil 则用默认）
 }
 
+const defaultService = "xsql"
+
+// parseKeyringRef 解析 keyring 引用。
+// 整个引用作为 account，service 固定为 "xsql"。
+// 例如 "prod/db_password" → service="xsql", account="prod/db_password"
+func parseKeyringRef(ref string) (service, account string, err *errors.XError) {
+	if ref == "" {
+		return "", "", errors.New(errors.CodeCfgInvalid,
+			"invalid keyring reference: empty account",
+			map[string]any{"ref": ref})
+	}
+	return defaultService, ref, nil
+}
+
 // Resolve 解析 secret 值，遵循 docs/config.md 的顺序：
-//  1. keyring:xxx → 从 keyring 读取
+//  1. keyring:<service>/<account> → 从 keyring 读取
 //  2. 否则若为明文且允许明文 → 直接返回
 //  3. 否则报错
 //
 // 注意：TTY 交互输入本阶段不实现（留给 cmd 层处理）。
 func Resolve(raw string, opts Options) (string, *errors.XError) {
 	if strings.HasPrefix(raw, keyringPrefix) {
-		key := strings.TrimPrefix(raw, keyringPrefix)
+		ref := strings.TrimPrefix(raw, keyringPrefix)
+		service, account, parseErr := parseKeyringRef(ref)
+		if parseErr != nil {
+			return "", parseErr
+		}
 		kr := opts.Keyring
 		if kr == nil {
 			kr = defaultKeyring()
 		}
-		val, err := kr.Get(key)
+		val, err := kr.Get(service, account)
 		if err != nil {
-			return "", errors.Wrap(errors.CodeSecretNotFound, "failed to read secret from keyring", map[string]any{"key": key}, err)
+			return "", errors.Wrap(errors.CodeSecretNotFound, "failed to read secret from keyring",
+				map[string]any{"service": service, "account": account}, err)
 		}
 		return val, nil
 	}

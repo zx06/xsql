@@ -25,7 +25,7 @@ ssh_proxies:
     port: 22
     user: admin
     identity_file: ~/.ssh/id_ed25519
-    passphrase: "keyring:xsql/ssh/passphrase"
+    passphrase: "keyring:ssh/passphrase"
     known_hosts_file: ~/.ssh/known_hosts
 
 profiles:

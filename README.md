@@ -169,7 +169,7 @@ profiles:
     host: db.internal  # 内网地址
     port: 5432
     user: readonly
-    password: "keyring:xsql/prod/password"
+    password: "keyring:prod/password"
     database: mydb
     ssh_proxy: bastion  # 引用 SSH 代理
 ```
@@ -177,7 +177,7 @@ profiles:
 ### 安全特性
 
 - **双重只读保护**：SQL 静态分析 + 数据库事务级只读
-- **Keyring 集成**：`password: "keyring:xsql/prod/password"`
+- **Keyring 集成**：`password: "keyring:prod/password"`
 - **密码脱敏**：`profile show` 不泄露密码
 - **SSH 安全**：默认验证 known_hosts
 

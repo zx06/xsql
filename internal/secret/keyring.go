@@ -1,10 +1,11 @@
 package secret
 
 // KeyringAPI 是对 OS keyring 的最小抽象，便于测试与跨平台。
+// service 对应 keyring 的 service name，account 对应 user/account。
 type KeyringAPI interface {
-	Get(key string) (string, error)
-	Set(key, value string) error
-	Delete(key string) error
+	Get(service, account string) (string, error)
+	Set(service, account, value string) error
+	Delete(service, account string) error
 }
 
 // 默认 keyring 实现（使用 zalando/go-keyring）

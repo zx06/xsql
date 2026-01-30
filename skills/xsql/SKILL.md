@@ -199,7 +199,7 @@ profiles:
     host: localhost
     port: 3306
     user: root
-    password: keyring:xsql/dev/password
+    password: keyring:dev/password
     database: mydb
   
   # Plaintext password example (set allow_plaintext: true to enable)
@@ -218,7 +218,7 @@ profiles:
     host: db1.internal
     port: 5432
     user: readonly
-    password: keyring:xsql/prod/password
+    password: keyring:prod/password
     database: production
     ssh_proxy: bastion  # Reference the SSH proxy by name
 
@@ -227,7 +227,7 @@ profiles:
     host: db2.internal
     port: 3306
     user: app
-    password: keyring:xsql/prod/db2_password
+    password: keyring:prod/db2_password
     database: analytics
     ssh_proxy: bastion  # Reuse the same proxy
 ```
