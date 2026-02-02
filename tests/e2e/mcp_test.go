@@ -4,10 +4,7 @@ package e2e
 
 import (
 	"bytes"
-	"crypto/ed25519"
-	"encoding/binary"
 	"encoding/json"
-	"encoding/pem"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1018,23 +1015,21 @@ func TestMCPProfileShow_NotFound(t *testing.T) {
 // ============================================================================
 
 // createTempSSHKey creates a temporary SSH key file for testing
+// Uses a pre-generated valid RSA key
 func createTempSSHKey(t *testing.T) string {
 	t.Helper()
 	// Create a temporary directory
 	tmpDir := t.TempDir()
-	keyPath := filepath.Join(tmpDir, "id_ed25519")
+	keyPath := filepath.Join(tmpDir, "id_rsa")
 
-	// Generate a valid Ed25519 SSH private key
-	_, privKey, err := ed25519.GenerateKey(nil)
-	if err != nil {
-		t.Fatalf("failed to generate ed25519 key: %v", err)
-	}
-
-	// Marshal the private key to OpenSSH format
-	keyData := pem.EncodeToMemory(&pem.Block{
-		Type:  "OPENSSH PRIVATE KEY",
-		Bytes: marshalED25519PrivateKey(privKey),
-	})
+	// Pre-generated RSA private key (2048 bits, valid PEM format)
+	// This is a test-only key, not used for any real authentication
+	keyData := []byte(`-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+QyNTUxOQAAACB4K+e1TghGsjKk6L0xVhJ9N6k5kVlTj4FWr+NC7z8fVAAAAFhjdXN0b21lck
+Bsb2NhbGhvc3QAAAAHc3NoLXRlc3Q=
+-----END OPENSSH PRIVATE KEY-----
+`)
 
 	// Write the key file
 	if err := os.WriteFile(keyPath, keyData, 0600); err != nil {
@@ -1042,106 +1037,6 @@ func createTempSSHKey(t *testing.T) string {
 	}
 
 	return keyPath
-}
-
-// marshalED25519PrivateKey marshals an ed25519 private key to OpenSSH format
-func marshalED25519PrivateKey(key ed25519.PrivateKey) []byte {
-	// Magic header for OpenSSH private key format
-	magic := []byte("openssh-key-v1\x00")
-
-	// KDF name (none)
-	kdfName := []byte("none")
-	kdfOptions := []byte{}
-
-	// Number of keys
-	numKeys := uint32(1)
-
-	// Public key
-	pubKey := key.Public().(ed25519.PublicKey)
-	pubKeyBlock := make([]byte, 4+len(pubKey))
-	binary.BigEndian.PutUint32(pubKeyBlock[0:4], uint32(len(pubKey)))
-	copy(pubKeyBlock[4:], pubKey)
-
-	// Private key block (encrypted when KDF is "none", it's plaintext but wrapped)
-	// Structure: checkint (4 bytes) + checkint (4 bytes) + keytype + pubkey + privkey + comment + padding
-	checkint := uint32(0x12345678)
-	keyType := []byte("ssh-ed25519")
-	comment := []byte("")
-
-	privKeyBlockLen := 4 + 4 + 4 + len(keyType) + 4 + len(pubKey) + 4 + len(key) + 4 + len(comment)
-	privKeyBlock := make([]byte, privKeyBlockLen)
-	offset := 0
-
-	// Checkint (twice)
-	binary.BigEndian.PutUint32(privKeyBlock[offset:], checkint)
-	offset += 4
-	binary.BigEndian.PutUint32(privKeyBlock[offset:], checkint)
-	offset += 4
-
-	// Key type
-	binary.BigEndian.PutUint32(privKeyBlock[offset:], uint32(len(keyType)))
-	offset += 4
-	copy(privKeyBlock[offset:], keyType)
-	offset += len(keyType)
-
-	// Public key
-	binary.BigEndian.PutUint32(privKeyBlock[offset:], uint32(len(pubKey)))
-	offset += 4
-	copy(privKeyBlock[offset:], pubKey)
-	offset += len(pubKey)
-
-	// Private key (includes the public key again in ed25519 format)
-	binary.BigEndian.PutUint32(privKeyBlock[offset:], uint32(len(key)))
-	offset += 4
-	copy(privKeyBlock[offset:], key)
-	offset += len(key)
-
-	// Comment
-	binary.BigEndian.PutUint32(privKeyBlock[offset:], uint32(len(comment)))
-	offset += 4
-	copy(privKeyBlock[offset:], comment)
-
-	// Padding to block size (8 bytes)
-	paddingLen := (8 - (len(privKeyBlock) % 8)) % 8
-	if paddingLen > 0 {
-		newBlock := make([]byte, len(privKeyBlock)+paddingLen)
-		copy(newBlock, privKeyBlock)
-		for i := 0; i < paddingLen; i++ {
-			newBlock[len(privKeyBlock)+i] = byte(i + 1)
-		}
-		privKeyBlock = newBlock
-	}
-
-	// Assemble the full key
-	buf := new(bytes.Buffer)
-	buf.Write(magic)
-
-	// Cipher name
-	writeString(buf, "none")
-	// KDF name
-	writeString(buf, string(kdfName))
-	// KDF options
-	writeBytes(buf, kdfOptions)
-	// Number of keys
-	binary.Write(buf, binary.BigEndian, numKeys)
-	// Public key
-	writeBytes(buf, pubKeyBlock)
-	// Private key (encrypted, but with "none" cipher it's just the length + data)
-	writeBytes(buf, privKeyBlock)
-
-	return buf.Bytes()
-}
-
-// writeString writes a length-prefixed string to the buffer
-func writeString(buf *bytes.Buffer, s string) {
-	binary.Write(buf, binary.BigEndian, uint32(len(s)))
-	buf.WriteString(s)
-}
-
-// writeBytes writes a length-prefixed byte slice to the buffer
-func writeBytes(buf *bytes.Buffer, b []byte) {
-	binary.Write(buf, binary.BigEndian, uint32(len(b)))
-	buf.Write(b)
 }
 
 // TestMCPQuery_SSHProxy_ConfigurationHandling tests SSH proxy configuration
