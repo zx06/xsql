@@ -82,6 +82,56 @@ jobs:
           --health-retries=5
 
     steps:
+      - name: Start SSH Server
+        run: |
+          # Create SSH host keys
+          mkdir -p /tmp/ssh-server
+          ssh-keygen -t rsa -f /tmp/ssh-server/ssh_host_rsa_key -N "" -C "host"
+          ssh-keygen -t ed25519 -f /tmp/ssh-server/ssh_host_ed25519_key -N "" -C "host"
+          
+          # Generate test user key pair
+          mkdir -p /tmp/ssh-client
+          ssh-keygen -t ed25519 -f /tmp/ssh-client/id_ed25519 -N "" -C "testuser"
+          
+          # Create authorized_keys
+          mkdir -p /tmp/ssh-server/authorized_keys
+          cp /tmp/ssh-client/id_ed25519.pub /tmp/ssh-server/authorized_keys/testuser
+          
+          # Start SSH server container
+          docker run -d \
+            --name ssh-server \
+            --network host \
+            -e PUID=1000 \
+            -e PGID=1000 \
+            -e TZ=Etc/UTC \
+            -e SUDO_ACCESS=false \
+            -e PASSWORD_ACCESS=false \
+            -e USER_NAME=testuser \
+            -v /tmp/ssh-server/ssh_host_rsa_key:/etc/ssh/ssh_host_rsa_key:ro \
+            -v /tmp/ssh-server/ssh_host_ed25519_key:/etc/ssh/ssh_host_ed25519_key:ro \
+            -v /tmp/ssh-server/authorized_keys:/config/.ssh:ro \
+            -p 2222:2222 \
+            linuxserver/openssh-server:latest
+          
+          # Wait for SSH server to be ready
+          sleep 5
+          for i in {1..30}; do
+            if nc -z localhost 2222; then
+              echo "SSH server is ready"
+              break
+            fi
+            sleep 1
+          done
+          
+          # Set environment variables for tests
+          echo "SSH_TEST_HOST=localhost" >> $GITHUB_ENV
+          echo "SSH_TEST_PORT=2222" >> $GITHUB_ENV
+          echo "SSH_TEST_USER=testuser" >> $GITHUB_ENV
+          echo "SSH_TEST_KEY_PATH=/tmp/ssh-client/id_ed25519" >> $GITHUB_ENV
+          echo "SSH_KNOWN_HOSTS_FILE=/tmp/ssh-client/known_hosts" >> $GITHUB_ENV
+          
+          # Add host key to known_hosts for tests that need it
+          ssh-keyscan -p 2222 -t ed25519 localhost > /tmp/ssh-client/known_hosts 2>/dev/null || true
       - uses: actions/checkout@v6
 
       - name: Setup Go
@@ -106,6 +156,11 @@ jobs:
         env:
           XSQL_TEST_MYSQL_DSN: "root:root@tcp(127.0.0.1:3306)/testdb"
           XSQL_TEST_PG_DSN: "postgres://postgres:postgres@127.0.0.1:5432/testdb?sslmode=disable"
+          SSH_TEST_HOST: ${{ env.SSH_TEST_HOST }}
+          SSH_TEST_PORT: ${{ env.SSH_TEST_PORT }}
+          SSH_TEST_USER: ${{ env.SSH_TEST_USER }}
+          SSH_TEST_KEY_PATH: ${{ env.SSH_TEST_KEY_PATH }}
+          SSH_KNOWN_HOSTS_FILE: ${{ env.SSH_KNOWN_HOSTS_FILE }}
         run: go test -v -tags=e2e -coverprofile=coverage-e2e.txt -covermode=atomic -coverpkg=github.com/zx06/xsql/internal/... ./tests/e2e/...
 
       - name: Upload integration coverage to Codecov
