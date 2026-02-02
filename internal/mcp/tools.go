@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/zx06/xsql/internal/config"
@@ -38,13 +39,44 @@ func NewToolHandler(cfg *config.File) *ToolHandler {
 	}
 }
 
+// getProfileNames returns a list of available profile names
+func (h *ToolHandler) getProfileNames() []string {
+	names := make([]string, 0, len(h.config.Profiles))
+	for name := range h.config.Profiles {
+		names = append(names, name)
+	}
+	return names
+}
+
 // RegisterTools registers all tools with the MCP server
 func (h *ToolHandler) RegisterTools(server *mcp.Server) {
-	// Query tool
-	mcp.AddTool[QueryInput, any](server, &mcp.Tool{
+	profileNames := h.getProfileNames()
+	profileEnums := make([]any, len(profileNames))
+	for i, name := range profileNames {
+		profileEnums[i] = name
+	}
+
+	// Query tool with profile enum
+	querySchema := &jsonschema.Schema{
+		Type:     "object",
+		Required: []string{"sql", "profile"},
+		Properties: map[string]*jsonschema.Schema{
+			"sql": {
+				Type:        "string",
+				Description: "SQL query to execute",
+			},
+			"profile": {
+				Type:        "string",
+				Description: "Profile name to use",
+				Enum:        profileEnums,
+			},
+		},
+	}
+	server.AddTool(&mcp.Tool{
 		Name:        "query",
 		Description: "Execute SQL query on database",
-	}, h.Query)
+		InputSchema: querySchema,
+	}, h.queryHandler)
 
 	// Profile list tool
 	mcp.AddTool[struct{}, any](server, &mcp.Tool{
@@ -52,11 +84,53 @@ func (h *ToolHandler) RegisterTools(server *mcp.Server) {
 		Description: "List all configured profiles",
 	}, h.ProfileList)
 
-	// Profile show tool
-	mcp.AddTool[ProfileShowInput, any](server, &mcp.Tool{
+	// Profile show tool with profile enum
+	profileShowSchema := &jsonschema.Schema{
+		Type:     "object",
+		Required: []string{"name"},
+		Properties: map[string]*jsonschema.Schema{
+			"name": {
+				Type:        "string",
+				Description: "Profile name",
+				Enum:        profileEnums,
+			},
+		},
+	}
+	server.AddTool(&mcp.Tool{
 		Name:        "profile_show",
 		Description: "Show profile details",
-	}, h.ProfileShow)
+		InputSchema: profileShowSchema,
+	}, h.profileShowHandler)
+}
+
+// queryHandler is the raw handler for query tool
+func (h *ToolHandler) queryHandler(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var input QueryInput
+	if err := json.Unmarshal(req.Params.Arguments, &input); err != nil {
+		return &mcp.CallToolResult{
+			IsError: true,
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: h.formatError(errors.Wrap(errors.CodeCfgInvalid, "invalid input", nil, err))},
+			},
+		}, nil
+	}
+	result, _, err := h.Query(ctx, req, input)
+	return result, err
+}
+
+// profileShowHandler is the raw handler for profile_show tool
+func (h *ToolHandler) profileShowHandler(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var input ProfileShowInput
+	if err := json.Unmarshal(req.Params.Arguments, &input); err != nil {
+		return &mcp.CallToolResult{
+			IsError: true,
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: h.formatError(errors.Wrap(errors.CodeCfgInvalid, "invalid input", nil, err))},
+			},
+		}, nil
+	}
+	result, _, err := h.ProfileShow(ctx, req, input)
+	return result, err
 }
 
 // Query executes a SQL query
@@ -86,7 +160,17 @@ func (h *ToolHandler) Query(ctx context.Context, req *mcp.CallToolRequest, input
 		return &mcp.CallToolResult{
 			IsError: true,
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: h.formatError(errors.New(errors.CodeCfgInvalid, "profile not found", map[string]interface{}{"name": input.Profile}))},
+				&mcp.TextContent{Text: h.formatError(errors.New(errors.CodeCfgInvalid, "profile does not exist", map[string]any{"name": input.Profile, "reason": "profile_not_found"}))},
+			},
+		}, nil, nil
+	}
+
+	// Validate SSH proxy reference if present
+	if profile.SSHProxy != "" && profile.SSHConfig == nil {
+		return &mcp.CallToolResult{
+			IsError: true,
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: h.formatError(errors.New(errors.CodeCfgInvalid, "ssh_proxy not found", map[string]any{"profile": input.Profile, "ssh_proxy": profile.SSHProxy, "reason": "ssh_proxy_not_found"}))},
 			},
 		}, nil, nil
 	}
@@ -158,7 +242,7 @@ func (h *ToolHandler) Query(ctx context.Context, req *mcp.CallToolRequest, input
 		return &mcp.CallToolResult{
 			IsError: true,
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: h.formatError(errors.New(errors.CodeDBDriverUnsupported, "unsupported db driver", map[string]interface{}{"db": profile.DB}))},
+				&mcp.TextContent{Text: h.formatError(errors.New(errors.CodeDBDriverUnsupported, "unsupported db driver", map[string]any{"db": profile.DB}))},
 			},
 		}, nil, nil
 	}
@@ -200,7 +284,7 @@ func (h *ToolHandler) Query(ctx context.Context, req *mcp.CallToolRequest, input
 		}, nil, nil
 	}
 
-	output := map[string]interface{}{
+	output := map[string]any{
 		"ok":             true,
 		"schema_version": 1,
 		"data":           result,
@@ -246,10 +330,10 @@ func (h *ToolHandler) ProfileList(ctx context.Context, req *mcp.CallToolRequest,
 		})
 	}
 
-	output := map[string]interface{}{
+	output := map[string]any{
 		"ok":             true,
 		"schema_version": 1,
-		"data": map[string]interface{}{
+		"data": map[string]any{
 			"profiles": profiles,
 		},
 	}
@@ -278,13 +362,13 @@ func (h *ToolHandler) ProfileShow(ctx context.Context, req *mcp.CallToolRequest,
 		return &mcp.CallToolResult{
 			IsError: true,
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: h.formatError(errors.New(errors.CodeCfgInvalid, "profile not found", map[string]interface{}{"name": input.Name}))},
+				&mcp.TextContent{Text: h.formatError(errors.New(errors.CodeCfgInvalid, "profile does not exist", map[string]any{"name": input.Name, "reason": "profile_not_found"}))},
 			},
 		}, nil, nil
 	}
 
 	// Redact sensitive information
-	result := map[string]interface{}{
+	result := map[string]any{
 		"name":               input.Name,
 		"description":        profile.Description,
 		"db":                 profile.DB,
@@ -313,7 +397,7 @@ func (h *ToolHandler) ProfileShow(ctx context.Context, req *mcp.CallToolRequest,
 		}
 	}
 
-	output := map[string]interface{}{
+	output := map[string]any{
 		"ok":             true,
 		"schema_version": 1,
 		"data":           result,
@@ -337,6 +421,7 @@ func (h *ToolHandler) ProfileShow(ctx context.Context, req *mcp.CallToolRequest,
 }
 
 // getProfile gets a profile by name, or returns the default profile
+// Also resolves SSH proxy reference if present
 func (h *ToolHandler) getProfile(name string) *config.Profile {
 	if name == "" {
 		// Use default profile (first one)
@@ -350,6 +435,14 @@ func (h *ToolHandler) getProfile(name string) *config.Profile {
 	if !ok {
 		return nil
 	}
+
+	// Resolve SSH proxy reference
+	if profile.SSHProxy != "" {
+		if proxy, ok := h.config.SSHProxies[profile.SSHProxy]; ok {
+			profile.SSHConfig = &proxy
+		}
+	}
+
 	return &profile
 }
 
@@ -361,10 +454,10 @@ func (h *ToolHandler) formatError(err error) string {
 	} else {
 		xe = errors.New(errors.CodeInternal, "unknown error", nil)
 	}
-	output := map[string]interface{}{
+	output := map[string]any{
 		"ok":             false,
 		"schema_version": 1,
-		"error": map[string]interface{}{
+		"error": map[string]any{
 			"code":    xe.Code,
 			"message": xe.Message,
 			"details": xe.Details,
