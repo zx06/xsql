@@ -2,9 +2,11 @@
 
 ## 优先级
 - CLI > ENV > Config
-
 ## Profiles
+
 支持多 profile：`profiles.<name>`，通过 `--profile` 或 `XSQL_PROFILE` 选择。
+
+> **默认 Profile**：如果未通过 CLI 或 ENV 指定 profile，且配置中存在名为 `default` 的 profile，则自动使用 `default` profile。
 
 ## SSH Proxies
 
