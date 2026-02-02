@@ -1023,7 +1023,7 @@ func createTempSSHKey(t *testing.T) string {
 	t.Helper()
 	// Create a temporary directory
 	tmpDir := t.TempDir()
-	keyPath := filepath.Join(tmpDir, "id_rsa")
+	keyPath := filepath.Join(tmpDir, "id_ed25519")
 
 	// Generate a valid Ed25519 SSH private key
 	_, privKey, err := ed25519.GenerateKey(nil)
@@ -1031,24 +1031,11 @@ func createTempSSHKey(t *testing.T) string {
 		t.Fatalf("failed to generate ed25519 key: %v", err)
 	}
 
-	// Convert to SSH private key format
-	signer, err := gossh.NewSignerFromKey(privKey)
-	if err != nil {
-		t.Fatalf("failed to create signer: %v", err)
-	}
-
-	// Marshal the private key to PEM format
-	var keyData []byte
-	switch signer.(type) {
-	case *gossh.CryptoPublicKey:
-		// For ed25519, we need to encode it properly
-		keyData = pem.EncodeToMemory(&pem.Block{
-			Type:  "OPENSSH PRIVATE KEY",
-			Bytes: marshalED25519PrivateKey(privKey),
-		})
-	default:
-		t.Fatal("unexpected key type")
-	}
+	// Marshal the private key to OpenSSH format
+	keyData := pem.EncodeToMemory(&pem.Block{
+		Type:  "OPENSSH PRIVATE KEY",
+		Bytes: marshalED25519PrivateKey(privKey),
+	})
 
 	// Write the key file
 	if err := os.WriteFile(keyPath, keyData, 0600); err != nil {
