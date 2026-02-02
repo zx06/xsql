@@ -84,6 +84,19 @@ jobs:
     steps:
       - name: Start SSH Server
         run: |
+          # Create Docker network for test containers
+          docker network create xsql-test-network
+          
+          # Connect MySQL and PostgreSQL to the test network
+          docker network connect xsql-test-network mysql
+          docker network connect xsql-test-network postgres
+          
+          # Get MySQL and PostgreSQL container IPs
+          MYSQL_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' mysql | cut -d' ' -f1)
+          PG_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' postgres | cut -d' ' -f1)
+          echo "MySQL IP: $MYSQL_IP"
+          echo "PostgreSQL IP: $PG_IP"
+          
           # Create SSH host keys
           mkdir -p /tmp/ssh-server
           ssh-keygen -t rsa -f /tmp/ssh-server/ssh_host_rsa_key -N "" -C "host"
@@ -93,14 +106,29 @@ jobs:
           mkdir -p /tmp/ssh-client
           ssh-keygen -t ed25519 -f /tmp/ssh-client/id_ed25519 -N "" -C "testuser"
           
-          # Create authorized_keys
-          mkdir -p /tmp/ssh-server/authorized_keys
-          cp /tmp/ssh-client/id_ed25519.pub /tmp/ssh-server/authorized_keys/testuser
+          # Create authorized_keys directory
+          mkdir -p /tmp/ssh-server/.ssh
+          cp /tmp/ssh-client/id_ed25519.pub /tmp/ssh-server/.ssh/authorized_keys
+          chmod 700 /tmp/ssh-server/.ssh
+          chmod 600 /tmp/ssh-server/.ssh/authorized_keys
           
-          # Start SSH server container
+          # Create SSH server configuration
+          cat > /tmp/ssh-server/sshd_config << 'EOF'
+          Port 2222
+          HostKey /etc/ssh/ssh_host_rsa_key
+          HostKey /etc/ssh/ssh_host_ed25519_key
+          AuthorizedKeysFile /config/.ssh/authorized_keys
+          PermitRootLogin no
+          PasswordAuthentication no
+          ChallengeResponseAuthentication no
+          UsePAM yes
+          AllowUsers testuser
+          EOF
+          
+          # Start SSH server container on the test network
           docker run -d \
             --name ssh-server \
-            --network host \
+            --network xsql-test-network \
             -e PUID=1000 \
             -e PGID=1000 \
             -e TZ=Etc/UTC \
@@ -109,7 +137,8 @@ jobs:
             -e USER_NAME=testuser \
             -v /tmp/ssh-server/ssh_host_rsa_key:/etc/ssh/ssh_host_rsa_key:ro \
             -v /tmp/ssh-server/ssh_host_ed25519_key:/etc/ssh/ssh_host_ed25519_key:ro \
-            -v /tmp/ssh-server/authorized_keys:/config/.ssh:ro \
+            -v /tmp/ssh-server/.ssh:/config/.ssh:ro \
+            -v /tmp/ssh-server/sshd_config:/etc/ssh/sshd_config:ro \
             -p 2222:2222 \
             linuxserver/openssh-server:latest
           
@@ -129,6 +158,8 @@ jobs:
           echo "SSH_TEST_USER=testuser" >> $GITHUB_ENV
           echo "SSH_TEST_KEY_PATH=/tmp/ssh-client/id_ed25519" >> $GITHUB_ENV
           echo "SSH_KNOWN_HOSTS_FILE=/tmp/ssh-client/known_hosts" >> $GITHUB_ENV
+          echo "MYSQL_IP=$MYSQL_IP" >> $GITHUB_ENV
+          echo "PG_IP=$PG_IP" >> $GITHUB_ENV
           
           # Add host key to known_hosts for tests that need it
           ssh-keyscan -p 2222 -t ed25519 localhost > /tmp/ssh-client/known_hosts 2>/dev/null || true
