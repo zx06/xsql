@@ -14,7 +14,6 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	gossh "golang.org/x/crypto/ssh"
 )
 
 // TestMCPServer_Startup tests that MCP server starts correctly and returns tools list
