@@ -94,6 +94,8 @@ xsql spec --format json
 xsql spec --format yaml
 ```
 
+> **注意**：`spec` 命令支持所有输出格式（`json`/`yaml`/`table`/`csv`/`auto`），但通常使用 `json` 或 `yaml` 供 AI 消费。
+
 ### `xsql version`
 
 输出版本信息。
