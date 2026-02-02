@@ -33,7 +33,12 @@ func TestMCPQuery_SSHProxy_Success_MySQL(t *testing.T) {
 		t.Skip("SSH test environment not configured (set SSH_TEST_HOST, SSH_TEST_PORT, SSH_TEST_USER, SSH_TEST_KEY_PATH)")
 	}
 
-	dsn := mysqlDSN(t)
+	// Use MySQL container IP from environment if available (for Docker network access via SSH)
+	mysqlIP := os.Getenv("MYSQL_IP")
+	if mysqlIP == "" {
+		mysqlIP = "127.0.0.1"
+	}
+	dsn := fmt.Sprintf("root:root@tcp(%s:3306)/testdb", mysqlIP)
 
 	// Build SSH proxy configuration
 	sshProxyConfig := fmt.Sprintf(`ssh_proxies:
@@ -122,7 +127,12 @@ func TestMCPQuery_SSHProxy_Success_PG(t *testing.T) {
 		t.Skip("SSH test environment not configured (set SSH_TEST_HOST, SSH_TEST_PORT, SSH_TEST_USER, SSH_TEST_KEY_PATH)")
 	}
 
-	dsn := pgDSN(t)
+	// Use PostgreSQL container IP from environment if available (for Docker network access via SSH)
+	pgIP := os.Getenv("PG_IP")
+	if pgIP == "" {
+		pgIP = "127.0.0.1"
+	}
+	dsn := fmt.Sprintf("postgres://postgres:postgres@%s:5432/testdb?sslmode=disable", pgIP)
 
 	// Build SSH proxy configuration
 	var sshProxyConfig string
@@ -202,7 +212,12 @@ func TestMCPQuery_SSHProxy_MultipleQueries(t *testing.T) {
 		t.Skip("SSH test environment not configured")
 	}
 
-	dsn := mysqlDSN(t)
+	// Use MySQL container IP from environment if available
+	mysqlIP := os.Getenv("MYSQL_IP")
+	if mysqlIP == "" {
+		mysqlIP = "127.0.0.1"
+	}
+	dsn := fmt.Sprintf("root:root@tcp(%s:3306)/testdb", mysqlIP)
 
 	var sshProxyConfig string
 	if knownHosts != "" {
