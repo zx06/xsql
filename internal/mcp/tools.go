@@ -165,6 +165,16 @@ func (h *ToolHandler) Query(ctx context.Context, req *mcp.CallToolRequest, input
 		}, nil, nil
 	}
 
+	// Validate SSH proxy reference if present
+	if profile.SSHProxy != "" && profile.SSHConfig == nil {
+		return &mcp.CallToolResult{
+			IsError: true,
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: h.formatError(errors.New(errors.CodeCfgInvalid, "ssh_proxy not found", map[string]any{"profile": input.Profile, "ssh_proxy": profile.SSHProxy, "reason": "ssh_proxy_not_found"}))},
+			},
+		}, nil, nil
+	}
+
 	if profile.DB == "" {
 		return &mcp.CallToolResult{
 			IsError: true,
@@ -411,6 +421,7 @@ func (h *ToolHandler) ProfileShow(ctx context.Context, req *mcp.CallToolRequest,
 }
 
 // getProfile gets a profile by name, or returns the default profile
+// Also resolves SSH proxy reference if present
 func (h *ToolHandler) getProfile(name string) *config.Profile {
 	if name == "" {
 		// Use default profile (first one)
@@ -424,6 +435,14 @@ func (h *ToolHandler) getProfile(name string) *config.Profile {
 	if !ok {
 		return nil
 	}
+
+	// Resolve SSH proxy reference
+	if profile.SSHProxy != "" {
+		if proxy, ok := h.config.SSHProxies[profile.SSHProxy]; ok {
+			profile.SSHConfig = &proxy
+		}
+	}
+
 	return &profile
 }
 
