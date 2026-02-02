@@ -6,17 +6,15 @@
 
 ## 只读（RO）策略
 
-### 双重保护机制（默认启用）
-xsql 采用双重保护防止误操作写数据库：
+### 只读保护机制（默认启用）
+xsql 采用客户端静态分析防止误操作写数据库：
 
-1. **SQL 静态分析**（客户端）
-   - 基于 SQL 关键字判定（非 AST 解析）
-   - 默认允许：`SELECT`、`WITH`、`EXPLAIN`、`SHOW`、`DESCRIBE`
-   - 默认拒绝：`INSERT/UPDATE/DELETE`、`CREATE/ALTER/DROP/TRUNCATE` 等
+**SQL 静态分析**（客户端）
+- 基于 SQL 关键字判定（非 AST 解析）
+- 默认允许：`SELECT`、`WITH`、`EXPLAIN`、`SHOW`、`DESCRIBE`
+- 默认拒绝：`INSERT/UPDATE/DELETE`、`CREATE/ALTER/DROP/TRUNCATE` 等
 
-2. **数据库事务级只读**（服务端）
-   - PostgreSQL/MySQL：使用 `BEGIN READ ONLY` 事务执行查询
-   - 数据库层面阻止任何写操作
+> **注意**：服务端事务级只读（`BEGIN READ ONLY`）为计划中功能，当前版本仅实现客户端静态分析。
 
 ### 写操作控制
 - 默认：只读模式（双重保护都启用）
