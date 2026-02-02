@@ -4,11 +4,17 @@ package e2e
 
 import (
 	"bytes"
+	"crypto/ed25519"
+	"encoding/binary"
 	"encoding/json"
+	"encoding/pem"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gossh "golang.org/x/crypto/ssh"
 )
 
 // TestMCPServer_Startup tests that MCP server starts correctly and returns tools list
@@ -1012,9 +1018,150 @@ func TestMCPProfileShow_NotFound(t *testing.T) {
 // MCP SSH Proxy Tests
 // ============================================================================
 
+// createTempSSHKey creates a temporary SSH key file for testing
+func createTempSSHKey(t *testing.T) string {
+	t.Helper()
+	// Create a temporary directory
+	tmpDir := t.TempDir()
+	keyPath := filepath.Join(tmpDir, "id_rsa")
+
+	// Generate a valid Ed25519 SSH private key
+	_, privKey, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("failed to generate ed25519 key: %v", err)
+	}
+
+	// Convert to SSH private key format
+	signer, err := gossh.NewSignerFromKey(privKey)
+	if err != nil {
+		t.Fatalf("failed to create signer: %v", err)
+	}
+
+	// Marshal the private key to PEM format
+	var keyData []byte
+	switch signer.(type) {
+	case *gossh.CryptoPublicKey:
+		// For ed25519, we need to encode it properly
+		keyData = pem.EncodeToMemory(&pem.Block{
+			Type:  "OPENSSH PRIVATE KEY",
+			Bytes: marshalED25519PrivateKey(privKey),
+		})
+	default:
+		t.Fatal("unexpected key type")
+	}
+
+	// Write the key file
+	if err := os.WriteFile(keyPath, keyData, 0600); err != nil {
+		t.Fatalf("failed to write key file: %v", err)
+	}
+
+	return keyPath
+}
+
+// marshalED25519PrivateKey marshals an ed25519 private key to OpenSSH format
+func marshalED25519PrivateKey(key ed25519.PrivateKey) []byte {
+	// Magic header for OpenSSH private key format
+	magic := []byte("openssh-key-v1\x00")
+
+	// KDF name (none)
+	kdfName := []byte("none")
+	kdfOptions := []byte{}
+
+	// Number of keys
+	numKeys := uint32(1)
+
+	// Public key
+	pubKey := key.Public().(ed25519.PublicKey)
+	pubKeyBlock := make([]byte, 4+len(pubKey))
+	binary.BigEndian.PutUint32(pubKeyBlock[0:4], uint32(len(pubKey)))
+	copy(pubKeyBlock[4:], pubKey)
+
+	// Private key block (encrypted when KDF is "none", it's plaintext but wrapped)
+	// Structure: checkint (4 bytes) + checkint (4 bytes) + keytype + pubkey + privkey + comment + padding
+	checkint := uint32(0x12345678)
+	keyType := []byte("ssh-ed25519")
+	comment := []byte("")
+
+	privKeyBlockLen := 4 + 4 + 4 + len(keyType) + 4 + len(pubKey) + 4 + len(key) + 4 + len(comment)
+	privKeyBlock := make([]byte, privKeyBlockLen)
+	offset := 0
+
+	// Checkint (twice)
+	binary.BigEndian.PutUint32(privKeyBlock[offset:], checkint)
+	offset += 4
+	binary.BigEndian.PutUint32(privKeyBlock[offset:], checkint)
+	offset += 4
+
+	// Key type
+	binary.BigEndian.PutUint32(privKeyBlock[offset:], uint32(len(keyType)))
+	offset += 4
+	copy(privKeyBlock[offset:], keyType)
+	offset += len(keyType)
+
+	// Public key
+	binary.BigEndian.PutUint32(privKeyBlock[offset:], uint32(len(pubKey)))
+	offset += 4
+	copy(privKeyBlock[offset:], pubKey)
+	offset += len(pubKey)
+
+	// Private key (includes the public key again in ed25519 format)
+	binary.BigEndian.PutUint32(privKeyBlock[offset:], uint32(len(key)))
+	offset += 4
+	copy(privKeyBlock[offset:], key)
+	offset += len(key)
+
+	// Comment
+	binary.BigEndian.PutUint32(privKeyBlock[offset:], uint32(len(comment)))
+	offset += 4
+	copy(privKeyBlock[offset:], comment)
+
+	// Padding to block size (8 bytes)
+	paddingLen := (8 - (len(privKeyBlock) % 8)) % 8
+	if paddingLen > 0 {
+		newBlock := make([]byte, len(privKeyBlock)+paddingLen)
+		copy(newBlock, privKeyBlock)
+		for i := 0; i < paddingLen; i++ {
+			newBlock[len(privKeyBlock)+i] = byte(i + 1)
+		}
+		privKeyBlock = newBlock
+	}
+
+	// Assemble the full key
+	buf := new(bytes.Buffer)
+	buf.Write(magic)
+
+	// Cipher name
+	writeString(buf, "none")
+	// KDF name
+	writeString(buf, string(kdfName))
+	// KDF options
+	writeBytes(buf, kdfOptions)
+	// Number of keys
+	binary.Write(buf, binary.BigEndian, numKeys)
+	// Public key
+	writeBytes(buf, pubKeyBlock)
+	// Private key (encrypted, but with "none" cipher it's just the length + data)
+	writeBytes(buf, privKeyBlock)
+
+	return buf.Bytes()
+}
+
+// writeString writes a length-prefixed string to the buffer
+func writeString(buf *bytes.Buffer, s string) {
+	binary.Write(buf, binary.BigEndian, uint32(len(s)))
+	buf.WriteString(s)
+}
+
+// writeBytes writes a length-prefixed byte slice to the buffer
+func writeBytes(buf *bytes.Buffer, b []byte) {
+	binary.Write(buf, binary.BigEndian, uint32(len(b)))
+	buf.Write(b)
+}
+
 // TestMCPQuery_SSHProxy_ConfigurationHandling tests SSH proxy configuration
 func TestMCPQuery_SSHProxy_ConfigurationHandling(t *testing.T) {
 	dsn := mysqlDSN(t)
+	keyPath := createTempSSHKey(t)
 
 	// Note: This test verifies SSH proxy configuration is properly processed,
 	// but will fail at SSH connection stage since no real SSH server exists.
@@ -1024,7 +1171,7 @@ func TestMCPQuery_SSHProxy_ConfigurationHandling(t *testing.T) {
     host: nonexistent.ssh.server.test
     port: 22
     user: testuser
-    identity_file: ~/.ssh/id_rsa
+    identity_file: `+keyPath+`
     skip_host_key: true
 
 profiles:
@@ -1062,13 +1209,10 @@ profiles:
 		t.Error("expected ok=false")
 	}
 
-	// Should fail with SSH dial error
-	if response.Error.Code != "XSQL_SSH_DIAL_FAILED" {
+	// Should fail with SSH dial error or SSH auth error
+	if response.Error.Code != "XSQL_SSH_DIAL_FAILED" && response.Error.Code != "XSQL_SSH_AUTH_FAILED" {
 		t.Logf("Got error code: %s (expected SSH_DIAL_FAILED or SSH_AUTH_FAILED)", response.Error.Code)
-		// Either SSH_DIAL_FAILED or SSH_AUTH_FAILED is acceptable depending on timing
-		if response.Error.Code != "XSQL_SSH_AUTH_FAILED" {
-			t.Errorf("expected XSQL_SSH_DIAL_FAILED or XSQL_SSH_AUTH_FAILED, got %s", response.Error.Code)
-		}
+		t.Errorf("expected XSQL_SSH_DIAL_FAILED or XSQL_SSH_AUTH_FAILED, got %s", response.Error.Code)
 	}
 }
 
@@ -1328,6 +1472,7 @@ profiles:
 // TestMCPQuery_SSHProxy_PassphraseHandling tests SSH key passphrase scenarios
 func TestMCPQuery_SSHProxy_PassphraseHandling(t *testing.T) {
 	dsn := mysqlDSN(t)
+	keyPath := createTempSSHKey(t)
 
 	// Test with invalid passphrase format (should fail at secret resolution)
 	config := createTempConfig(t, `ssh_proxies:
@@ -1335,7 +1480,7 @@ func TestMCPQuery_SSHProxy_PassphraseHandling(t *testing.T) {
     host: localhost
     port: 22
     user: testuser
-    identity_file: ~/.ssh/id_rsa
+    identity_file: `+keyPath+`
     passphrase: "keyring:invalid:format:too:many:parts"
     skip_host_key: true
 
@@ -1384,6 +1529,7 @@ profiles:
 // TestMCPQuery_SSHProxy_HostKeyValidation tests SSH host key scenarios
 func TestMCPQuery_SSHProxy_HostKeyValidation(t *testing.T) {
 	dsn := mysqlDSN(t)
+	keyPath := createTempSSHKey(t)
 
 	// Test without skip_host_key (should fail with known_hosts error)
 	config := createTempConfig(t, `ssh_proxies:
@@ -1391,7 +1537,7 @@ func TestMCPQuery_SSHProxy_HostKeyValidation(t *testing.T) {
     host: unknown.host.test
     port: 22
     user: testuser
-    identity_file: ~/.ssh/id_rsa
+    identity_file: `+keyPath+`
     skip_host_key: false
 
 profiles:
