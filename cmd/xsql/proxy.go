@@ -60,18 +60,6 @@ func runProxy(cmd *cobra.Command, flags *ProxyFlags, w *output.Writer) error {
 		return errors.New(errors.CodeCfgInvalid, "db type is required (mysql|pg)", nil)
 	}
 
-	// Get default port based on DB type
-	if p.Port == 0 {
-		switch p.DB {
-		case "mysql":
-			p.Port = 3306
-		case "pg":
-			p.Port = 5432
-		default:
-			return errors.New(errors.CodeCfgInvalid, "unknown db type", map[string]any{"db": p.DB})
-		}
-	}
-
 	// Check if SSH proxy is configured
 	if p.SSHConfig == nil {
 		return errors.New(errors.CodeCfgInvalid, "profile must have ssh_proxy configured for port forwarding", nil)
