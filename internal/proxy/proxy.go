@@ -19,11 +19,11 @@ type Dialer interface {
 
 // Proxy represents a TCP port forwarding proxy.
 type Proxy struct {
-	dialer    Dialer
-	listener  net.Listener
-	ctx       context.Context
-	cancel    context.CancelFunc
-	wg        sync.WaitGroup
+	dialer   Dialer
+	listener net.Listener
+	ctx      context.Context
+	cancel   context.CancelFunc
+	wg       sync.WaitGroup
 }
 
 // Options holds configuration for starting a proxy.

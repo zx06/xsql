@@ -177,7 +177,7 @@ func TestProxy_OutputFormat_Table(t *testing.T) {
 `)
 
 	// This will fail to connect to SSH, but stderr should have table-like output
-	stdout, stderr, exitCode := runXSQL(t, "-p", "test", "proxy",
+	_, stderr, exitCode := runXSQL(t, "-p", "test", "proxy",
 		"--config", config, "--format", "table")
 
 	// Should fail due to SSH connection issues
@@ -474,7 +474,7 @@ func TestProxy_RealConnection(t *testing.T) {
 
 	// Get the output
 	stdout := outBuf.String()
-	stderr := errBuf.String()
+	_ = errBuf.String()
 
 	// Terminate the proxy
 	if err := cmd.Process.Kill(); err != nil {

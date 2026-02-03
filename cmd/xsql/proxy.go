@@ -18,8 +18,8 @@ import (
 
 // ProxyFlags holds the flags for the proxy command
 type ProxyFlags struct {
-	LocalPort     int
-	LocalHost     string
+	LocalPort      int
+	LocalHost      string
 	AllowPlaintext bool
 	SSHSkipHostKey bool
 }
