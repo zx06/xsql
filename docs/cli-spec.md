@@ -154,6 +154,73 @@ xsql profile show dev --format json
 }
 ```
 
+### `xsql proxy`
+
+启动端口转发代理，将本地端口通过 SSH tunnel 转发到指定 profile 的数据库。这类似于 `ssh -L` 的功能，但使用 xsql 的配置和 profile 系统。
+
+```bash
+# 使用 profile 启动代理（端口自动分配）
+xsql proxy -p prod-mysql
+
+# 指定本地端口
+xsql -p prod-mysql proxy --local-port 13306
+
+# 输出 JSON 格式
+xsql -p prod-mysql proxy --format json
+```
+
+**要求：**
+- Profile 必须配置 `ssh_proxy`，否则无法启动
+- Profile 必须配置数据库类型（`db`）、主机（`host`）和端口（`port`）
+
+**Flags:**
+| Flag | 默认值 | 说明 |
+|------|--------|------|
+| `--local-port` | 0 | 本地监听端口（0 表示自动分配） |
+| `--local-host` | 127.0.0.1 | 本地监听地址 |
+| `--allow-plaintext` | false | 允许配置中使用明文密码 |
+| `--ssh-skip-known-hosts-check` | false | 跳过 SSH 主机密钥验证（危险） |
+
+**全局 Flags:**
+| Flag | 说明 |
+|------|------|
+| `-p, --profile <name>` | Profile 名称（必需） |
+
+**输出示例（Table）：**
+```
+✓ Proxy started successfully
+  Local:   127.0.0.1:13306
+  Remote:  db.internal.example.com:3306 (via bastion.example.com:22)
+  Profile: prod-mysql
+
+Press Ctrl+C to stop
+```
+
+**输出示例（JSON）：**
+```json
+{
+  "ok": true,
+  "schema_version": 1,
+  "data": {
+    "local_address": "127.0.0.1:13306",
+    "remote_address": "db.internal.example.com:3306",
+    "ssh_proxy": "bastion.example.com:22",
+    "profile": "prod-mysql"
+  }
+}
+```
+
+**使用场景：**
+- 本地开发时需要通过 SSH tunnel 访问远程数据库
+- 让本地数据库客户端（如 DBeaver、DataGrip）或 IDE 直接连接远程数据库
+- 替代手动执行 `ssh -L` 命令
+
+**安全说明：**
+- 默认监听 `127.0.0.1`，仅本地可访问
+- 复用 SSH 配置的 known_hosts 校验
+- 密码/passphrase 复用 keyring 机制，不泄露明文
+- 按 Ctrl+C 或发送 SIGTERM 信号优雅关闭代理
+
 ## 全局 Flags
 
 | Flag | 说明 |
