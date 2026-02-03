@@ -59,6 +59,9 @@ func runProxy(cmd *cobra.Command, flags *ProxyFlags, w *output.Writer) error {
 	if p.DB == "" {
 		return errors.New(errors.CodeCfgInvalid, "db type is required (mysql|pg)", nil)
 	}
+	if p.Host == "" || p.Port == 0 {
+		return errors.New(errors.CodeCfgInvalid, "profile must have host and port configured", nil)
+	}
 
 	// Check if SSH proxy is configured
 	if p.SSHConfig == nil {
@@ -114,19 +117,20 @@ func runProxy(cmd *cobra.Command, flags *ProxyFlags, w *output.Writer) error {
 	defer func() { _ = px.Stop() }()
 
 	// Print result based on format
+	sshProxyAddr := fmt.Sprintf("%s:%d", p.SSHConfig.Host, p.SSHConfig.Port)
 	if format == output.FormatTable {
 		// Custom table output for proxy
-		fmt.Fprintf(os.Stderr, "✓ Proxy started successfully\n")
-		fmt.Fprintf(os.Stderr, "  Local:   %s\n", result.LocalAddress)
-		fmt.Fprintf(os.Stderr, "  Remote:  %s (via %s)\n", result.RemoteAddress, p.SSHConfig.Host)
-		fmt.Fprintf(os.Stderr, "  Profile: %s\n", profileName)
-		fmt.Fprintf(os.Stderr, "\nPress Ctrl+C to stop\n")
+		fmt.Fprintf(w.Out, "✓ Proxy started successfully\n")
+		fmt.Fprintf(w.Out, "  Local:   %s\n", result.LocalAddress)
+		fmt.Fprintf(w.Out, "  Remote:  %s (via %s)\n", result.RemoteAddress, sshProxyAddr)
+		fmt.Fprintf(w.Out, "  Profile: %s\n", profileName)
+		fmt.Fprintf(w.Out, "\nPress Ctrl+C to stop\n")
 	} else {
 		// JSON/YAML output
 		data := map[string]any{
 			"local_address":  result.LocalAddress,
 			"remote_address": result.RemoteAddress,
-			"ssh_proxy":      fmt.Sprintf("%s:%d", p.SSHConfig.Host, p.SSHConfig.Port),
+			"ssh_proxy":      sshProxyAddr,
 			"profile":        profileName,
 		}
 		_ = w.WriteOK(format, data)
@@ -138,7 +142,7 @@ func runProxy(cmd *cobra.Command, flags *ProxyFlags, w *output.Writer) error {
 
 	// Wait for interrupt signal
 	<-sigChan
-	fmt.Fprintf(os.Stderr, "\nShutting down proxy...\n")
+	fmt.Fprintf(w.Err, "\nShutting down proxy...\n")
 
 	return nil
 }
