@@ -433,33 +433,34 @@ func writeCSV(out io.Writer, env Envelope) error {
 	// 尝试解析为查询结果（优先使用接口，然后反射）
 	var cols []string
 	var rows []map[string]any
-	var ok bool
+	var dataOK bool
 
 	// 先尝试 TableFormatter 接口
-	if formatter, ok := env.Data.(TableFormatter); ok {
-		cols, rows, ok = formatter.ToTableData()
+	if formatter, isFormatter := env.Data.(TableFormatter); isFormatter {
+		cols, rows, dataOK = formatter.ToTableData()
 	}
 
 	// 回退：使用反射
-	if !ok {
+	if !dataOK {
 		if result, ok2 := tryAsQueryResultReflect(env.Data); ok2 {
 			cols = result.columns
 			rows = result.rows
-			ok = true
+			dataOK = true
 		}
 	}
 
 	// 回退：使用 map 提取
-	if !ok {
+	if !dataOK {
 		if m, ok2 := env.Data.(map[string]any); ok2 {
-			cols, ok = extractStringSlice(m["columns"])
-			if ok {
-				rows, ok = extractMapSlice(m["rows"])
+			var ok3 bool
+			cols, ok3 = extractStringSlice(m["columns"])
+			if ok3 {
+				rows, dataOK = extractMapSlice(m["rows"])
 			}
 		}
 	}
 
-	if ok {
+	if dataOK {
 		// 输出表头
 		_ = cw.Write(cols)
 		// 输出数据行

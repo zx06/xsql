@@ -442,54 +442,30 @@ func hasWriteInCTE(tokens []SQLToken) bool {
 		}
 
 		// 跟踪括号深度以识别 CTE 边界
-		if tok.Value == "(" {
+		switch tok.Value {
+		case "(":
 			parenDepth++
-		} else if tok.Value == ")" {
+		case ")":
 			parenDepth--
 			// CTE 定义结束后的 SELECT 是正常的
 			if parenDepth == 0 && i+1 < len(tokens) {
 				nextTok := tokens[i+1]
-				if nextTok.Value == "SELECT" || nextTok.Value == "INSERT" ||
-					nextTok.Value == "UPDATE" || nextTok.Value == "DELETE" {
-					// 这是主查询，不是 CTE 内部
-					if nextTok.Value != "SELECT" {
-						return true
-					}
+				switch nextTok.Value {
+				case "INSERT", "UPDATE", "DELETE":
+					return true
+				case "SELECT":
 					return false
 				}
 			}
-		}
-
-		// 在 CTE 体内检查写入关键字
-		if parenDepth > 0 && (tok.Value == "INSERT" || tok.Value == "UPDATE" || tok.Value == "DELETE") {
-			return true
+		default:
+			// 在 CTE 体内检查写入关键字
+			if parenDepth > 0 {
+				switch tok.Value {
+				case "INSERT", "UPDATE", "DELETE":
+					return true
+				}
+			}
 		}
 	}
 	return false
-}
-
-// 保留旧函数用于向后兼容
-type legacyChecker struct{}
-
-func (c legacyChecker) firstKeyword(sql string) string {
-	sql = strings.TrimLeftFunc(sql, unicode.IsSpace)
-	if sql == "" {
-		return ""
-	}
-	if !unicode.IsLetter(rune(sql[0])) {
-		return ""
-	}
-	start := 0
-	end := 0
-	for end < len(sql) {
-		r := rune(sql[end])
-		if !unicode.IsLetter(r) {
-			break
-		}
-		end++
-	}
-	if end <= start {
-		return ""
-	}
-	return strings.ToUpper(sql[start:end])
 }
