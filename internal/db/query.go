@@ -13,6 +13,14 @@ type QueryResult struct {
 	Rows    []map[string]any `json:"rows" yaml:"rows"`
 }
 
+// ToTableData 实现 output.TableFormatter 接口，支持无 JSON 编解码的表格输出。
+func (r *QueryResult) ToTableData() (columns []string, rows []map[string]any, ok bool) {
+	if r == nil {
+		return nil, nil, false
+	}
+	return r.Columns, r.Rows, true
+}
+
 // QueryOptions 包含查询执行的选项。
 type QueryOptions struct {
 	UnsafeAllowWrite bool   // 允许写操作（绕过只读保护）
