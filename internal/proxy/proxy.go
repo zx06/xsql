@@ -119,14 +119,14 @@ func (p *Proxy) acceptConnections(remoteHost string, remotePort int) {
 // handleConnection handles a single connection by forwarding it through SSH.
 func (p *Proxy) handleConnection(localConn net.Conn, remoteAddr string) {
 	defer p.wg.Done()
-	defer localConn.Close()
+	defer func() { _ = localConn.Close() }()
 
 	// Dial remote through SSH
 	remoteConn, err := p.dialer.DialContext(p.ctx, "tcp", remoteAddr)
 	if err != nil {
 		return
 	}
-	defer remoteConn.Close()
+	defer func() { _ = remoteConn.Close() }()
 
 	// Bidirectional copy
 	var wg sync.WaitGroup
@@ -134,12 +134,12 @@ func (p *Proxy) handleConnection(localConn net.Conn, remoteAddr string) {
 
 	go func() {
 		defer wg.Done()
-		io.Copy(localConn, remoteConn)
+		_, _ = io.Copy(localConn, remoteConn)
 	}()
 
 	go func() {
 		defer wg.Done()
-		io.Copy(remoteConn, localConn)
+		_, _ = io.Copy(remoteConn, localConn)
 	}()
 
 	// Wait for both copies to finish or context cancellation

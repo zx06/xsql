@@ -82,7 +82,7 @@ func TestProxyStart(t *testing.T) {
 			var dialer *mockSSHClient
 			if !tt.expectError {
 				dialer = newMockSSHClient(t, "127.0.0.1:18080")
-				defer dialer.Close()
+				defer func() { _ = dialer.Close() }()
 				tt.opts.Dialer = dialer
 			}
 
@@ -93,7 +93,7 @@ func TestProxyStart(t *testing.T) {
 					t.Error("expected error but got none")
 				}
 				if proxy != nil {
-					proxy.Stop()
+					_ = proxy.Stop()
 				}
 				return
 			}
@@ -123,16 +123,16 @@ func TestProxyStart(t *testing.T) {
 			if err != nil {
 				t.Errorf("failed to dial local address: %v", err)
 			}
-			conn.Close()
+			_ = conn.Close()
 
-			proxy.Stop()
+			_ = proxy.Stop()
 		})
 	}
 }
 
 func TestProxyStop(t *testing.T) {
 	dialer := newMockSSHClient(t, "127.0.0.1:18090")
-	defer dialer.Close()
+	defer func() { _ = dialer.Close() }()
 
 	ctx := context.Background()
 	opts := Options{
@@ -153,7 +153,7 @@ func TestProxyStop(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to dial local address: %v", err)
 	}
-	conn.Close()
+	_ = conn.Close()
 
 	// Stop the proxy
 	if err := proxy.Stop(); err != nil {
@@ -163,14 +163,14 @@ func TestProxyStop(t *testing.T) {
 	// Verify proxy is no longer listening
 	conn, err = net.DialTimeout("tcp", result.LocalAddress, 1*time.Second)
 	if err == nil {
-		conn.Close()
+		_ = conn.Close()
 		t.Error("proxy should not be listening after stop")
 	}
 }
 
 func TestProxyLocalAddress(t *testing.T) {
 	dialer := newMockSSHClient(t, "127.0.0.1:18100")
-	defer dialer.Close()
+	defer func() { _ = dialer.Close() }()
 
 	ctx := context.Background()
 	opts := Options{
@@ -185,7 +185,7 @@ func TestProxyLocalAddress(t *testing.T) {
 	if xe != nil {
 		t.Fatalf("failed to start proxy: %v", xe)
 	}
-	defer proxy.Stop()
+	defer func() { _ = proxy.Stop() }()
 
 	addr := proxy.LocalAddress()
 	if addr == "" {

@@ -96,7 +96,7 @@ func runProxy(cmd *cobra.Command, flags *ProxyFlags, w *output.Writer) error {
 	if xe != nil {
 		return xe
 	}
-	defer sshClient.Close()
+	defer func() { _ = sshClient.Close() }()
 
 	// Start proxy
 	proxyOpts := proxy.Options{
@@ -111,7 +111,7 @@ func runProxy(cmd *cobra.Command, flags *ProxyFlags, w *output.Writer) error {
 	if xe != nil {
 		return xe
 	}
-	defer px.Stop()
+	defer func() { _ = px.Stop() }()
 
 	// Print result based on format
 	if format == output.FormatTable {

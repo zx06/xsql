@@ -5,9 +5,9 @@ package e2e
 import (
 	"bytes"
 	"encoding/json"
-	"exec"
 	"net"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"testing"
