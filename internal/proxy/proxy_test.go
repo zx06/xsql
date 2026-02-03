@@ -233,3 +233,96 @@ func TestProxyWithRealSSHClient(t *testing.T) {
 		}
 	}
 }
+
+func TestProxy_PortInUse(t *testing.T) {
+	// Find an available port, bind to it, then try to start proxy on same port
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to find available port: %v", err)
+	}
+	defer func() { _ = listener.Close() }()
+
+	// Get the port that was allocated
+	addr := listener.Addr().(*net.TCPAddr)
+	port := addr.Port
+
+	dialer := newMockSSHClient(t, "127.0.0.1:18200")
+	defer func() { _ = dialer.Close() }()
+
+	ctx := context.Background()
+	opts := Options{
+		LocalHost:  "127.0.0.1",
+		LocalPort:  port,
+		RemoteHost: "127.0.0.1",
+		RemotePort: 18200,
+		Dialer:     dialer,
+	}
+
+	_, _, xe := Start(ctx, opts)
+	if xe == nil {
+		t.Error("expected error when port is already in use")
+	}
+	if xe != nil && xe.Code != errors.CodeInternal {
+		t.Errorf("expected CodeInternal, got %s", xe.Code)
+	}
+}
+
+func TestProxy_DefaultLocalHost(t *testing.T) {
+	dialer := newMockSSHClient(t, "127.0.0.1:18300")
+	defer func() { _ = dialer.Close() }()
+
+	ctx := context.Background()
+	opts := Options{
+		LocalHost:  "", // Should default to 127.0.0.1
+		LocalPort:  0,
+		RemoteHost: "127.0.0.1",
+		RemotePort: 18300,
+		Dialer:     dialer,
+	}
+
+	proxy, result, xe := Start(ctx, opts)
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+	defer func() { _ = proxy.Stop() }()
+
+	if result.LocalAddress == "" {
+		t.Error("local address should not be empty")
+	}
+
+	// Verify it's bound to 127.0.0.1
+	host, _, err := net.SplitHostPort(result.LocalAddress)
+	if err != nil {
+		t.Errorf("invalid address format: %v", err)
+	}
+	if host != "127.0.0.1" {
+		t.Errorf("expected default host 127.0.0.1, got %s", host)
+	}
+}
+
+func TestProxy_ContextCancellation(t *testing.T) {
+	dialer := newMockSSHClient(t, "127.0.0.1:18400")
+	defer func() { _ = dialer.Close() }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	opts := Options{
+		LocalHost:  "127.0.0.1",
+		LocalPort:  0,
+		RemoteHost: "127.0.0.1",
+		RemotePort: 18400,
+		Dialer:     dialer,
+	}
+
+	proxy, _, xe := Start(ctx, opts)
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+
+	// Cancel the context
+	cancel()
+
+	// Stop should complete without hanging
+	if err := proxy.Stop(); err != nil {
+		t.Errorf("failed to stop proxy: %v", err)
+	}
+}

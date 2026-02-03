@@ -67,12 +67,22 @@ func TestMain_VersionCommand(t *testing.T) {
 func TestMain_QueryCommand_NoProfile(t *testing.T) {
 	binary := buildTestBinary(t)
 
-	cmd := exec.Command(binary, "query", "SELECT 1", "--format", "json")
+	// 设置临时工作目录，避免读取默认配置文件
+	tmpDir := t.TempDir()
+
+	// 创建一个空的配置文件路径（确保不会读取现有配置）
+	nonExistentConfig := filepath.Join(tmpDir, "nonexistent_config.yaml")
+
+	cmd := exec.Command(binary, "query", "SELECT 1", "--format", "json", "--config", nonExistentConfig)
+	cmd.Dir = tmpDir
+	// 清除环境变量，避免读取配置文件
+	cmd.Env = append(os.Environ(), "XSQL_CONFIG=", "HOME="+tmpDir, "USERPROFILE="+tmpDir)
+
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err == nil {
-		t.Fatal("expected error when no db type configured")
+		t.Fatalf("expected error when no db type configured, got none. stderr: %s, stdout: %s", stderr.String(), string(out))
 	}
 
 	// 应该输出错误 JSON
@@ -80,9 +90,12 @@ func TestMain_QueryCommand_NoProfile(t *testing.T) {
 		var resp map[string]any
 		if err := json.Unmarshal(out, &resp); err == nil {
 			if ok, _ := resp["ok"].(bool); ok {
-				t.Error("expected ok=false")
+				t.Errorf("expected ok=false, got ok=true. stderr: %s", stderr.String())
 			}
 		}
+	}
+	if stderr.Len() > 0 {
+		t.Logf("stderr: %s", stderr.String())
 	}
 }
 
