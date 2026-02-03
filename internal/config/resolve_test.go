@@ -132,3 +132,70 @@ func TestResolve_SSHProxyNotFound(t *testing.T) {
 		t.Errorf("expected code=XSQL_CFG_INVALID, got %s", xe.Code)
 	}
 }
+
+func TestResolve_DefaultPort_MySQL(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := []byte(`profiles:
+  mysql_db:
+    db: mysql
+    host: localhost
+`)
+	path := filepath.Join(tmp, "xsql.yaml")
+	if err := os.WriteFile(path, cfg, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	got, xe := Resolve(Options{WorkDir: tmp, HomeDir: tmp, CLIProfile: "mysql_db", CLIProfileSet: true})
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+
+	if got.Profile.Port != 3306 {
+		t.Errorf("expected default port 3306 for MySQL, got %d", got.Profile.Port)
+	}
+}
+
+func TestResolve_DefaultPort_PostgreSQL(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := []byte(`profiles:
+  pg_db:
+    db: pg
+    host: localhost
+`)
+	path := filepath.Join(tmp, "xsql.yaml")
+	if err := os.WriteFile(path, cfg, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	got, xe := Resolve(Options{WorkDir: tmp, HomeDir: tmp, CLIProfile: "pg_db", CLIProfileSet: true})
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+
+	if got.Profile.Port != 5432 {
+		t.Errorf("expected default port 5432 for PostgreSQL, got %d", got.Profile.Port)
+	}
+}
+
+func TestResolve_Port_PreservedWhenSpecified(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := []byte(`profiles:
+  custom_port:
+    db: mysql
+    host: localhost
+    port: 13306
+`)
+	path := filepath.Join(tmp, "xsql.yaml")
+	if err := os.WriteFile(path, cfg, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	got, xe := Resolve(Options{WorkDir: tmp, HomeDir: tmp, CLIProfile: "custom_port", CLIProfileSet: true})
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+
+	if got.Profile.Port != 13306 {
+		t.Errorf("expected port 13306 to be preserved, got %d", got.Profile.Port)
+	}
+}

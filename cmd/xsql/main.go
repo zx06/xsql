@@ -28,6 +28,7 @@ func run() int {
 	root.AddCommand(NewQueryCommand(&w))
 	root.AddCommand(NewProfileCommand(&w))
 	root.AddCommand(NewMCPCommand())
+	root.AddCommand(NewProxyCommand(&w))
 
 	// Execute and handle errors
 	if err := root.Execute(); err != nil {

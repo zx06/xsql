@@ -55,6 +55,16 @@ func (a App) BuildSpec() spec.Spec {
 				Description: "Show profile details (passwords are masked)",
 				Flags:       globalFlags,
 			},
+			{
+				Name:        "proxy",
+				Description: "Start a port forwarding proxy (replaces ssh -L)",
+				Flags: append(globalFlags,
+					spec.FlagSpec{Name: "local-port", Default: "0", Description: "Local port to listen on (0 for auto-assign)"},
+					spec.FlagSpec{Name: "local-host", Default: "127.0.0.1", Description: "Local host to bind to"},
+					spec.FlagSpec{Name: "allow-plaintext", Default: "false", Description: "Allow plaintext secrets in config"},
+					spec.FlagSpec{Name: "ssh-skip-known-hosts-check", Default: "false", Description: "Skip SSH known_hosts check (dangerous)"},
+				),
+			},
 		},
 		ErrorCodes: errors.AllCodes(),
 	}

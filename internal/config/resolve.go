@@ -75,6 +75,15 @@ func Resolve(opts Options) (Resolved, *errors.XError) {
 						map[string]any{"profile": profile, "ssh_proxy": selectedProfile.SSHProxy})
 				}
 			}
+			// 设置默认端口
+			if selectedProfile.Port == 0 {
+				switch selectedProfile.DB {
+				case "mysql":
+					selectedProfile.Port = 3306
+				case "pg":
+					selectedProfile.Port = 5432
+				}
+			}
 		}
 	}
 
