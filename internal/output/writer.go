@@ -251,6 +251,42 @@ func tryAsProfileList(data any) ([]profileListItem, bool) {
 		return result, len(result) > 0
 	}
 
+	// 使用反射处理任意结构体切片（如 cmd/xsql/profile.go 中的 []profileInfo）
+	v := reflect.ValueOf(data)
+	if v.IsValid() && v.Kind() == reflect.Slice {
+		result := make([]profileListItem, 0, v.Len())
+		for i := 0; i < v.Len(); i++ {
+			elem := v.Index(i)
+			// 解引用指针
+			if elem.Kind() == reflect.Ptr {
+				elem = elem.Elem()
+			}
+			// 只处理结构体
+			if elem.Kind() != reflect.Struct {
+				return nil, false
+			}
+			p := profileListItem{}
+			// 读取字段
+			if f := elem.FieldByName("Name"); f.IsValid() && f.Kind() == reflect.String {
+				p.Name = f.String()
+			}
+			if f := elem.FieldByName("Description"); f.IsValid() && f.Kind() == reflect.String {
+				p.Description = f.String()
+			}
+			if f := elem.FieldByName("DB"); f.IsValid() && f.Kind() == reflect.String {
+				p.DB = f.String()
+			}
+			if f := elem.FieldByName("Mode"); f.IsValid() && f.Kind() == reflect.String {
+				p.Mode = f.String()
+			}
+			if p.Name == "" {
+				return nil, false
+			}
+			result = append(result, p)
+		}
+		return result, len(result) > 0
+	}
+
 	// 处理 []any
 	arr, ok := data.([]any)
 	if !ok {
