@@ -29,12 +29,15 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@v1.12.0
+
       - name: Build
         run: go build -v ./...
 
       - name: Test
         shell: bash
-        run: CGO_ENABLED=1 go run gotest.tools/gotestsum@v1.12.0 --junitfile test-results.xml -- -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+        run: gotestsum --junitfile test-results.xml -- -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload test results to Codecov
         uses: codecov/test-results-action@v1
