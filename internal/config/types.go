@@ -5,6 +5,7 @@ package config
 type File struct {
 	SSHProxies map[string]SSHProxy `yaml:"ssh_proxies"`
 	Profiles   map[string]Profile  `yaml:"profiles"`
+	MCP        MCPConfig           `yaml:"mcp"`
 }
 
 // SSHProxy 定义可复用的 SSH 代理配置。
@@ -40,6 +41,19 @@ type Profile struct {
 
 	// 解析后的 SSH 配置（由 Resolve 填充，不从 YAML 读取）
 	SSHConfig *SSHProxy `yaml:"-"`
+}
+
+// MCPConfig 定义 MCP server 配置。
+type MCPConfig struct {
+	Transport string        `yaml:"transport"` // stdio | streamable_http
+	HTTP      MCPHTTPConfig `yaml:"http"`
+}
+
+// MCPHTTPConfig 定义 MCP Streamable HTTP 传输配置。
+type MCPHTTPConfig struct {
+	Addr                string `yaml:"addr"`
+	AuthToken           string `yaml:"auth_token"`            // 支持 keyring:xxx 引用
+	AllowPlaintextToken bool   `yaml:"allow_plaintext_token"` // 允许明文 token
 }
 
 type Resolved struct {

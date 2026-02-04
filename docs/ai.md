@@ -25,6 +25,12 @@ xsql 提供了 MCP (Model Context Protocol) Server 模式，允许 AI 助手通�
 xsql mcp server
 ```
 
+### Streamable HTTP 传输
+需要通过 `streamable_http` 启动，并强制要求鉴权：
+```bash
+xsql mcp server --transport streamable_http --http-addr 127.0.0.1:8787 --http-auth-token "your-token"
+```
+
 ### MCP Tools
 MCP Server 提供以下 tools：
 - **query**: 执行 SQL 查询（支持只读模式）

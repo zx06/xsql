@@ -249,7 +249,18 @@ xsql mcp server
 
 # 指定配置文件
 xsql mcp server --config /path/to/config.yaml
+
+# 使用 Streamable HTTP 传输（必须提供鉴权 token）
+xsql mcp server --transport streamable_http --http-addr 127.0.0.1:8787 --http-auth-token "your-token"
 ```
+
+**参数：**
+
+| 参数 | 说明 |
+|------|------|
+| `--transport` | MCP 传输方式：`stdio`（默认）或 `streamable_http` |
+| `--http-addr` | Streamable HTTP 监听地址（默认 `127.0.0.1:8787`） |
+| `--http-auth-token` | Streamable HTTP 鉴权 token（仅 `streamable_http` 必填） |
 
 **MCP Tools:**
 
@@ -298,6 +309,7 @@ xsql mcp server --config /path/to/config.yaml
 **安全说明：**
 - query tool 默认只读模式（双重保护：SQL 静态分析 + DB 事务级只读）
 - 写操作需要显式设置 `unsafe_allow_write: true`
+- Streamable HTTP 传输要求鉴权，请在请求中提供 `Authorization: Bearer <token>` 头
 
 ## 参数来源优先级
 - CLI > ENV > Config
