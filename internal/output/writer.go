@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -110,10 +111,10 @@ func writeTable(out io.Writer, env Envelope) error {
 			}
 		}
 
-		// 默认：直接输出 key-value
+		// 默认：直接输出 key-value（按 key 排序以保证稳定性）
 		tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-		for k, v := range m {
-			_, _ = fmt.Fprintf(tw, "%s\t%v\n", k, v)
+		for _, k := range sortedMapKeys(m) {
+			_, _ = fmt.Fprintf(tw, "%s\t%v\n", k, m[k])
 		}
 		return tw.Flush()
 	}
@@ -127,8 +128,8 @@ func writeTable(out io.Writer, env Envelope) error {
 	tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
 	if env.Data != nil {
 		if m, ok := env.Data.(map[string]any); ok {
-			for k, v := range m {
-				_, _ = fmt.Fprintf(tw, "%s\t%v\n", k, v)
+			for _, k := range sortedMapKeys(m) {
+				_, _ = fmt.Fprintf(tw, "%s\t%v\n", k, m[k])
 			}
 		} else {
 			// 只有这里不得已才使用 JSON 格式化
@@ -506,9 +507,18 @@ func writeCSV(out io.Writer, env Envelope) error {
 
 	// 默认：输出为 key,value 格式
 	if m, ok := env.Data.(map[string]any); ok {
-		for k, v := range m {
-			_ = cw.Write([]string{k, fmt.Sprintf("%v", v)})
+		for _, k := range sortedMapKeys(m) {
+			_ = cw.Write([]string{k, fmt.Sprintf("%v", m[k])})
 		}
 	}
 	return cw.Error()
+}
+
+func sortedMapKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

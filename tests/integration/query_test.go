@@ -215,6 +215,31 @@ func TestMySQL_Query_ReadOnlyBlocked(t *testing.T) {
 	}
 }
 
+func TestMySQL_Query_ReadOnlyBlocked_ForShare(t *testing.T) {
+	dsn := os.Getenv("XSQL_TEST_MYSQL_DSN")
+	if dsn == "" {
+		t.Skip("XSQL_TEST_MYSQL_DSN not set")
+	}
+
+	drv, _ := db.Get("mysql")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, xe := drv.Open(ctx, db.ConnOptions{DSN: dsn})
+	if xe != nil {
+		t.Fatalf("failed to open: %v", xe)
+	}
+	defer conn.Close()
+
+	_, xe = db.Query(ctx, conn, "SELECT 1 FOR SHARE", db.QueryOptions{DBType: "mysql"})
+	if xe == nil {
+		t.Fatal("expected error for SELECT ... FOR SHARE in read-only mode")
+	}
+	if xe.Code != "XSQL_RO_BLOCKED" {
+		t.Errorf("expected XSQL_RO_BLOCKED, got %s", xe.Code)
+	}
+}
+
 func TestMySQL_Query_InvalidSQL(t *testing.T) {
 	dsn := os.Getenv("XSQL_TEST_MYSQL_DSN")
 	if dsn == "" {
