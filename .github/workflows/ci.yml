@@ -46,12 +46,7 @@ jobs:
       - name: Build
         run: go build -v ./...
 
-      - name: Test (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: gotestsum --junitfile test-results.xml -- -v -race -coverprofile=coverage.txt -covermode=atomic ./...
-
-      - name: Test (Windows)
-        if: runner.os == 'Windows'
+      - name: Test
         run: gotestsum --junitfile test-results.xml -- -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload test results to Codecov
