@@ -10,6 +10,12 @@ import (
 	"github.com/zx06/xsql/internal/errors"
 )
 
+type tableFormatterData struct{}
+
+func (tableFormatterData) ToTableData() ([]string, []map[string]any, bool) {
+	return []string{"id"}, []map[string]any{{"id": 1}}, true
+}
+
 func TestWriteOK_JSONEnvelope(t *testing.T) {
 	var out bytes.Buffer
 	w := New(&out, &bytes.Buffer{})
@@ -359,6 +365,18 @@ func TestWriteOK_TableFormat_ProfileListWithDescription(t *testing.T) {
 	}
 }
 
+func TestWriteOK_TableFormat_TableFormatter(t *testing.T) {
+	var out bytes.Buffer
+	w := New(&out, &bytes.Buffer{})
+
+	if err := w.WriteOK(FormatTable, tableFormatterData{}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "id") {
+		t.Fatalf("expected table output, got %s", out.String())
+	}
+}
+
 func TestWriteOK_TableFormat_ProfileListWithoutDescription(t *testing.T) {
 	var out bytes.Buffer
 	w := New(&out, &bytes.Buffer{})
@@ -603,6 +621,18 @@ func TestTryAsQueryResultReflect(t *testing.T) {
 			t.Error("expected ok=false for struct missing Columns")
 		}
 	})
+}
+
+func TestFormatCellValue(t *testing.T) {
+	if got := formatCellValue(nil, "<null>"); got != "<null>" {
+		t.Fatalf("expected null placeholder, got %q", got)
+	}
+	if got := formatCellValue(float64(10), "<null>"); got != "10" {
+		t.Fatalf("expected integer float to render without decimals, got %q", got)
+	}
+	if got := formatCellValue(float64(10.5), "<null>"); got != "10.5" {
+		t.Fatalf("expected float to render with decimals, got %q", got)
+	}
 }
 
 func TestWriteOK_YAMLFormat_EmptyData(t *testing.T) {

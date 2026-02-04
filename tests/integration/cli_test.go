@@ -83,6 +83,79 @@ func TestCLI_Version(t *testing.T) {
 	}
 }
 
+func runCommand(t *testing.T, args ...string) (stdout string, exitCode int) {
+	t.Helper()
+	cmd := exec.Command(testBinary, args...)
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return string(out), 0
+	}
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		return string(out), exitErr.ExitCode()
+	}
+	t.Fatalf("failed to run command: %v", err)
+	return "", 0
+}
+
+func TestCLI_InvalidFormat(t *testing.T) {
+	stdout, exitCode := runCommand(t, "spec", "--format", "invalid")
+	if exitCode != 2 {
+		t.Fatalf("expected exit code 2, got %d", exitCode)
+	}
+
+	var resp struct {
+		OK    bool `json:"ok"`
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &resp); err != nil {
+		t.Fatalf("invalid JSON: %v\noutput: %s", err, stdout)
+	}
+	if resp.OK {
+		t.Error("expected ok=false for invalid format")
+	}
+	if resp.Error.Code != "XSQL_CFG_INVALID" {
+		t.Errorf("expected XSQL_CFG_INVALID, got %s", resp.Error.Code)
+	}
+}
+
+func TestCLI_ProfileShow_NotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "xsql.yaml")
+	configContent := `profiles:
+  dev:
+    db: mysql
+    host: localhost
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, exitCode := runCommand(t, "profile", "show", "missing",
+		"--config", configPath,
+		"--format", "json")
+	if exitCode != 2 {
+		t.Fatalf("expected exit code 2, got %d", exitCode)
+	}
+
+	var resp struct {
+		OK    bool `json:"ok"`
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &resp); err != nil {
+		t.Fatalf("invalid JSON: %v\noutput: %s", err, stdout)
+	}
+	if resp.OK {
+		t.Error("expected ok=false for missing profile")
+	}
+	if resp.Error.Code != "XSQL_CFG_INVALID" {
+		t.Errorf("expected XSQL_CFG_INVALID, got %s", resp.Error.Code)
+	}
+}
+
 func TestCLI_QueryWithMySQL(t *testing.T) {
 	dsn := os.Getenv("XSQL_TEST_MYSQL_DSN")
 	if dsn == "" {

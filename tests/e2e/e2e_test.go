@@ -178,6 +178,52 @@ func TestSpec_YAML(t *testing.T) {
 	}
 }
 
+func TestSpec_InvalidFormat(t *testing.T) {
+	stdout, _, exitCode := runXSQL(t, "spec", "--format", "invalid")
+
+	if exitCode != 2 {
+		t.Fatalf("expected exit code 2, got %d", exitCode)
+	}
+
+	var resp Response
+	if err := json.Unmarshal([]byte(stdout), &resp); err != nil {
+		t.Fatalf("invalid JSON: %v\noutput: %s", err, stdout)
+	}
+	if resp.OK {
+		t.Error("expected ok=false")
+	}
+	if resp.Error == nil || resp.Error.Code != "XSQL_CFG_INVALID" {
+		t.Fatalf("expected XSQL_CFG_INVALID, got %+v", resp.Error)
+	}
+}
+
+func TestQuery_MissingDBType(t *testing.T) {
+	config := createTempConfig(t, `profiles:
+  dev:
+    host: localhost
+`)
+
+	stdout, _, exitCode := runXSQL(t, "query", "SELECT 1",
+		"--config", config,
+		"--profile", "dev",
+		"--format", "json")
+
+	if exitCode != 2 {
+		t.Fatalf("expected exit code 2, got %d", exitCode)
+	}
+
+	var resp Response
+	if err := json.Unmarshal([]byte(stdout), &resp); err != nil {
+		t.Fatalf("invalid JSON: %v\noutput: %s", err, stdout)
+	}
+	if resp.OK {
+		t.Error("expected ok=false")
+	}
+	if resp.Error == nil || resp.Error.Code != "XSQL_CFG_INVALID" {
+		t.Fatalf("expected XSQL_CFG_INVALID, got %+v", resp.Error)
+	}
+}
+
 // ============================================================================
 // xsql version Tests
 // ============================================================================
