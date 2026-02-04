@@ -224,6 +224,90 @@ func TestProfileList(t *testing.T) {
 	}
 }
 
+func TestQuery_SSHProxyMissing(t *testing.T) {
+	cfg := &config.File{
+		Profiles: map[string]config.Profile{
+			"dev": {DB: "mysql", SSHProxy: "missing"},
+		},
+		SSHProxies: map[string]config.SSHProxy{},
+	}
+	handler := NewToolHandler(cfg)
+
+	result, _, err := handler.Query(context.Background(), &mcp.CallToolRequest{}, QueryInput{SQL: "select 1", Profile: "dev"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("expected error result, got %+v", result)
+	}
+}
+
+func TestProfileShow_RedactsSensitiveFields(t *testing.T) {
+	cfg := &config.File{
+		Profiles: map[string]config.Profile{
+			"dev": {
+				DB:       "mysql",
+				DSN:      "user:pass@tcp(localhost:3306)/db",
+				Password: "secret",
+				SSHProxy: "proxy1",
+			},
+		},
+		SSHProxies: map[string]config.SSHProxy{
+			"proxy1": {
+				Host:         "ssh.example.com",
+				Port:         22,
+				User:         "sshuser",
+				IdentityFile: "~/.ssh/id_rsa",
+			},
+		},
+	}
+	handler := NewToolHandler(cfg)
+
+	result, _, err := handler.ProfileShow(context.Background(), &mcp.CallToolRequest{}, ProfileShowInput{Name: "dev"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("expected success result, got %+v", result)
+	}
+	if len(result.Content) == 0 {
+		t.Fatal("expected content")
+	}
+	if !strings.Contains(result.Content[0].(*mcp.TextContent).Text, "\"dsn\": \"***\"") {
+		t.Fatal("expected dsn to be redacted")
+	}
+	if !strings.Contains(result.Content[0].(*mcp.TextContent).Text, "\"password\": \"***\"") {
+		t.Fatal("expected password to be redacted")
+	}
+	if !strings.Contains(result.Content[0].(*mcp.TextContent).Text, "\"ssh_host\": \"ssh.example.com\"") {
+		t.Fatal("expected ssh host in output")
+	}
+}
+
+func TestProfileList_Output(t *testing.T) {
+	cfg := &config.File{
+		Profiles: map[string]config.Profile{
+			"dev":  {DB: "mysql"},
+			"prod": {DB: "pg", UnsafeAllowWrite: true},
+		},
+	}
+	handler := NewToolHandler(cfg)
+
+	result, _, err := handler.ProfileList(context.Background(), &mcp.CallToolRequest{}, struct{}{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("expected success result, got %+v", result)
+	}
+	if len(result.Content) == 0 {
+		t.Fatal("expected content")
+	}
+	if !strings.Contains(result.Content[0].(*mcp.TextContent).Text, "\"profiles\"") {
+		t.Fatal("expected profiles in output")
+	}
+}
+
 func TestProfileShow_ProfileNotFound(t *testing.T) {
 	cfg := &config.File{
 		Profiles: map[string]config.Profile{

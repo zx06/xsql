@@ -605,6 +605,18 @@ func TestTryAsQueryResultReflect(t *testing.T) {
 	})
 }
 
+func TestFormatCellValue(t *testing.T) {
+	if got := formatCellValue(nil, "<null>"); got != "<null>" {
+		t.Fatalf("expected null placeholder, got %q", got)
+	}
+	if got := formatCellValue(float64(10), "<null>"); got != "10" {
+		t.Fatalf("expected integer float to render without decimals, got %q", got)
+	}
+	if got := formatCellValue(float64(10.5), "<null>"); got != "10.5" {
+		t.Fatalf("expected float to render with decimals, got %q", got)
+	}
+}
+
 func TestWriteOK_YAMLFormat_EmptyData(t *testing.T) {
 	var out bytes.Buffer
 	w := New(&out, &bytes.Buffer{})

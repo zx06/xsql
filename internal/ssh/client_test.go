@@ -2,8 +2,18 @@ package ssh
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
+	"net"
 	"os"
+	"path/filepath"
 	"testing"
+	"time"
+
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 
 	"github.com/zx06/xsql/internal/errors"
 )
@@ -206,6 +216,138 @@ func TestBuildHostKeyCallback_DefaultPath(t *testing.T) {
 	if xe == nil && cb == nil {
 		t.Error("expected non-nil callback when no error")
 	}
+}
+
+func TestBuildAuthMethods_WithIdentityFile(t *testing.T) {
+	keyPath := writeTestKey(t, t.TempDir(), "id_rsa")
+
+	opts := Options{
+		IdentityFile: keyPath,
+	}
+
+	methods, xe := buildAuthMethods(opts)
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+	if len(methods) == 0 {
+		t.Fatal("expected auth methods")
+	}
+}
+
+func TestBuildAuthMethods_DefaultKeyLookup(t *testing.T) {
+	tmpDir := t.TempDir()
+	sshDir := filepath.Join(tmpDir, ".ssh")
+	if err := os.MkdirAll(sshDir, 0700); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	keyPath := writeTestKey(t, sshDir, "id_rsa")
+
+	origHome := os.Getenv("HOME")
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", tmpDir)
+
+	opts := Options{}
+	methods, xe := buildAuthMethods(opts)
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+	if len(methods) == 0 {
+		t.Fatal("expected auth methods from default key")
+	}
+
+	if _, err := os.Stat(keyPath); err != nil {
+		t.Fatalf("expected key file to exist: %v", err)
+	}
+	if origHome != "" {
+		t.Setenv("HOME", origHome)
+	}
+}
+
+func TestBuildHostKeyCallback_WithKnownHostsFile(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+	signer, err := ssh.NewSignerFromKey(key)
+	if err != nil {
+		t.Fatalf("failed to create signer: %v", err)
+	}
+
+	line := knownhosts.Line([]string{"127.0.0.1"}, signer.PublicKey())
+	khPath := filepath.Join(t.TempDir(), "known_hosts")
+	if err := os.WriteFile(khPath, []byte(line+"\n"), 0600); err != nil {
+		t.Fatalf("failed to write known_hosts: %v", err)
+	}
+
+	opts := Options{KnownHostsFile: khPath}
+	cb, xe := buildHostKeyCallback(opts)
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+	if cb == nil {
+		t.Fatal("expected non-nil callback")
+	}
+}
+
+func TestConnect_DialFailureReturnsCode(t *testing.T) {
+	keyPath := writeTestKey(t, t.TempDir(), "id_rsa")
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	defer ln.Close()
+
+	go func() {
+		conn, err := ln.Accept()
+		if err == nil {
+			_ = conn.Close()
+		}
+	}()
+
+	addr := ln.Addr().(*net.TCPAddr)
+	opts := Options{
+		Host:                "127.0.0.1",
+		Port:                addr.Port,
+		User:                "testuser",
+		IdentityFile:        keyPath,
+		SkipKnownHostsCheck: true,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	_, xe := Connect(ctx, opts)
+	if xe == nil {
+		t.Fatal("expected error for failed dial")
+	}
+	if xe.Code != errors.CodeSSHDialFailed {
+		t.Fatalf("expected CodeSSHDialFailed, got %s", xe.Code)
+	}
+}
+
+func TestClientClose_NoClient(t *testing.T) {
+	client := &Client{}
+	if err := client.Close(); err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+}
+
+func writeTestKey(t *testing.T, dir, name string) string {
+	t.Helper()
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+
+	keyBytes := x509.MarshalPKCS1PrivateKey(key)
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyBytes})
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, pemBytes, 0600); err != nil {
+		t.Fatalf("failed to write key: %v", err)
+	}
+	return path
 }
 
 // Helper function to check if a path contains another path component
