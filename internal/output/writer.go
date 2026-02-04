@@ -29,12 +29,6 @@ func (w Writer) WriteOK(format Format, data any) error {
 
 func (w Writer) WriteError(format Format, xe *errors.XError) error {
 	errObj := &ErrorObject{Code: xe.Code, Message: xe.Message, Details: xe.Details}
-	// 如果有底层错误，添加到 details
-	if xe.Unwrap() != nil && errObj.Details == nil {
-		errObj.Details = map[string]any{"cause": xe.Unwrap().Error()}
-	} else if xe.Unwrap() != nil {
-		errObj.Details["cause"] = xe.Unwrap().Error()
-	}
 	return w.write(format, Envelope{OK: false, SchemaVersion: SchemaVersion, Error: errObj})
 }
 
@@ -425,7 +419,7 @@ func writeQueryResultTable(out io.Writer, cols []string, rows []map[string]any) 
 	for _, row := range rows {
 		vals := make([]string, len(cols))
 		for i, c := range cols {
-			vals[i] = formatCellValue(row[c])
+			vals[i] = formatCellValue(row[c], "<null>")
 		}
 		_, _ = fmt.Fprintln(tw, strings.Join(vals, "\t"))
 	}
@@ -436,9 +430,9 @@ func writeQueryResultTable(out io.Writer, cols []string, rows []map[string]any) 
 	return tw.Flush()
 }
 
-func formatCellValue(v any) string {
+func formatCellValue(v any, nullValue string) string {
 	if v == nil {
-		return "NULL"
+		return nullValue
 	}
 	switch val := v.(type) {
 	case string:
@@ -503,7 +497,7 @@ func writeCSV(out io.Writer, env Envelope) error {
 		for _, row := range rows {
 			vals := make([]string, len(cols))
 			for i, c := range cols {
-				vals[i] = formatCellValue(row[c])
+				vals[i] = formatCellValue(row[c], "")
 			}
 			_ = cw.Write(vals)
 		}
