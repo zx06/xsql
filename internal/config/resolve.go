@@ -64,25 +64,28 @@ func Resolve(opts Options) (Resolved, *errors.XError) {
 	// 3) 获取完整 profile
 	var selectedProfile Profile
 	if profile != "" {
-		if p, ok := cfg.Profiles[profile]; ok {
-			selectedProfile = p
-			// 解析 ssh_proxy 引用
-			if selectedProfile.SSHProxy != "" {
-				if proxy, ok := cfg.SSHProxies[selectedProfile.SSHProxy]; ok {
-					selectedProfile.SSHConfig = &proxy
-				} else {
-					return Resolved{}, errors.New(errors.CodeCfgInvalid, "ssh_proxy not found",
-						map[string]any{"profile": profile, "ssh_proxy": selectedProfile.SSHProxy})
-				}
+		p, ok := cfg.Profiles[profile]
+		if !ok {
+			return Resolved{}, errors.New(errors.CodeCfgInvalid, "profile not found",
+				map[string]any{"profile": profile})
+		}
+		selectedProfile = p
+		// 解析 ssh_proxy 引用
+		if selectedProfile.SSHProxy != "" {
+			if proxy, ok := cfg.SSHProxies[selectedProfile.SSHProxy]; ok {
+				selectedProfile.SSHConfig = &proxy
+			} else {
+				return Resolved{}, errors.New(errors.CodeCfgInvalid, "ssh_proxy not found",
+					map[string]any{"profile": profile, "ssh_proxy": selectedProfile.SSHProxy})
 			}
-			// 设置默认端口
-			if selectedProfile.Port == 0 {
-				switch selectedProfile.DB {
-				case "mysql":
-					selectedProfile.Port = 3306
-				case "pg":
-					selectedProfile.Port = 5432
-				}
+		}
+		// 设置默认端口
+		if selectedProfile.Port == 0 {
+			switch selectedProfile.DB {
+			case "mysql":
+				selectedProfile.Port = 3306
+			case "pg":
+				selectedProfile.Port = 5432
 			}
 		}
 	}
