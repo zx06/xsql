@@ -30,14 +30,14 @@ jobs:
         run: go mod download
 
       - name: Install gotestsum
-        run: go install gotest.tools/gotestsum@v1.12.0
+        run: GOBIN="$PWD/bin" go install gotest.tools/gotestsum@v1.12.0
 
       - name: Build
         run: go build -v ./...
 
       - name: Test
         shell: bash
-        run: gotestsum --junitfile test-results.xml -- -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+        run: ./bin/gotestsum --junitfile test-results.xml -- -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload test results to Codecov
         uses: codecov/test-results-action@v1
@@ -100,6 +100,9 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      - name: Install gotestsum
+        run: GOBIN="$PWD/bin" go install gotest.tools/gotestsum@v1.12.0
+
       - name: Build
         run: go build -v ./...
 
@@ -107,13 +110,21 @@ jobs:
         env:
           XSQL_TEST_MYSQL_DSN: "root:root@tcp(127.0.0.1:3306)/testdb"
           XSQL_TEST_PG_DSN: "postgres://postgres:postgres@127.0.0.1:5432/testdb?sslmode=disable"
-        run: go test -v -tags=integration -coverprofile=coverage-integration.txt -covermode=atomic -coverpkg=github.com/zx06/xsql/internal/... ./tests/integration/...
+        run: ./bin/gotestsum --junitfile integration-test-results.xml -- -v -tags=integration -coverprofile=coverage-integration.txt -covermode=atomic -coverpkg=github.com/zx06/xsql/internal/... ./tests/integration/...
 
       - name: Run E2E tests
         env:
           XSQL_TEST_MYSQL_DSN: "root:root@tcp(127.0.0.1:3306)/testdb"
           XSQL_TEST_PG_DSN: "postgres://postgres:postgres@127.0.0.1:5432/testdb?sslmode=disable"
-        run: go test -v -tags=e2e -coverprofile=coverage-e2e.txt -covermode=atomic -coverpkg=github.com/zx06/xsql/internal/... ./tests/e2e/...
+        run: ./bin/gotestsum --junitfile e2e-test-results.xml -- -v -tags=e2e -coverprofile=coverage-e2e.txt -covermode=atomic -coverpkg=github.com/zx06/xsql/internal/... ./tests/e2e/...
+
+      - name: Upload integration test results to Codecov
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: integration-test-results.xml,e2e-test-results.xml
+          flags: integration,e2e
+          fail_ci_if_error: false
 
       - name: Upload integration coverage to Codecov
         uses: codecov/codecov-action@v5
