@@ -391,6 +391,77 @@ func TestResolveMCPServerOptions_StreamableHTTPMissingToken(t *testing.T) {
 	}
 }
 
+func TestResolveMCPServerOptions_EnvMissingToken(t *testing.T) {
+	t.Setenv("XSQL_MCP_TRANSPORT", "streamable_http")
+	cfg := config.File{
+		Profiles:   map[string]config.Profile{},
+		SSHProxies: map[string]config.SSHProxy{},
+	}
+	_, xe := resolveMCPServerOptions(&mcpServerOptions{}, cfg)
+	if xe == nil {
+		t.Fatal("expected error for missing auth token")
+	}
+}
+
+func TestResolveMCPServerOptions_CLIOverridesEnvConfig(t *testing.T) {
+	t.Setenv("XSQL_MCP_TRANSPORT", "streamable_http")
+	t.Setenv("XSQL_MCP_HTTP_AUTH_TOKEN", "env-token")
+	cfg := config.File{
+		Profiles:   map[string]config.Profile{},
+		SSHProxies: map[string]config.SSHProxy{},
+		MCP: config.MCPConfig{
+			Transport: "streamable_http",
+			HTTP: config.MCPHTTPConfig{
+				Addr:                "127.0.0.1:7000",
+				AuthToken:           "config-token",
+				AllowPlaintextToken: true,
+			},
+		},
+	}
+	opts := &mcpServerOptions{
+		transport:        "stdio",
+		transportSet:     true,
+		httpAddr:         "127.0.0.1:6000",
+		httpAddrSet:      true,
+		httpAuthToken:    "cli-token",
+		httpAuthTokenSet: true,
+	}
+	resolved, xe := resolveMCPServerOptions(opts, cfg)
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+	if resolved.transport != "stdio" {
+		t.Fatalf("expected stdio transport, got %s", resolved.transport)
+	}
+	if resolved.httpAddr != "127.0.0.1:6000" {
+		t.Fatalf("expected CLI addr, got %s", resolved.httpAddr)
+	}
+	if resolved.httpAuthToken != "cli-token" {
+		t.Fatalf("expected CLI token, got %s", resolved.httpAuthToken)
+	}
+}
+
+func TestResolveMCPServerOptions_ConfigTokenPlaintextNotAllowed(t *testing.T) {
+	cfg := config.File{
+		Profiles:   map[string]config.Profile{},
+		SSHProxies: map[string]config.SSHProxy{},
+		MCP: config.MCPConfig{
+			Transport: "streamable_http",
+			HTTP: config.MCPHTTPConfig{
+				AuthToken:           "config-token",
+				AllowPlaintextToken: false,
+			},
+		},
+	}
+	_, xe := resolveMCPServerOptions(&mcpServerOptions{}, cfg)
+	if xe == nil {
+		t.Fatal("expected error for plaintext token without allow")
+	}
+	if xe.Code != errors.CodeCfgInvalid {
+		t.Fatalf("expected CodeCfgInvalid, got %s", xe.Code)
+	}
+}
+
 func TestMCPServerCommand_ConfigMissing(t *testing.T) {
 	GlobalConfig.ConfigStr = filepath.Join(t.TempDir(), "missing.yaml")
 
