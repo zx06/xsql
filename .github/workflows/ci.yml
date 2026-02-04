@@ -34,7 +34,7 @@ jobs:
 
       - name: Test
         shell: bash
-        run: go run gotest.tools/gotestsum@v1.12.0 -- --junitfile test-results.xml -- -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+        run: CGO_ENABLED=1 go run gotest.tools/gotestsum@v1.12.0 --junitfile test-results.xml -- -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload test results to Codecov
         uses: codecov/test-results-action@v1
