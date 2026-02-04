@@ -63,7 +63,8 @@ profiles:
 - 计划支持解析：`Host`, `HostName`, `User`, `Port`, `IdentityFile`, `ProxyJump`。
 - 解析失败时回退到显式参数（config/cli/env）。
 
-## 回退方案：本地端口转发（计划中）
-- 仅在 driver 不支持 dial hook / 特殊场景时启用：
-  - 监听 `127.0.0.1:0` 分配端口
-  - 将 DB 连接指向本地端口
+## 回退方案：本地端口转发（已实现）
+当需要传统的 `ssh -L` 行为或 driver 不支持 dial hook 时，可使用 `xsql proxy` 命令启用本地端口转发：
+- 监听 `127.0.0.1:0`（或指定端口）分配端口
+- 将 DB 连接指向本地端口
+- 输出支持 JSON/YAML 或终端表格（详见 `docs/cli-spec.md`）

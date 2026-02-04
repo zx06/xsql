@@ -1,11 +1,12 @@
 {
   "name": "xsql",
   "version": "1.0.0",
-  "description": "Execute read-only SQL queries on MySQL/PostgreSQL databases via SSH proxy. Use when needing to query databases, check data, or explore database schemas.",
+  "description": "Use when you need to safely inspect MySQL/PostgreSQL data or schema via the xsql CLI.",
   "author": {
     "name": "zx06",
     "url": "https://github.com/zx06"
   },
+  "homepage": "https://github.com/zx06/xsql",
   "repository": "https://github.com/zx06/xsql",
   "license": "MIT",
   "keywords": [

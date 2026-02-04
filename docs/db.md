@@ -139,4 +139,4 @@ xsql query "INSERT INTO logs VALUES ('test')" -p prod --unsafe-allow-write
 ## SSH Proxy 与 driver dial
 - `database/sql` 不提供通用替换 `net.Conn` 的入口；需要依赖各 driver 的 dial hook。
 - 本项目采用 **driver 自定义 dial + sshClient.Dial**（详见 `docs/ssh-proxy.md`）。
-- 保留未来回退到本地端口转发的可能。
+- 已提供 `xsql proxy` 作为本地端口转发模式（`ssh -L` 语义），用于 driver 不支持 dial hook 或需要显式端口转发的场景。

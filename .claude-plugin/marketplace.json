@@ -1,18 +1,18 @@
 {
   "name": "xsql",
   "owner": {
+    "repo": "zx06/xsql",
     "name": "zx06",
-    "email": "zx06@github.com"
+    "url": "https://github.com/zx06"
   },
   "metadata": {
-    "description": "AI-first cross-database CLI tool for executing read-only SQL queries on MySQL/PostgreSQL with SSH proxy support",
+    "description": "AI-first cross-database CLI tools for read-only SQL inspection",
     "version": "1.0.0"
   },
   "plugins": [
     {
       "name": "xsql",
-      "source": "./",
-      "description": "Execute read-only SQL queries on MySQL/PostgreSQL databases via SSH proxy",
+      "description": "Use when you need to safely inspect MySQL/PostgreSQL data or schema via the xsql CLI.",
       "version": "1.0.0",
       "author": {
         "name": "zx06"
@@ -20,8 +20,24 @@
       "homepage": "https://github.com/zx06/xsql",
       "repository": "https://github.com/zx06/xsql",
       "license": "MIT",
-      "keywords": ["xsql", "sql", "mysql", "postgresql", "database", "cli", "ssh", "query"],
-      "category": "database"
+      "keywords": [
+        "xsql",
+        "sql",
+        "mysql",
+        "postgresql",
+        "database",
+        "cli",
+        "ssh",
+        "query"
+      ],
+      "category": "database",
+      "tags": [
+        "read-only",
+        "schema",
+        "mcp"
+      ],
+      "source": ".claude-plugin",
+      "strict": true
     }
   ]
 }

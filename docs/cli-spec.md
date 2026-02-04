@@ -148,11 +148,21 @@ xsql profile show dev --format json
     "host": "localhost",
     "port": 3306,
     "user": "root",
+    "database": "mydb",
+    "unsafe_allow_write": false,
+    "allow_plaintext": false,
+    "dsn": "***",
     "password": "***",
-    "database": "mydb"
+    "ssh_proxy": "bastion",
+    "ssh_host": "bastion.example.com",
+    "ssh_port": 22,
+    "ssh_user": "admin",
+    "ssh_identity_file": "~/.ssh/id_ed25519"
   }
 }
 ```
+
+> 注：`dsn`/`password`/`ssh_*` 字段仅在对应配置存在时返回，并且会被脱敏。
 
 ### `xsql proxy`
 
