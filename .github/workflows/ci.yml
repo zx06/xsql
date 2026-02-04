@@ -29,16 +29,27 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@v1.12.0
+
       - name: Build
         run: go build -v ./...
 
       - name: Test (Linux/macOS)
         if: runner.os != 'Windows'
-        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+        run: gotestsum --junitfile test-results.xml -- -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Test (Windows)
         if: runner.os == 'Windows'
-        run: go test -v -race "-coverprofile=coverage.txt" ./...
+        run: gotestsum --junitfile test-results.xml -- -v -race -coverprofile=coverage.txt ./...
+
+      - name: Upload test results to Codecov
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: test-results.xml
+          flags: unittests
+          fail_ci_if_error: false
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
