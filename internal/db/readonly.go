@@ -127,6 +127,11 @@ func IsReadOnlySQL(sql string) (bool, string) {
 		}
 	}
 
+	// 检查是否包含 SELECT ... FOR SHARE / FOR KEY SHARE
+	if hasSelectShareLock(tokens) {
+		return false, "forbidden_share_lock"
+	}
+
 	// 特殊处理 WITH (CTE) - 检查是否包含写入操作
 	if firstKeyword == "WITH" {
 		if hasWriteInCTE(tokens) {
@@ -135,6 +140,37 @@ func IsReadOnlySQL(sql string) (bool, string) {
 	}
 
 	return true, firstKeyword
+}
+
+func hasSelectShareLock(tokens []SQLToken) bool {
+	keywords := make([]string, 0, len(tokens))
+	for _, tok := range tokens {
+		if tok.Type == TokenKeyword {
+			keywords = append(keywords, tok.Value)
+		}
+	}
+
+	return hasKeywordSequence(keywords, []string{"FOR", "SHARE"}) ||
+		hasKeywordSequence(keywords, []string{"FOR", "KEY", "SHARE"})
+}
+
+func hasKeywordSequence(keywords []string, seq []string) bool {
+	if len(seq) == 0 || len(keywords) < len(seq) {
+		return false
+	}
+	for i := 0; i <= len(keywords)-len(seq); i++ {
+		match := true
+		for j := range seq {
+			if keywords[i+j] != seq[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
 }
 
 // stripLeadingCommentsAndSpace 去除前导注释和空白
@@ -383,7 +419,7 @@ func isKeyword(word string) bool {
 		"IF", "ELSEIF", "ELSE", "WHILE", "FOR", "LOOP", "RETURN",
 		"FUNCTION", "PROCEDURE", "TRIGGER", "VIEW", "INDEX", "SCHEMA",
 		"DATABASE", "TABLESPACE", "SEQUENCE", "DOMAIN", "TYPE",
-		"INTO", "VALUES", "DEFAULT", "PRIMARY", "KEY", "FOREIGN",
+		"INTO", "VALUES", "DEFAULT", "PRIMARY", "KEY", "FOREIGN", "SHARE",
 		"REFERENCES", "UNIQUE", "CHECK", "CONSTRAINT", "CASCADE",
 		"RESTRICT", "COLLATE", "ESCAPE", "REGEXP", "RLIKE",
 	}

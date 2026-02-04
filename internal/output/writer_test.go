@@ -255,6 +255,50 @@ func TestWriteOK_CSVFormat_NonQueryResult(t *testing.T) {
 	}
 }
 
+func TestWriteOK_TableFormat_MapOrdering(t *testing.T) {
+	var out bytes.Buffer
+	w := New(&out, &bytes.Buffer{})
+
+	data := map[string]any{
+		"b": "second",
+		"a": "first",
+	}
+
+	if err := w.WriteOK(FormatTable, data); err != nil {
+		t.Fatal(err)
+	}
+
+	result := out.String()
+	if strings.Index(result, "a") > strings.Index(result, "b") {
+		t.Errorf("expected keys to be sorted, got: %s", result)
+	}
+}
+
+func TestWriteOK_CSVFormat_MapOrdering(t *testing.T) {
+	var out bytes.Buffer
+	w := New(&out, &bytes.Buffer{})
+
+	data := map[string]any{
+		"b": "second",
+		"a": "first",
+	}
+
+	if err := w.WriteOK(FormatCSV, data); err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected at least two lines, got: %q", out.String())
+	}
+	if !strings.HasPrefix(lines[0], "a,") {
+		t.Errorf("expected first key to be 'a', got: %s", lines[0])
+	}
+	if !strings.HasPrefix(lines[1], "b,") {
+		t.Errorf("expected second key to be 'b', got: %s", lines[1])
+	}
+}
+
 func TestWriteError_TableFormat(t *testing.T) {
 	var out bytes.Buffer
 	w := New(&out, &bytes.Buffer{})

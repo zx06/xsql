@@ -84,6 +84,10 @@ func TestIsReadOnlySQL_WriteOperations(t *testing.T) {
 		{"EXECUTE stmt", false},
 		{"PREPARE stmt FROM 'SELECT 1'", false},
 		{"DEALLOCATE PREPARE stmt", false},
+
+		// SELECT locking clauses
+		{"SELECT * FROM users FOR SHARE", false},
+		{"SELECT * FROM users FOR KEY SHARE", false},
 	}
 
 	for _, tc := range cases {
