@@ -76,6 +76,23 @@ func TestResolve_ProfileAndFormatPrecedence(t *testing.T) {
 	}
 }
 
+func TestResolve_ProfileNotFound(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := []byte("profiles:\n  default:\n    format: yaml\n")
+	path := filepath.Join(tmp, "xsql.yaml")
+	if err := os.WriteFile(path, cfg, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, xe := Resolve(Options{WorkDir: tmp, HomeDir: tmp, CLIProfile: "missing", CLIProfileSet: true})
+	if xe == nil {
+		t.Fatal("expected error for missing profile")
+	}
+	if xe.Code != "XSQL_CFG_INVALID" {
+		t.Fatalf("code=%s", xe.Code)
+	}
+}
+
 func TestResolve_SSHProxyResolution(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := []byte(`ssh_proxies:
