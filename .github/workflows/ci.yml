@@ -52,7 +52,7 @@ jobs:
 
       - name: Test (Windows)
         if: runner.os == 'Windows'
-        run: gotestsum --junitfile test-results.xml -- -v -race -coverprofile=coverage.txt ./...
+        run: gotestsum --junitfile test-results.xml -- -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload test results to Codecov
         uses: codecov/test-results-action@v1
