@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/zx06/xsql/internal/config"
+	"github.com/zx06/xsql/internal/errors"
 )
 
 func TestStreamableHTTPAuthRequired(t *testing.T) {
@@ -25,32 +26,70 @@ func TestStreamableHTTPAuthRequired(t *testing.T) {
 	ts := httptest.NewServer(handler)
 	defer ts.Close()
 
-	req, err := http.NewRequest(http.MethodPost, ts.URL, strings.NewReader("{}"))
-	if err != nil {
-		t.Fatalf("new request: %v", err)
+	cases := []struct {
+		name             string
+		authHeader       string
+		wantUnauthorized bool
+	}{
+		{name: "missing", authHeader: "", wantUnauthorized: true},
+		{name: "wrong-scheme", authHeader: "Token secret-token", wantUnauthorized: true},
+		{name: "wrong-token", authHeader: "Bearer bad-token", wantUnauthorized: true},
+		{name: "ok", authHeader: "Bearer secret-token", wantUnauthorized: false},
 	}
-	req.Header.Set("Accept", "application/json, text/event-stream")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("http request error: %v", err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := http.NewRequest(http.MethodPost, ts.URL, strings.NewReader("{}"))
+			if err != nil {
+				t.Fatalf("new request: %v", err)
+			}
+			req.Header.Set("Accept", "application/json, text/event-stream")
+			if tc.authHeader != "" {
+				req.Header.Set("Authorization", tc.authHeader)
+			}
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("http request error: %v", err)
+			}
+			resp.Body.Close()
+			if tc.wantUnauthorized && resp.StatusCode != http.StatusUnauthorized {
+				t.Fatalf("expected unauthorized, got %d", resp.StatusCode)
+			}
+			if !tc.wantUnauthorized && resp.StatusCode == http.StatusUnauthorized {
+				t.Fatalf("expected non-unauthorized status, got %d", resp.StatusCode)
+			}
+		})
 	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("expected unauthorized, got %d", resp.StatusCode)
+}
+
+func TestNewStreamableHTTPHandler_Validation(t *testing.T) {
+	_, err := NewStreamableHTTPHandler(nil, "token")
+	if err == nil {
+		t.Fatal("expected error for nil server")
+	}
+	xe, ok := err.(*errors.XError)
+	if !ok {
+		t.Fatalf("expected XError, got %T", err)
+	}
+	if xe.Code != errors.CodeInternal {
+		t.Fatalf("expected CodeInternal, got %s", xe.Code)
 	}
 
-	reqAuth, err := http.NewRequest(http.MethodPost, ts.URL, strings.NewReader("{}"))
+	server, err := CreateServer("test", &config.File{
+		Profiles:   map[string]config.Profile{},
+		SSHProxies: map[string]config.SSHProxy{},
+	})
 	if err != nil {
-		t.Fatalf("new request: %v", err)
+		t.Fatalf("CreateServer error: %v", err)
 	}
-	reqAuth.Header.Set("Accept", "application/json, text/event-stream")
-	reqAuth.Header.Set("Authorization", "Bearer secret-token")
-	respAuth, err := http.DefaultClient.Do(reqAuth)
-	if err != nil {
-		t.Fatalf("http request error: %v", err)
+	_, err = NewStreamableHTTPHandler(server, "")
+	if err == nil {
+		t.Fatal("expected error for empty token")
 	}
-	respAuth.Body.Close()
-	if respAuth.StatusCode == http.StatusUnauthorized {
-		t.Fatalf("expected authorized request to not be unauthorized")
+	xe, ok = err.(*errors.XError)
+	if !ok {
+		t.Fatalf("expected XError, got %T", err)
+	}
+	if xe.Code != errors.CodeCfgInvalid {
+		t.Fatalf("expected CodeCfgInvalid, got %s", xe.Code)
 	}
 }
