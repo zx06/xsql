@@ -293,7 +293,7 @@ profiles:
 
 func TestRunMCPServer_ConfigMissing(t *testing.T) {
 	GlobalConfig.ConfigStr = filepath.Join(t.TempDir(), "missing.yaml")
-	err := runMCPServer()
+	err := runMCPServer(&mcpServerOptions{})
 	if err == nil {
 		t.Fatal("expected error for missing config")
 	}

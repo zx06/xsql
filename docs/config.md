@@ -32,6 +32,13 @@ ssh_proxies:
 
 ```yaml
 # xsql.yaml
+mcp:
+  transport: streamable_http
+  http:
+    addr: 127.0.0.1:8787
+    auth_token: "keyring:mcp/http_token"
+    allow_plaintext_token: false
+
 ssh_proxies:
   bastion:
     host: bastion.example.com
@@ -86,6 +93,15 @@ profiles:
     db: pg
     dsn: "postgres://user:pass@staging-db.example.com:5432/myapp?sslmode=require"
 ```
+
+## MCP 配置项
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `mcp.transport` | string | MCP 传输：`stdio` 或 `streamable_http` |
+| `mcp.http.addr` | string | Streamable HTTP 监听地址 |
+| `mcp.http.auth_token` | string | Streamable HTTP 鉴权 token（支持 `keyring:` 引用） |
+| `mcp.http.allow_plaintext_token` | bool | 允许在配置中使用明文 token |
 
 ## SSH Proxy 配置项
 

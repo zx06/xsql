@@ -20,6 +20,10 @@ Status: Draft
   mcp:
     enabled: true
     transport: stdio  # 默认使用 stdio 传输
+    http:
+      addr: 127.0.0.1:8787
+      auth_token: "keyring:mcp/http_token"
+      allow_plaintext_token: false
   ```
 - MCP Server 提供的 tools：
   - `query`: 执行 SQL 查询（支持只读模式）
@@ -36,6 +40,7 @@ Status: Draft
 - 数据结构/接口：
   - MCP Protocol: 遵循 [Model Context Protocol](https://modelcontextprotocol.io/) 规范
   - Tool 输入/输出：复用 xsql 现有的 JSON 输出格式（`ok`、`schema_version`、`data`/`error`）
+  - Streamable HTTP: 使用 MCP Streamable HTTP 传输，必须启用鉴权
 - 兼容性策略：
   - 新增能力，不影响 CLI 现有功能
   - MCP server 使用独立的代码路径，复用 internal 层的核心能力
@@ -101,6 +106,7 @@ Status: Draft
 - 默认安全策略：
   - query tool 默认只读模式（双重保护：SQL 静态分析 + DB 事务级只读）
   - 写操作需要显式设置 `unsafe_allow_write: true`
+  - Streamable HTTP 必须提供 `Authorization: Bearer <token>` 鉴权
 - secrets 管理：
   - 复用现有的 secret 管理（keyring/加密/明文兼容）
   - 不在 MCP tool 输出中暴露密码、私钥等敏感信息
@@ -123,6 +129,5 @@ Status: Draft
 - 验证只读保护机制
 
 ## 未决问题
-- 是否需要支持 HTTP transport（除 stdio 外）？
 - 是否需要实现 MCP 的 resources 和 prompts 功能？
 - MCP server 是否需要支持多客户端并发？
