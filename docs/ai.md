@@ -44,10 +44,7 @@ MCP Server 提供以下 tools：
   "mcpServers": {
     "xsql": {
       "command": "xsql",
-      "args": ["mcp", "server"],
-      "env": {
-        "XSQL_CONFIG": "/path/to/config.yaml"
-      }
+      "args": ["mcp", "server", "--config", "/path/to/config.yaml"]
     }
   }
 }

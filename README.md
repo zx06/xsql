@@ -192,6 +192,20 @@ profiles:
     ssh_proxy: bastion  # 引用 SSH 代理
 ```
 
+### 端口转发代理（xsql proxy）
+
+当需要传统的 `ssh -L` 行为或希望暴露本地端口给 GUI 客户端时，可以使用 `xsql proxy`：
+
+```bash
+# 启动端口转发（自动分配本地端口）
+xsql -p prod proxy
+
+# 指定本地端口
+xsql -p prod proxy --local-port 13306
+```
+
+> 该命令要求 profile 配置 `ssh_proxy`，并会在本地监听端口，将流量转发到目标数据库。
+
 ### 安全特性
 
 - **双重只读保护**：SQL 静态分析 + 数据库事务级只读

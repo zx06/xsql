@@ -1,6 +1,13 @@
 ---
 name: xsql
 description: Use when you need to safely inspect MySQL/PostgreSQL data or schema via the xsql CLI.
+license: MIT
+compatibility: Designed for Claude Code and compatible AI agents that can run CLI commands.
+metadata:
+  repository: https://github.com/zx06/xsql
+  docs: https://github.com/zx06/xsql#readme
+  category: database-cli
+allowed-tools: Bash(xsql:*)
 ---
 
 # xsql - AI-first Cross-Database CLI Tool
@@ -12,6 +19,11 @@ xsql is a command-line tool designed for AI agents to execute read-only SQL quer
 ```bash
 go install github.com/zx06/xsql/cmd/xsql@latest
 ```
+
+## Prerequisites
+
+- Ensure a valid `xsql.yaml` exists (`./xsql.yaml` or `~/.config/xsql/xsql.yaml`) or pass `--config`.
+- Confirm the target profile exists before running queries.
 
 ## Quick Reference
 
