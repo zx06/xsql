@@ -29,25 +29,11 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Install gotestsum
-        run: go install gotest.tools/gotestsum@v1.12.0
-
-      - name: Add Go bin to PATH (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
-
-      - name: Add Go bin to PATH (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $gopath = go env GOPATH
-          "$gopath\\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
       - name: Build
         run: go build -v ./...
 
       - name: Test
-        run: gotestsum --junitfile test-results.xml -- -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+        run: go run gotest.tools/gotestsum@v1.12.0 --junitfile test-results.xml -- -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload test results to Codecov
         uses: codecov/test-results-action@v1
