@@ -53,11 +53,8 @@ func TestWriteError_WithCause(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &env); err != nil {
 		t.Fatal(err)
 	}
-	if env.Error.Details == nil || env.Error.Details["cause"] == nil {
-		t.Error("error details should contain cause")
-	}
-	if env.Error.Details["cause"] != "underlying error" {
-		t.Errorf("cause=%v, want 'underlying error'", env.Error.Details["cause"])
+	if env.Error.Details != nil && env.Error.Details["cause"] != nil {
+		t.Errorf("error details should not expose cause, got: %v", env.Error.Details["cause"])
 	}
 }
 
@@ -159,6 +156,27 @@ func TestWriteOK_TableFormat_EmptyResult(t *testing.T) {
 	}
 }
 
+func TestWriteOK_TableFormat_NullValue(t *testing.T) {
+	var out bytes.Buffer
+	w := New(&out, &bytes.Buffer{})
+
+	data := map[string]any{
+		"columns": []string{"id", "email"},
+		"rows": []map[string]any{
+			{"id": 1, "email": nil},
+		},
+	}
+
+	if err := w.WriteOK(FormatTable, data); err != nil {
+		t.Fatal(err)
+	}
+
+	result := out.String()
+	if !strings.Contains(result, "<null>") {
+		t.Errorf("table should render null as <null>, got: %s", result)
+	}
+}
+
 func TestWriteOK_CSVFormat_QueryResult(t *testing.T) {
 	var out bytes.Buffer
 	w := New(&out, &bytes.Buffer{})
@@ -190,6 +208,27 @@ func TestWriteOK_CSVFormat_QueryResult(t *testing.T) {
 	// 不应包含 ok 和 schema_version
 	if strings.Contains(result, "schema_version") {
 		t.Errorf("csv format should not contain schema_version, got: %s", result)
+	}
+}
+
+func TestWriteOK_CSVFormat_NullValue(t *testing.T) {
+	var out bytes.Buffer
+	w := New(&out, &bytes.Buffer{})
+
+	data := map[string]any{
+		"columns": []string{"id", "email"},
+		"rows": []map[string]any{
+			{"id": 1, "email": nil},
+		},
+	}
+
+	if err := w.WriteOK(FormatCSV, data); err != nil {
+		t.Fatal(err)
+	}
+
+	result := out.String()
+	if !strings.Contains(result, "1,") {
+		t.Errorf("csv should render null as empty, got: %s", result)
 	}
 }
 
