@@ -1,13 +1,10 @@
 {
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "xsql",
+  "description": "AI-first cross-database CLI tools for read-only SQL inspection",
   "owner": {
-    "repo": "zx06/xsql",
     "name": "zx06",
     "url": "https://github.com/zx06"
-  },
-  "metadata": {
-    "description": "AI-first cross-database CLI tools for read-only SQL inspection",
-    "version": "1.0.0"
   },
   "plugins": [
     {
@@ -36,7 +33,7 @@
         "schema",
         "mcp"
       ],
-      "source": ".claude-plugin",
+      "source": "./.claude-plugin",
       "strict": true
     }
   ]
