@@ -3,6 +3,10 @@ version: "2"
 run:
   timeout: 5m
 
+issues:
+  exclude-files:
+    - ".*_test\\.go"
+
 linters:
   default: standard
   settings:
