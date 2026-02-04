@@ -10,6 +10,12 @@ import (
 	"github.com/zx06/xsql/internal/errors"
 )
 
+type tableFormatterData struct{}
+
+func (tableFormatterData) ToTableData() ([]string, []map[string]any, bool) {
+	return []string{"id"}, []map[string]any{{"id": 1}}, true
+}
+
 func TestWriteOK_JSONEnvelope(t *testing.T) {
 	var out bytes.Buffer
 	w := New(&out, &bytes.Buffer{})
@@ -356,6 +362,18 @@ func TestWriteOK_TableFormat_ProfileListWithDescription(t *testing.T) {
 	// 检查 profiles 数量
 	if !strings.Contains(result, "(2 profiles)") {
 		t.Errorf("table should show 2 profiles, got: %s", result)
+	}
+}
+
+func TestWriteOK_TableFormat_TableFormatter(t *testing.T) {
+	var out bytes.Buffer
+	w := New(&out, &bytes.Buffer{})
+
+	if err := w.WriteOK(FormatTable, tableFormatterData{}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "id") {
+		t.Fatalf("expected table output, got %s", out.String())
 	}
 }
 
