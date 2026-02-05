@@ -40,11 +40,12 @@ jobs:
         run: gotestsum --junitfile test-results.xml -- -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload test results to Codecov
-        uses: codecov/test-results-action@v1
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: test-results.xml
           flags: unittests
+          report_type: test_results
           fail_ci_if_error: false
 
       - name: Upload coverage to Codecov
@@ -119,11 +120,12 @@ jobs:
         run: gotestsum --junitfile e2e-test-results.xml -- -v -tags=e2e -coverprofile=coverage-e2e.txt -covermode=atomic -coverpkg=github.com/zx06/xsql/internal/... ./tests/e2e/...
 
       - name: Upload integration test results to Codecov
-        uses: codecov/test-results-action@v1
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: integration-test-results.xml,e2e-test-results.xml
           flags: integration,e2e
+          report_type: test_results
           fail_ci_if_error: false
 
       - name: Upload integration coverage to Codecov
