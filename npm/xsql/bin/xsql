@@ -5,12 +5,12 @@ const path = require("path");
 const os = require("os");
 
 const PLATFORMS = {
-  "linux-x64": "@xsql-cli/linux-x64",
-  "linux-arm64": "@xsql-cli/linux-arm64",
-  "darwin-x64": "@xsql-cli/darwin-x64",
-  "darwin-arm64": "@xsql-cli/darwin-arm64",
-  "win32-x64": "@xsql-cli/win32-x64",
-  "win32-arm64": "@xsql-cli/win32-arm64",
+  "linux-x64": "@zx06/xsql-cli-linux-x64",
+  "linux-arm64": "@zx06/xsql-cli-linux-arm64",
+  "darwin-x64": "@zx06/xsql-cli-darwin-x64",
+  "darwin-arm64": "@zx06/xsql-cli-darwin-arm64",
+  "win32-x64": "@zx06/xsql-cli-win32-x64",
+  "win32-arm64": "@zx06/xsql-cli-win32-arm64",
 };
 
 function getBinaryPath() {
@@ -50,3 +50,4 @@ try {
   console.error(err.message);
   process.exit(1);
 }
+

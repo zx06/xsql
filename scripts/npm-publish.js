@@ -9,6 +9,7 @@ const { createWriteStream, mkdirSync } = require("fs");
 
 const REPO = "zx06/xsql";
 const NPM_DIR = path.join(__dirname, "..", "npm");
+const NPM_SCOPE = "@zx06";
 
 const PLATFORM_MAP = [
   { goos: "linux",   goarch: "amd64", npm: "linux-x64",   ext: "", archive: "tar.gz" },
@@ -114,7 +115,7 @@ async function main() {
   const publishFlag = dryRun ? "--dry-run" : "";
   for (const p of PLATFORM_MAP) {
     const pkgDir = path.join(NPM_DIR, p.npm);
-    console.log(`  Publishing @xsql-cli/${p.npm}...`);
+    console.log(`  Publishing ${NPM_SCOPE}/xsql-cli-${p.npm}...`);
     run(`npm publish --access public ${publishFlag}`, { cwd: pkgDir });
   }
 
@@ -130,3 +131,5 @@ main().catch((err) => {
   console.error(err);
   process.exit(1);
 });
+
+

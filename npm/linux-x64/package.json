@@ -1,10 +1,11 @@
 {
-  "name": "@xsql-cli/linux-x64",
+  "name": "@zx06/xsql-cli-linux-x64",
   "version": "0.0.0",
   "description": "xsql binary for linux-x64",
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/zx06/xsql.git" },
+  "repository": { "type": "git", "url": "git+https://github.com/zx06/xsql.git" },
   "os": ["linux"],
   "cpu": ["x64"],
   "files": ["bin/xsql"]
 }
+

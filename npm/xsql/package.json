@@ -5,7 +5,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/zx06/xsql.git"
+    "url": "git+https://github.com/zx06/xsql.git"
   },
   "homepage": "https://github.com/zx06/xsql",
   "bin": {
@@ -16,15 +16,16 @@
     "README.md"
   ],
   "optionalDependencies": {
-    "@xsql-cli/linux-x64": "0.0.0",
-    "@xsql-cli/linux-arm64": "0.0.0",
-    "@xsql-cli/darwin-x64": "0.0.0",
-    "@xsql-cli/darwin-arm64": "0.0.0",
-    "@xsql-cli/win32-x64": "0.0.0",
-    "@xsql-cli/win32-arm64": "0.0.0"
+    "@zx06/xsql-cli-linux-x64": "0.0.0",
+    "@zx06/xsql-cli-linux-arm64": "0.0.0",
+    "@zx06/xsql-cli-darwin-x64": "0.0.0",
+    "@zx06/xsql-cli-darwin-arm64": "0.0.0",
+    "@zx06/xsql-cli-win32-x64": "0.0.0",
+    "@zx06/xsql-cli-win32-arm64": "0.0.0"
   },
   "keywords": ["sql", "database", "mysql", "postgresql", "cli", "ai"],
   "engines": {
     "node": ">=16"
   }
 }
+
