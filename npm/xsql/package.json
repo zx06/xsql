@@ -1,0 +1,30 @@
+{
+  "name": "xsql-cli",
+  "version": "0.0.0",
+  "description": "AI-first cross-database CLI tool with SSH proxy support",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zx06/xsql.git"
+  },
+  "homepage": "https://github.com/zx06/xsql",
+  "bin": {
+    "xsql": "bin/xsql"
+  },
+  "files": [
+    "bin",
+    "README.md"
+  ],
+  "optionalDependencies": {
+    "@xsql-cli/linux-x64": "0.0.0",
+    "@xsql-cli/linux-arm64": "0.0.0",
+    "@xsql-cli/darwin-x64": "0.0.0",
+    "@xsql-cli/darwin-arm64": "0.0.0",
+    "@xsql-cli/win32-x64": "0.0.0",
+    "@xsql-cli/win32-arm64": "0.0.0"
+  },
+  "keywords": ["sql", "database", "mysql", "postgresql", "cli", "ai"],
+  "engines": {
+    "node": ">=16"
+  }
+}

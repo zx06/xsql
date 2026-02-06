@@ -1,0 +1,10 @@
+{
+  "name": "@xsql-cli/darwin-arm64",
+  "version": "0.0.0",
+  "description": "xsql binary for darwin-arm64",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/zx06/xsql.git" },
+  "os": ["darwin"],
+  "cpu": ["arm64"],
+  "files": ["bin/xsql"]
+}

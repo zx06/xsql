@@ -1,2 +1,5 @@
 *.exe
 .vscode/
+.npm-tmp/
+npm/*/bin/xsql
+npm/*/bin/xsql.exe
