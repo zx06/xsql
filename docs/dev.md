@@ -100,10 +100,12 @@ internal/
   log/             # slog 日志
   mcp/             # MCP Server 实现
   output/          # json/yaml/table/csv 输出
+  proxy/           # 端口转发代理
   secret/          # keyring + 明文策略
   spec/            # tool spec 导出
   ssh/             # SSH client + dial
 tests/
+  e2e/             # E2E 测试
   integration/     # 集成测试（需要数据库）
 docs/              # 文档
 ```

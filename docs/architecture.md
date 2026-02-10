@@ -15,6 +15,7 @@
 /internal/db/pg        # PostgreSQL 驱动实现
 /internal/mcp          # MCP Server 实现
 /internal/ssh          # SSH proxy（driver dial，必要时回退端口转发）+ ssh_config（可选）
+/internal/proxy        # 端口转发代理（ssh -L 语义）
 /internal/output       # json/yaml/table/csv + 流式输出
 /internal/spec         # tool spec 导出（JSON schema）
 /internal/errors       # 错误码/退出码/可机读错误
