@@ -33,6 +33,9 @@ brew install zx06/tap/xsql
 # Windows
 scoop bucket add zx06 https://github.com/zx06/scoop-bucket && scoop install xsql
 
+# npm / npx
+npm install -g xsql-cli
+
 # 或直接下载: https://github.com/zx06/xsql/releases
 ```
 
@@ -153,7 +156,7 @@ xsql query "<SQL>" -p <profile> -f json
 | `xsql profile list` | 列出所有 profile |
 | `xsql profile show <name>` | 查看 profile 详情（密码脱敏） |
 | `xsql mcp server` | 启动 MCP Server（AI 助手集成） |
-| `xsql spec` | 导出 AI Tool Spec |
+| `xsql spec` | 导出 AI Tool Spec（支持 `--format yaml`） |
 | `xsql version` | 显示版本信息 |
 
 ### 输出格式
@@ -198,10 +201,10 @@ profiles:
 
 ```bash
 # 启动端口转发（自动分配本地端口）
-xsql -p prod proxy
+xsql proxy -p prod
 
 # 指定本地端口
-xsql -p prod proxy --local-port 13306
+xsql proxy -p prod --local-port 13306
 ```
 
 > 该命令要求 profile 配置 `ssh_proxy`，并会在本地监听端口，将流量转发到目标数据库。

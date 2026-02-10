@@ -207,8 +207,13 @@ func TestMain(m *testing.M) {
 ### 目录结构
 ```
 tests/e2e/
-  ├── e2e_test.go      # 共享 helper 和基础测试
-  └── profile_test.go  # profile 命令测试
+  ├── e2e_test.go                # 共享 helper 和基础设施
+  ├── mcp_test.go                # MCP Server 测试
+  ├── output_test.go             # 输出格式测试
+  ├── profile_test.go            # profile 命令测试
+  ├── proxy_test.go              # proxy 命令测试
+  ├── readonly_test.go           # 只读策略测试
+  └── ssh_proxy_success_test.go  # SSH 代理成功测试
 ```
 
 ### 运行测试

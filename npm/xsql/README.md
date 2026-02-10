@@ -11,7 +11,7 @@ npm install -g xsql-cli
 ## Usage
 
 ```bash
-xsql query --dsn "mysql://user:pass@host:3306/db" "SELECT 1"
+xsql query "SELECT 1" -p dev -f json
 xsql version
 ```
 
