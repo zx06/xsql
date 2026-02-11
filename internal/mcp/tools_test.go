@@ -801,3 +801,108 @@ func TestQuery_AllFields(t *testing.T) {
 		t.Errorf("expected Description=Full profile, got %s", profile.Description)
 	}
 }
+
+func TestQueryHandler_InvalidJSON(t *testing.T) {
+	cfg := &config.File{
+		Profiles: map[string]config.Profile{
+			"dev": {DB: "mysql"},
+		},
+	}
+	handler := NewToolHandler(cfg)
+
+	req := &mcp.CallToolRequest{
+		Params: &mcp.CallToolParamsRaw{
+			Arguments: []byte("{"),
+		},
+	}
+
+	result, err := handler.queryHandler(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("expected error result, got %+v", result)
+	}
+	if len(result.Content) == 0 {
+		t.Fatal("expected error content")
+	}
+	text := result.Content[0].(*mcp.TextContent).Text
+	if !strings.Contains(text, "CFG_INVALID") {
+		t.Fatalf("expected CFG_INVALID in output, got: %s", text)
+	}
+}
+
+func TestProfileShowHandler_InvalidJSON(t *testing.T) {
+	cfg := &config.File{
+		Profiles: map[string]config.Profile{
+			"dev": {DB: "mysql"},
+		},
+	}
+	handler := NewToolHandler(cfg)
+
+	req := &mcp.CallToolRequest{
+		Params: &mcp.CallToolParamsRaw{
+			Arguments: []byte("{"),
+		},
+	}
+
+	result, err := handler.profileShowHandler(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("expected error result, got %+v", result)
+	}
+	if len(result.Content) == 0 {
+		t.Fatal("expected error content")
+	}
+	text := result.Content[0].(*mcp.TextContent).Text
+	if !strings.Contains(text, "CFG_INVALID") {
+		t.Fatalf("expected CFG_INVALID in output, got: %s", text)
+	}
+}
+
+func TestGetProfile_ResolvesSSHProxy(t *testing.T) {
+	cfg := &config.File{
+		Profiles: map[string]config.Profile{
+			"dev": {DB: "mysql", SSHProxy: "bastion"},
+		},
+		SSHProxies: map[string]config.SSHProxy{
+			"bastion": {Host: "bastion.example.com", Port: 22, User: "bastion"},
+		},
+	}
+
+	handler := NewToolHandler(cfg)
+	profile := handler.getProfile("dev")
+	if profile == nil {
+		t.Fatal("expected non-nil profile")
+	}
+	if profile.SSHConfig == nil {
+		t.Fatal("expected SSHConfig to be resolved")
+	}
+	if profile.SSHConfig.Host != "bastion.example.com" {
+		t.Fatalf("expected SSH host to be resolved, got %s", profile.SSHConfig.Host)
+	}
+}
+
+func TestProfileList_EmptyProfiles(t *testing.T) {
+	cfg := &config.File{
+		Profiles: map[string]config.Profile{},
+	}
+	handler := NewToolHandler(cfg)
+
+	result, _, err := handler.ProfileList(context.Background(), &mcp.CallToolRequest{}, struct{}{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("expected success result, got %+v", result)
+	}
+	if len(result.Content) == 0 {
+		t.Fatal("expected content")
+	}
+	text := result.Content[0].(*mcp.TextContent).Text
+	if !strings.Contains(text, "\"profiles\": []") {
+		t.Fatalf("expected empty profiles list, got: %s", text)
+	}
+}

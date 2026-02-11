@@ -787,3 +787,103 @@ func TestWriteOK_TableFormat_SchemaFormatter_NoColumns_SchemaEqualsDB(t *testing
 		t.Errorf("schema table output should include table count, got: %s", result)
 	}
 }
+
+func TestTryAsProfileList_ReflectMissingName(t *testing.T) {
+	type profileInfo struct {
+		Description string
+		DB          string
+		Mode        string
+	}
+	input := []profileInfo{
+		{Description: "no name", DB: "mysql", Mode: "read-only"},
+	}
+	if _, ok := tryAsProfileList(input); ok {
+		t.Fatal("expected ok=false for struct slice missing Name")
+	}
+}
+
+func TestTryAsQueryResultReflect_RowMapNonStringKey(t *testing.T) {
+	type Result struct {
+		Columns []string
+		Rows    []map[any]any
+	}
+	input := Result{
+		Columns: []string{"id"},
+		Rows:    []map[any]any{{1: "bad"}},
+	}
+	if _, ok := tryAsQueryResultReflect(input); ok {
+		t.Fatal("expected ok=false for non-string row map keys")
+	}
+}
+
+func TestWriteTable_ErrorWithoutErrorObject(t *testing.T) {
+	var out bytes.Buffer
+	err := writeTable(&out, Envelope{OK: false, Error: nil})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("expected empty output, got: %s", out.String())
+	}
+}
+
+func TestWriteCSV_ErrorWithoutErrorObject(t *testing.T) {
+	var out bytes.Buffer
+	err := writeCSV(&out, Envelope{OK: false, Error: nil})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("expected empty output, got: %s", out.String())
+	}
+}
+
+func TestTryAsProfileList_ReflectStructSlice(t *testing.T) {
+	type profileInfo struct {
+		Name        string
+		Description string
+		DB          string
+		Mode        string
+	}
+	input := []profileInfo{
+		{Name: "dev", Description: "Dev", DB: "mysql", Mode: "read-only"},
+	}
+	got, ok := tryAsProfileList(input)
+	if !ok {
+		t.Fatal("expected ok=true for struct slice")
+	}
+	if len(got) != 1 || got[0].Name != "dev" {
+		t.Fatalf("unexpected profile list: %+v", got)
+	}
+}
+
+func TestTryAsQueryResultReflect_NonStringColumns(t *testing.T) {
+	type BadResult struct {
+		Columns []any
+		Rows    []map[string]any
+	}
+	input := BadResult{
+		Columns: []any{1},
+		Rows:    []map[string]any{{"id": 1}},
+	}
+	if _, ok := tryAsQueryResultReflect(input); ok {
+		t.Fatal("expected ok=false for non-string columns")
+	}
+}
+
+func TestWriteOK_TableFormat_JSONFallback(t *testing.T) {
+	var out bytes.Buffer
+	w := New(&out, &bytes.Buffer{})
+
+	type payload struct {
+		Foo string `json:"foo"`
+	}
+	if err := w.WriteOK(FormatTable, payload{Foo: "bar"}); err != nil {
+		t.Fatal(err)
+	}
+
+	result := out.String()
+	if !strings.Contains(result, "\"foo\"") || !strings.Contains(result, "bar") {
+		t.Fatalf("expected JSON fallback output, got: %s", result)
+	}
+}

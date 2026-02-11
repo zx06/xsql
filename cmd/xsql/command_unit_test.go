@@ -599,6 +599,24 @@ profiles:
 	}
 }
 
+func TestValueIfSet(t *testing.T) {
+	if got := valueIfSet(false, "x"); got != "" {
+		t.Fatalf("expected empty when not set, got %q", got)
+	}
+	if got := valueIfSet(true, "x"); got != "x" {
+		t.Fatalf("expected value when set, got %q", got)
+	}
+}
+
+func TestFirstNonEmpty(t *testing.T) {
+	if got := firstNonEmpty("", "", "a", "b"); got != "a" {
+		t.Fatalf("expected first non-empty value, got %q", got)
+	}
+	if got := firstNonEmpty("", ""); got != "" {
+		t.Fatalf("expected empty when all empty, got %q", got)
+	}
+}
+
 func configProfile(dbType string) config.Profile {
 	return config.Profile{DB: dbType}
 }
