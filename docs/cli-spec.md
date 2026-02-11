@@ -85,6 +85,100 @@ id,name
 
 > 注：Table 和 CSV 格式不包含 `ok` 和 `schema_version` 元数据，直接输出数据。
 
+### `xsql schema dump`
+
+导出数据库结构（表、列、索引、外键），供 AI/agent 自动理解数据库 schema。
+
+```bash
+# 导出所有表结构
+xsql schema dump -p dev
+
+# 输出 JSON 格式
+xsql schema dump -p dev -f json
+
+# 过滤特定表（支持通配符）
+xsql schema dump -p dev --table "user*"
+
+# 包含系统表
+xsql schema dump -p dev --include-system
+```
+
+**Flags:**
+| Flag | 默认值 | 说明 |
+|------|--------|------|
+| `--profile` | - | Profile 名称 |
+| `--format` | auto | 输出格式：json/yaml/table/auto |
+| `--table` | "" | 表名过滤（支持 `*` 和 `?` 通配符） |
+| `--include-system` | false | 包含系统表 |
+| `--allow-plaintext` | false | 允许配置中使用明文密码 |
+| `--ssh-skip-known-hosts-check` | false | 跳过 SSH 主机密钥验证（危险） |
+
+**输出示例（JSON）：**
+```json
+{
+  "ok": true,
+  "schema_version": 1,
+  "data": {
+    "database": "mydb",
+    "tables": [
+      {
+        "schema": "public",
+        "name": "users",
+        "comment": "用户表",
+        "columns": [
+          {
+            "name": "id",
+            "type": "bigint",
+            "nullable": false,
+            "default": "nextval('users_id_seq'::regclass)",
+            "comment": "主键",
+            "primary_key": true
+          },
+          {
+            "name": "email",
+            "type": "varchar(255)",
+            "nullable": false,
+            "default": null,
+            "comment": "邮箱",
+            "primary_key": false
+          }
+        ],
+        "indexes": [
+          {
+            "name": "users_pkey",
+            "columns": ["id"],
+            "unique": true,
+            "primary": true
+          }
+        ],
+        "foreign_keys": []
+      }
+    ]
+  }
+}
+```
+
+**输出示例（Table）：**
+```
+Database: mydb
+
+Table: public.users (用户表)
+  Columns:
+    name    type          nullable  default                   comment  pk
+    ----    ----          --------  -------                   -------  --
+    id      bigint        false     nextval('users_id_seq')   主键     ✓
+    email   varchar(255)  false     -                         邮箱     
+
+(1 table)
+```
+
+**使用场景：**
+- AI 自动发现数据库结构，无需人工提供表信息
+- 生成数据库文档
+- 对比不同环境的 schema 差异
+
+> **注意**：schema dump 是只读操作，遵循 profile 的只读策略。
+
 ### `xsql spec`
 
 导出 tool spec（供 AI/agent 自动发现）。

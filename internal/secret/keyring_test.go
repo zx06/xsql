@@ -2,8 +2,11 @@ package secret
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/zalando/go-keyring"
 )
 
 // nullByteKeyring 模拟 Windows cmdkey 返回带 null 字节的值
@@ -232,5 +235,32 @@ func TestResolve_LongPassword(t *testing.T) {
 	}
 	if val != longPass {
 		t.Errorf("Long password mismatch: got len=%d, want len=%d", len(val), len(longPass))
+	}
+}
+
+func TestDefaultKeyring_NullByteBehavior(t *testing.T) {
+	keyring.MockInit()
+	kr := defaultKeyring()
+	service := "xsql-test"
+	account := "null-byte"
+	raw := "s\x00e\x00c\x00r\x00e\x00t\x00"
+	if err := kr.Set(service, account, raw); err != nil {
+		t.Fatalf("Set failed: %v", err)
+	}
+	got, err := kr.Get(service, account)
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if runtime.GOOS == "windows" {
+		if strings.Contains(got, "\x00") {
+			t.Fatalf("expected null bytes to be stripped, got %q", got)
+		}
+		if got != "secret" {
+			t.Fatalf("expected cleaned value, got %q", got)
+		}
+		return
+	}
+	if got != raw {
+		t.Fatalf("expected raw value on non-windows, got %q", got)
 	}
 }

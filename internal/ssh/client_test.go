@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -350,7 +351,26 @@ func writeTestKey(t *testing.T, dir, name string) string {
 	return path
 }
 
-// Helper function to check if a path contains another path component
+// Helper function to check if a path contains another path component (cross-platform)
 func containsPath(path, component string) bool {
-	return len(path) >= len(component) && (path == component || path[len(path)-len(component)-1] == '/' || path[:len(component)] == component)
+	p := filepath.ToSlash(filepath.Clean(path))
+	c := filepath.ToSlash(filepath.Clean(component))
+
+	if p == c {
+		return true
+	}
+
+	if len(p) < len(c) {
+		return false
+	}
+
+	if strings.HasPrefix(p, c+"/") {
+		return true
+	}
+
+	if strings.Contains(p, "/"+c+"/") || strings.HasSuffix(p, "/"+c) {
+		return true
+	}
+
+	return false
 }

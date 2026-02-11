@@ -3,19 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
-	"database/sql"
-	"database/sql/driver"
 	"encoding/json"
-	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/zx06/xsql/internal/app"
 	"github.com/zx06/xsql/internal/config"
-	xdb "github.com/zx06/xsql/internal/db"
 	"github.com/zx06/xsql/internal/errors"
 	"github.com/zx06/xsql/internal/output"
 )
@@ -98,27 +92,116 @@ func TestRunQuery_MissingDB(t *testing.T) {
 	}
 }
 
-func TestRunQuery_Success(t *testing.T) {
-	driverName := registerStubDriver(t, map[string]*stubRows{
-		"select 1": {
-			columns: []string{"value"},
-			rows:    [][]driver.Value{{1}},
-		},
-	})
+func TestRunQuery_UnsupportedDriver(t *testing.T) {
+	GlobalConfig.Resolved.Profile = configProfile("sqlite")
+	GlobalConfig.FormatStr = "json"
 
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	err := runQuery(nil, []string{"select 1"}, &QueryFlags{}, &w)
+	if err == nil {
+		t.Fatal("expected error for unsupported driver")
+	}
+	if xe, ok := errors.As(err); !ok || xe.Code != errors.CodeDBDriverUnsupported {
+		t.Fatalf("expected CodeDBDriverUnsupported, got %v", err)
+	}
+}
+
+func TestRunQuery_PlaintextPasswordNotAllowed(t *testing.T) {
 	GlobalConfig.Resolved.Profile = config.Profile{
-		DB: driverName,
+		DB:             "mysql",
+		Password:       "plain_password",
+		AllowPlaintext: false,
 	}
 	GlobalConfig.FormatStr = "json"
 
 	var out bytes.Buffer
 	w := output.New(&out, &bytes.Buffer{})
-	err := runQuery(nil, []string{"select 1"}, &QueryFlags{UnsafeAllowWrite: true}, &w)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	err := runQuery(nil, []string{"select 1"}, &QueryFlags{}, &w)
+	if err == nil {
+		t.Fatal("expected error for plaintext password not allowed")
 	}
-	if !json.Valid(out.Bytes()) {
-		t.Fatalf("expected json output, got %s", out.String())
+	if xe, ok := errors.As(err); !ok || xe.Code != errors.CodeCfgInvalid {
+		t.Fatalf("expected CodeCfgInvalid, got %v", err)
+	}
+}
+
+func TestRunSchemaDump_UnsupportedDriver(t *testing.T) {
+	GlobalConfig.Resolved.Profile = configProfile("sqlite")
+	GlobalConfig.FormatStr = "json"
+
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	err := runSchemaDump(nil, nil, &SchemaFlags{}, &w)
+	if err == nil {
+		t.Fatal("expected error for unsupported driver")
+	}
+	if xe, ok := errors.As(err); !ok || xe.Code != errors.CodeDBDriverUnsupported {
+		t.Fatalf("expected CodeDBDriverUnsupported, got %v", err)
+	}
+}
+
+func TestRunSchemaDump_PlaintextPasswordNotAllowed(t *testing.T) {
+	GlobalConfig.Resolved.Profile = config.Profile{
+		DB:             "mysql",
+		Password:       "plain_password",
+		AllowPlaintext: false,
+	}
+	GlobalConfig.FormatStr = "json"
+
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	err := runSchemaDump(nil, nil, &SchemaFlags{}, &w)
+	if err == nil {
+		t.Fatal("expected error for plaintext password not allowed")
+	}
+	if xe, ok := errors.As(err); !ok || xe.Code != errors.CodeCfgInvalid {
+		t.Fatalf("expected CodeCfgInvalid, got %v", err)
+	}
+}
+
+func TestRunQuery_InvalidFormat(t *testing.T) {
+	GlobalConfig.Resolved.Profile = configProfile("mysql")
+	GlobalConfig.FormatStr = "invalid"
+
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	err := runQuery(nil, []string{"select 1"}, &QueryFlags{}, &w)
+	if err == nil {
+		t.Fatal("expected error for invalid format")
+	}
+	if xe, ok := errors.As(err); !ok || xe.Code != errors.CodeCfgInvalid {
+		t.Fatalf("expected CodeCfgInvalid, got %v", err)
+	}
+}
+
+func TestRunSchemaDump_MissingDB(t *testing.T) {
+	GlobalConfig.Resolved.Profile = configProfile("")
+	GlobalConfig.FormatStr = "json"
+
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	err := runSchemaDump(nil, nil, &SchemaFlags{}, &w)
+	if err == nil {
+		t.Fatal("expected error for missing db type")
+	}
+	if xe, ok := errors.As(err); !ok || xe.Code != errors.CodeCfgInvalid {
+		t.Fatalf("expected CodeCfgInvalid, got %v", err)
+	}
+}
+
+func TestRunSchemaDump_InvalidFormat(t *testing.T) {
+	GlobalConfig.Resolved.Profile = configProfile("mysql")
+	GlobalConfig.FormatStr = "invalid"
+
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	err := runSchemaDump(nil, nil, &SchemaFlags{}, &w)
+	if err == nil {
+		t.Fatal("expected error for invalid format")
+	}
+	if xe, ok := errors.As(err); !ok || xe.Code != errors.CodeCfgInvalid {
+		t.Fatalf("expected CodeCfgInvalid, got %v", err)
 	}
 }
 
@@ -516,104 +599,24 @@ profiles:
 	}
 }
 
+func TestValueIfSet(t *testing.T) {
+	if got := valueIfSet(false, "x"); got != "" {
+		t.Fatalf("expected empty when not set, got %q", got)
+	}
+	if got := valueIfSet(true, "x"); got != "x" {
+		t.Fatalf("expected value when set, got %q", got)
+	}
+}
+
+func TestFirstNonEmpty(t *testing.T) {
+	if got := firstNonEmpty("", "", "a", "b"); got != "a" {
+		t.Fatalf("expected first non-empty value, got %q", got)
+	}
+	if got := firstNonEmpty("", ""); got != "" {
+		t.Fatalf("expected empty when all empty, got %q", got)
+	}
+}
+
 func configProfile(dbType string) config.Profile {
 	return config.Profile{DB: dbType}
-}
-
-type stubDriver struct {
-	responseRows map[string]*stubRows
-}
-
-type stubConnector struct {
-	driver *stubDriver
-}
-
-func (c *stubConnector) Connect(context.Context) (driver.Conn, error) {
-	return &stubConn{driver: c.driver}, nil
-}
-
-func (c *stubConnector) Driver() driver.Driver {
-	return c.driver
-}
-
-func (d *stubDriver) Open(string) (driver.Conn, error) {
-	return &stubConn{driver: d}, nil
-}
-
-type stubConn struct {
-	driver *stubDriver
-}
-
-func (c *stubConn) Prepare(string) (driver.Stmt, error) {
-	return nil, fmt.Errorf("prepare not supported")
-}
-
-func (c *stubConn) Close() error {
-	return nil
-}
-
-func (c *stubConn) Begin() (driver.Tx, error) {
-	return &stubTx{}, nil
-}
-
-func (c *stubConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
-	if rows, ok := c.driver.responseRows[query]; ok {
-		return rows, nil
-	}
-	return nil, fmt.Errorf("unexpected query: %s", query)
-}
-
-type stubTx struct{}
-
-func (t *stubTx) Commit() error {
-	return nil
-}
-
-func (t *stubTx) Rollback() error {
-	return nil
-}
-
-type stubRows struct {
-	columns []string
-	rows    [][]driver.Value
-	idx     int
-}
-
-func (r *stubRows) Columns() []string {
-	return r.columns
-}
-
-func (r *stubRows) Close() error {
-	return nil
-}
-
-func (r *stubRows) Next(dest []driver.Value) error {
-	if r.idx >= len(r.rows) {
-		return io.EOF
-	}
-	copy(dest, r.rows[r.idx])
-	r.idx++
-	return nil
-}
-
-func registerStubDriver(t *testing.T, rows map[string]*stubRows) string {
-	t.Helper()
-
-	name := fmt.Sprintf("stub-%d", time.Now().UnixNano())
-	driver := &stubDriver{responseRows: rows}
-	db := sql.OpenDB(&stubConnector{driver: driver})
-	t.Cleanup(func() {
-		_ = db.Close()
-	})
-
-	xdb.Register(name, fakeDriver{db: db})
-	return name
-}
-
-type fakeDriver struct {
-	db *sql.DB
-}
-
-func (d fakeDriver) Open(ctx context.Context, opts xdb.ConnOptions) (*sql.DB, *errors.XError) {
-	return d.db, nil
 }

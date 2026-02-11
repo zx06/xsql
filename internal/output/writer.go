@@ -66,6 +66,19 @@ type TableFormatter interface {
 	ToTableData() (columns []string, rows []map[string]any, ok bool)
 }
 
+// SchemaFormatter 接口：支持 schema 输出的结构实现此接口
+type SchemaFormatter interface {
+	ToSchemaData() (database string, tables []SchemaTable, ok bool)
+}
+
+// SchemaTable schema 表格输出的简化结构
+type SchemaTable struct {
+	Schema  string
+	Name    string
+	Comment string
+	Columns []SchemaColumn
+}
+
 // ProfileListFormatter 接口：支持 profile list 输出的结构实现此接口
 type ProfileListFormatter interface {
 	ToProfileListData() (configPath string, profiles []profileListItem, ok bool)
@@ -91,6 +104,13 @@ func writeTable(out io.Writer, env Envelope) error {
 	if formatter, ok := env.Data.(ProfileListFormatter); ok {
 		if cfgPath, profiles, ok := formatter.ToProfileListData(); ok {
 			return writeProfileListTable(out, cfgPath, profiles)
+		}
+	}
+
+	// 检查是否实现了 SchemaFormatter 接口
+	if formatter, ok := env.Data.(SchemaFormatter); ok {
+		if database, tables, ok := formatter.ToSchemaData(); ok {
+			return writeSchemaTable(out, database, tables)
 		}
 	}
 
@@ -521,4 +541,72 @@ func sortedMapKeys(m map[string]any) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// writeSchemaTable 输出 schema 表格
+func writeSchemaTable(out io.Writer, database string, tables []SchemaTable) error {
+	// 输出数据库名
+	if database != "" {
+		_, _ = fmt.Fprintf(out, "Database: %s\n\n", database)
+	}
+
+	// 遍历每个表
+	for i, table := range tables {
+		if i > 0 {
+			_, _ = fmt.Fprintln(out) // 表之间空一行
+		}
+
+		// 表头
+		header := table.Name
+		if table.Schema != "" && table.Schema != database {
+			header = table.Schema + "." + table.Name
+		}
+		if table.Comment != "" {
+			header += " (" + table.Comment + ")"
+		}
+		_, _ = fmt.Fprintf(out, "Table: %s\n", header)
+
+		// 列信息
+		if len(table.Columns) > 0 {
+			_, _ = fmt.Fprintln(out, "  Columns:")
+			tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
+			_, _ = fmt.Fprintln(tw, "    name\ttype\tnullable\tdefault\tcomment\tpk")
+			_, _ = fmt.Fprintln(tw, "    ----\t----\t--------\t-------\t-------\t--")
+			for _, col := range table.Columns {
+				defaultVal := col.Default
+				if defaultVal == "" {
+					defaultVal = "-"
+				}
+				comment := col.Comment
+				if comment == "" {
+					comment = "-"
+				}
+				pk := ""
+				if col.PrimaryKey {
+					pk = "✓"
+				}
+				_, _ = fmt.Fprintf(tw, "    %s\t%s\t%v\t%s\t%s\t%s\n",
+					col.Name, col.Type, col.Nullable, defaultVal, comment, pk)
+			}
+			_ = tw.Flush()
+		}
+	}
+
+	// 表数量统计
+	suffix := "tables"
+	if len(tables) == 1 {
+		suffix = "table"
+	}
+	_, _ = fmt.Fprintf(out, "\n(%d %s)\n", len(tables), suffix)
+	return nil
+}
+
+// SchemaColumn schema 列输出的简化结构
+type SchemaColumn struct {
+	Name       string
+	Type       string
+	Nullable   bool
+	Default    string
+	Comment    string
+	PrimaryKey bool
 }

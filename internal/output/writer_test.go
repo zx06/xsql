@@ -704,3 +704,186 @@ func TestWriteOK_TableFormat_NilData(t *testing.T) {
 	result := out.String()
 	t.Logf("nil data output: %s", result)
 }
+
+type schemaFormatterData struct {
+	db     string
+	tables []SchemaTable
+	ok     bool
+}
+
+func (s schemaFormatterData) ToSchemaData() (string, []SchemaTable, bool) {
+	return s.db, s.tables, s.ok
+}
+
+func TestWriteOK_TableFormat_SchemaFormatter_WithColumns(t *testing.T) {
+	var out bytes.Buffer
+	w := New(&out, &bytes.Buffer{})
+
+	data := schemaFormatterData{
+		db: "testdb",
+		tables: []SchemaTable{
+			{
+				Schema:  "public",
+				Name:    "users",
+				Comment: "用户表",
+				Columns: []SchemaColumn{
+					{Name: "id", Type: "bigint", Nullable: false, PrimaryKey: true},
+					{Name: "email", Type: "varchar(255)", Nullable: true},
+				},
+			},
+		},
+		ok: true,
+	}
+
+	if err := w.WriteOK(FormatTable, data); err != nil {
+		t.Fatal(err)
+	}
+
+	result := out.String()
+	if !strings.Contains(result, "Database: testdb") {
+		t.Errorf("schema table output should include database name, got: %s", result)
+	}
+	if !strings.Contains(result, "Table: public.users (用户表)") {
+		t.Errorf("schema table output should include table header with schema and comment, got: %s", result)
+	}
+	if !strings.Contains(result, "Columns:") {
+		t.Errorf("schema table output should include columns section, got: %s", result)
+	}
+	if !strings.Contains(result, "✓") {
+		t.Errorf("schema table output should include primary key marker, got: %s", result)
+	}
+	if !strings.Contains(result, "(1 table)") {
+		t.Errorf("schema table output should include table count, got: %s", result)
+	}
+}
+
+func TestWriteOK_TableFormat_SchemaFormatter_NoColumns_SchemaEqualsDB(t *testing.T) {
+	var out bytes.Buffer
+	w := New(&out, &bytes.Buffer{})
+
+	data := schemaFormatterData{
+		db: "testdb",
+		tables: []SchemaTable{
+			{
+				Schema: "testdb",
+				Name:   "users",
+			},
+		},
+		ok: true,
+	}
+
+	if err := w.WriteOK(FormatTable, data); err != nil {
+		t.Fatal(err)
+	}
+
+	result := out.String()
+	if !strings.Contains(result, "Table: users") {
+		t.Errorf("schema table output should omit schema when it matches database, got: %s", result)
+	}
+	if strings.Contains(result, "Columns:") {
+		t.Errorf("schema table output should not include columns section when empty, got: %s", result)
+	}
+	if !strings.Contains(result, "(1 table)") {
+		t.Errorf("schema table output should include table count, got: %s", result)
+	}
+}
+
+func TestTryAsProfileList_ReflectMissingName(t *testing.T) {
+	type profileInfo struct {
+		Description string
+		DB          string
+		Mode        string
+	}
+	input := []profileInfo{
+		{Description: "no name", DB: "mysql", Mode: "read-only"},
+	}
+	if _, ok := tryAsProfileList(input); ok {
+		t.Fatal("expected ok=false for struct slice missing Name")
+	}
+}
+
+func TestTryAsQueryResultReflect_RowMapNonStringKey(t *testing.T) {
+	type Result struct {
+		Columns []string
+		Rows    []map[any]any
+	}
+	input := Result{
+		Columns: []string{"id"},
+		Rows:    []map[any]any{{1: "bad"}},
+	}
+	if _, ok := tryAsQueryResultReflect(input); ok {
+		t.Fatal("expected ok=false for non-string row map keys")
+	}
+}
+
+func TestWriteTable_ErrorWithoutErrorObject(t *testing.T) {
+	var out bytes.Buffer
+	err := writeTable(&out, Envelope{OK: false, Error: nil})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("expected empty output, got: %s", out.String())
+	}
+}
+
+func TestWriteCSV_ErrorWithoutErrorObject(t *testing.T) {
+	var out bytes.Buffer
+	err := writeCSV(&out, Envelope{OK: false, Error: nil})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("expected empty output, got: %s", out.String())
+	}
+}
+
+func TestTryAsProfileList_ReflectStructSlice(t *testing.T) {
+	type profileInfo struct {
+		Name        string
+		Description string
+		DB          string
+		Mode        string
+	}
+	input := []profileInfo{
+		{Name: "dev", Description: "Dev", DB: "mysql", Mode: "read-only"},
+	}
+	got, ok := tryAsProfileList(input)
+	if !ok {
+		t.Fatal("expected ok=true for struct slice")
+	}
+	if len(got) != 1 || got[0].Name != "dev" {
+		t.Fatalf("unexpected profile list: %+v", got)
+	}
+}
+
+func TestTryAsQueryResultReflect_NonStringColumns(t *testing.T) {
+	type BadResult struct {
+		Columns []any
+		Rows    []map[string]any
+	}
+	input := BadResult{
+		Columns: []any{1},
+		Rows:    []map[string]any{{"id": 1}},
+	}
+	if _, ok := tryAsQueryResultReflect(input); ok {
+		t.Fatal("expected ok=false for non-string columns")
+	}
+}
+
+func TestWriteOK_TableFormat_JSONFallback(t *testing.T) {
+	var out bytes.Buffer
+	w := New(&out, &bytes.Buffer{})
+
+	type payload struct {
+		Foo string `json:"foo"`
+	}
+	if err := w.WriteOK(FormatTable, payload{Foo: "bar"}); err != nil {
+		t.Fatal(err)
+	}
+
+	result := out.String()
+	if !strings.Contains(result, "\"foo\"") || !strings.Contains(result, "bar") {
+		t.Fatalf("expected JSON fallback output, got: %s", result)
+	}
+}

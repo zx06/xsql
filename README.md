@@ -101,6 +101,7 @@ xsql query "<SQL>" -p <profile> -f json
 
 ## 可用命令
 - xsql query "SQL" -p <profile> -f json  # 执行查询
+- xsql schema dump -p <profile> -f json  # 导出数据库结构
 - xsql profile list -f json               # 列出所有 profile
 - xsql profile show <name> -f json        # 查看 profile 详情
 
@@ -146,6 +147,7 @@ xsql query "<SQL>" -p <profile> -f json
 
 使用 xsql 工具查询数据库：
 - 查询: `xsql query "SELECT ..." -p <profile> -f json`
+- 导出结构: `xsql schema dump -p <profile> -f json`
 - 列出配置: `xsql profile list -f json`
 
 注意: 默认只读模式，写操作需要 --unsafe-allow-write 标志。
@@ -160,6 +162,7 @@ xsql query "<SQL>" -p <profile> -f json
 | 命令 | 说明 |
 |------|------|
 | `xsql query <SQL>` | 执行 SQL 查询（默认只读） |
+| `xsql schema dump` | 导出数据库结构（表、列、索引、外键） |
 | `xsql profile list` | 列出所有 profile |
 | `xsql profile show <name>` | 查看 profile 详情（密码脱敏） |
 | `xsql mcp server` | 启动 MCP Server（AI 助手集成） |
@@ -180,6 +183,33 @@ id  name
 1   Alice
 
 (1 rows)
+```
+
+### Schema 发现（AI 自动理解数据库）
+
+```bash
+# 导出数据库结构（供 AI 理解表结构）
+xsql schema dump -p dev -f json
+
+# 过滤特定表
+xsql schema dump -p dev --table "user*" -f json
+
+# 输出示例
+{
+  "ok": true,
+  "data": {
+    "database": "mydb",
+    "tables": [
+      {
+        "name": "users",
+        "columns": [
+          {"name": "id", "type": "bigint", "primary_key": true},
+          {"name": "email", "type": "varchar(255)", "nullable": false}
+        ]
+      }
+    ]
+  }
+}
 ```
 
 ### SSH 隧道连接
