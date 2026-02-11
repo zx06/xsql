@@ -12,7 +12,7 @@ coverage:
     # New code (patch) coverage
     patch:
       default:
-        target: 60%         # New code coverage at least 60%
+        target: 80%         # New code coverage at least 80%
         threshold: 10%      # Allow 10% variance
 
 # Ignored files/directories
