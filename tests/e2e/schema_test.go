@@ -4,25 +4,22 @@ package e2e
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 )
 
 func TestSchemaDump_JSON(t *testing.T) {
-	config := createTempConfig(t, `profiles:
+	config := createTempConfig(t, fmt.Sprintf(`profiles:
   dev:
     description: "开发环境"
     db: mysql
-    host: 127.0.0.1
-    port: 3306
-    user: root
-    database: testdb
-    allow_plaintext: true
-`)
+    dsn: "%s"
+`, mysqlDSN(t)))
 	stdout, stderr, exitCode := runXSQL(t, "schema", "dump", "--config", config, "-p", "dev", "-f", "json")
 
-	// 验证退出码（可能因数据库未启动而失败，但输出格式应正确）
-	if exitCode != 0 && exitCode != 3 && exitCode != 5 {
-		t.Errorf("unexpected exit code %d, stderr: %s", exitCode, stderr)
+	// 验证退出码
+	if exitCode != 0 {
+		t.Fatalf("unexpected exit code %d, stderr: %s", exitCode, stderr)
 	}
 
 	// 验证 JSON 格式
@@ -81,21 +78,17 @@ func TestSchemaDump_JSON(t *testing.T) {
 }
 
 func TestSchemaDump_YAML(t *testing.T) {
-	config := createTempConfig(t, `profiles:
+	config := createTempConfig(t, fmt.Sprintf(`profiles:
   dev:
     description: "开发环境"
     db: pg
-    host: 127.0.0.1
-    port: 5432
-    user: postgres
-    database: testdb
-    allow_plaintext: true
-`)
+    dsn: "%s"
+`, pgDSN(t)))
 	stdout, stderr, exitCode := runXSQL(t, "schema", "dump", "--config", config, "-p", "dev", "-f", "yaml")
 
 	// 验证退出码
-	if exitCode != 0 && exitCode != 3 && exitCode != 5 {
-		t.Errorf("unexpected exit code %d, stderr: %s", exitCode, stderr)
+	if exitCode != 0 {
+		t.Fatalf("unexpected exit code %d, stderr: %s", exitCode, stderr)
 	}
 
 	// 验证 YAML 格式包含必要字段
@@ -108,21 +101,17 @@ func TestSchemaDump_YAML(t *testing.T) {
 }
 
 func TestSchemaDump_Table(t *testing.T) {
-	config := createTempConfig(t, `profiles:
+	config := createTempConfig(t, fmt.Sprintf(`profiles:
   dev:
     description: "开发环境"
     db: mysql
-    host: 127.0.0.1
-    port: 3306
-    user: root
-    database: testdb
-    allow_plaintext: true
-`)
+    dsn: "%s"
+`, mysqlDSN(t)))
 	stdout, stderr, exitCode := runXSQL(t, "schema", "dump", "--config", config, "-p", "dev", "-f", "table")
 
 	// 验证退出码
-	if exitCode != 0 && exitCode != 3 && exitCode != 5 {
-		t.Errorf("unexpected exit code %d, stderr: %s", exitCode, stderr)
+	if exitCode != 0 {
+		t.Fatalf("unexpected exit code %d, stderr: %s", exitCode, stderr)
 	}
 
 	// 验证 Table 格式不包含 JSON 元数据
@@ -182,22 +171,18 @@ func TestSchemaDump_MissingProfile(t *testing.T) {
 }
 
 func TestSchemaDump_TableFilter(t *testing.T) {
-	config := createTempConfig(t, `profiles:
+	config := createTempConfig(t, fmt.Sprintf(`profiles:
   dev:
     description: "开发环境"
     db: mysql
-    host: 127.0.0.1
-    port: 3306
-    user: root
-    database: testdb
-    allow_plaintext: true
-`)
+    dsn: "%s"
+`, mysqlDSN(t)))
 	// 使用 --table 过滤
 	stdout, stderr, exitCode := runXSQL(t, "schema", "dump", "--config", config, "-p", "dev", "-f", "json", "--table", "user*")
 
-	// 验证退出码（可能因数据库未启动而失败）
-	if exitCode != 0 && exitCode != 3 && exitCode != 5 {
-		t.Errorf("unexpected exit code %d, stderr: %s", exitCode, stderr)
+	// 验证退出码
+	if exitCode != 0 {
+		t.Fatalf("unexpected exit code %d, stderr: %s", exitCode, stderr)
 	}
 
 	// 如果成功，验证过滤生效
