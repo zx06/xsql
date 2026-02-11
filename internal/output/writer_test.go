@@ -704,3 +704,86 @@ func TestWriteOK_TableFormat_NilData(t *testing.T) {
 	result := out.String()
 	t.Logf("nil data output: %s", result)
 }
+
+type schemaFormatterData struct {
+	db     string
+	tables []SchemaTable
+	ok     bool
+}
+
+func (s schemaFormatterData) ToSchemaData() (string, []SchemaTable, bool) {
+	return s.db, s.tables, s.ok
+}
+
+func TestWriteOK_TableFormat_SchemaFormatter_WithColumns(t *testing.T) {
+	var out bytes.Buffer
+	w := New(&out, &bytes.Buffer{})
+
+	data := schemaFormatterData{
+		db: "testdb",
+		tables: []SchemaTable{
+			{
+				Schema:  "public",
+				Name:    "users",
+				Comment: "用户表",
+				Columns: []SchemaColumn{
+					{Name: "id", Type: "bigint", Nullable: false, PrimaryKey: true},
+					{Name: "email", Type: "varchar(255)", Nullable: true},
+				},
+			},
+		},
+		ok: true,
+	}
+
+	if err := w.WriteOK(FormatTable, data); err != nil {
+		t.Fatal(err)
+	}
+
+	result := out.String()
+	if !strings.Contains(result, "Database: testdb") {
+		t.Errorf("schema table output should include database name, got: %s", result)
+	}
+	if !strings.Contains(result, "Table: public.users (用户表)") {
+		t.Errorf("schema table output should include table header with schema and comment, got: %s", result)
+	}
+	if !strings.Contains(result, "Columns:") {
+		t.Errorf("schema table output should include columns section, got: %s", result)
+	}
+	if !strings.Contains(result, "✓") {
+		t.Errorf("schema table output should include primary key marker, got: %s", result)
+	}
+	if !strings.Contains(result, "(1 table)") {
+		t.Errorf("schema table output should include table count, got: %s", result)
+	}
+}
+
+func TestWriteOK_TableFormat_SchemaFormatter_NoColumns_SchemaEqualsDB(t *testing.T) {
+	var out bytes.Buffer
+	w := New(&out, &bytes.Buffer{})
+
+	data := schemaFormatterData{
+		db: "testdb",
+		tables: []SchemaTable{
+			{
+				Schema: "testdb",
+				Name:   "users",
+			},
+		},
+		ok: true,
+	}
+
+	if err := w.WriteOK(FormatTable, data); err != nil {
+		t.Fatal(err)
+	}
+
+	result := out.String()
+	if !strings.Contains(result, "Table: users") {
+		t.Errorf("schema table output should omit schema when it matches database, got: %s", result)
+	}
+	if strings.Contains(result, "Columns:") {
+		t.Errorf("schema table output should not include columns section when empty, got: %s", result)
+	}
+	if !strings.Contains(result, "(1 table)") {
+		t.Errorf("schema table output should include table count, got: %s", result)
+	}
+}
