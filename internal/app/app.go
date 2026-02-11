@@ -55,6 +55,16 @@ func (a App) BuildSpec() spec.Spec {
 				Flags:       globalFlags,
 			},
 			{
+				Name:        "schema dump",
+				Description: "Dump database schema (tables, columns, indexes, foreign keys)",
+				Flags: append(globalFlags,
+					spec.FlagSpec{Name: "table", Default: "", Description: "Table name filter (supports * and ? wildcards)"},
+					spec.FlagSpec{Name: "include-system", Default: "false", Description: "Include system tables"},
+					spec.FlagSpec{Name: "allow-plaintext", Default: "false", Description: "Allow plaintext secrets in config"},
+					spec.FlagSpec{Name: "ssh-skip-known-hosts-check", Default: "false", Description: "Skip SSH known_hosts check (dangerous)"},
+				),
+			},
+			{
 				Name:        "proxy",
 				Description: "Start a port forwarding proxy (replaces ssh -L)",
 				Flags: append(globalFlags,
