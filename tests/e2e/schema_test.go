@@ -240,6 +240,132 @@ func TestSchema_Command(t *testing.T) {
 	}
 }
 
+func TestSchemaDump_MissingDBType(t *testing.T) {
+	config := createTempConfig(t, `profiles:
+  dev:
+    host: 127.0.0.1
+`)
+	stdout, _, exitCode := runXSQL(t, "schema", "dump", "--config", config, "-p", "dev", "-f", "json")
+
+	if exitCode != 2 {
+		t.Errorf("exit code = %d, want 2", exitCode)
+	}
+
+	var resp struct {
+		OK    bool `json:"ok"`
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &resp); err != nil {
+		t.Fatalf("failed to parse JSON: %v", err)
+	}
+	if resp.OK {
+		t.Error("expected ok=false")
+	}
+	if resp.Error.Code == "" {
+		t.Error("error code is empty")
+	}
+}
+
+func TestSchemaDump_PlaintextPasswordNotAllowed(t *testing.T) {
+	config := createTempConfig(t, fmt.Sprintf(`profiles:
+  dev:
+    description: "开发环境"
+    db: mysql
+    dsn: "%s"
+    password: "plain_password"
+`, mysqlDSN(t)))
+
+	stdout, _, exitCode := runXSQL(t, "schema", "dump", "--config", config, "-p", "dev", "-f", "json")
+
+	if exitCode != 2 {
+		t.Errorf("exit code = %d, want 2", exitCode)
+	}
+
+	var resp struct {
+		OK    bool `json:"ok"`
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &resp); err != nil {
+		t.Fatalf("failed to parse JSON: %v", err)
+	}
+	if resp.OK {
+		t.Error("expected ok=false")
+	}
+	if resp.Error.Code == "" {
+		t.Error("error code is empty")
+	}
+}
+
+func TestSchemaDump_InvalidFormat(t *testing.T) {
+	config := createTempConfig(t, fmt.Sprintf(`profiles:
+  dev:
+    description: "开发环境"
+    db: mysql
+    dsn: "%s"
+`, mysqlDSN(t)))
+
+	stdout, _, exitCode := runXSQL(t, "schema", "dump", "--config", config, "-p", "dev", "-f", "invalid")
+
+	if exitCode != 2 {
+		t.Errorf("exit code = %d, want 2", exitCode)
+	}
+
+	var resp struct {
+		OK    bool `json:"ok"`
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &resp); err != nil {
+		t.Fatalf("failed to parse JSON: %v", err)
+	}
+	if resp.OK {
+		t.Error("expected ok=false")
+	}
+	if resp.Error.Code == "" {
+		t.Error("error code is empty")
+	}
+}
+
+func TestSchemaDump_UnsupportedDriver(t *testing.T) {
+	config := createTempConfig(t, fmt.Sprintf(`profiles:
+  dev:
+    description: "开发环境"
+    db: sqlite
+    dsn: "%s"
+`, mysqlDSN(t)))
+
+	stdout, _, exitCode := runXSQL(t, "schema", "dump", "--config", config, "-p", "dev", "-f", "json")
+
+	if exitCode == 0 {
+		t.Errorf("exit code = %d, want non-zero", exitCode)
+	}
+
+	var resp struct {
+		OK    bool `json:"ok"`
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &resp); err != nil {
+		t.Fatalf("failed to parse JSON: %v", err)
+	}
+	if resp.OK {
+		t.Error("expected ok=false")
+	}
+	if resp.Error.Code == "" {
+		t.Error("error code is empty")
+	}
+}
+
 // Helper function to check if string contains substring
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))

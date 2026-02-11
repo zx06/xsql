@@ -44,15 +44,16 @@ func TestSchemaDump_MySQL_RealDB(t *testing.T) {
 	_, _ = conn.ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", ordersTable))
 	_, _ = conn.ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", usersTable))
 
-	// 创建表结构
+	// 创建表结构（包含注释与默认值）
 	_, err := conn.ExecContext(ctx, fmt.Sprintf(`
 		CREATE TABLE %s (
-			id BIGINT PRIMARY KEY,
+			id BIGINT PRIMARY KEY COMMENT '主键',
 			email VARCHAR(255) NOT NULL,
 			tenant_id BIGINT NOT NULL,
-			created_at DATETIME NULL,
+			status VARCHAR(20) NOT NULL DEFAULT 'active' COMMENT '状态',
+			created_at DATETIME NULL DEFAULT CURRENT_TIMESTAMP,
 			INDEX idx_email (email)
-		) ENGINE=InnoDB
+		) ENGINE=InnoDB COMMENT='用户表'
 	`, usersTable))
 	if err != nil {
 		t.Fatalf("create users table failed: %v", err)
@@ -108,6 +109,20 @@ func TestSchemaDump_MySQL_RealDB(t *testing.T) {
 		t.Fatalf("users table missing idx_email index")
 	}
 
+	if !hasColumnComment(users, "id", "主键") {
+		t.Fatalf("users table column 'id' missing comment")
+	}
+	if !hasColumnComment(users, "status", "状态") {
+		t.Fatalf("users table column 'status' missing comment")
+	}
+	if !hasColumnDefault(users, "status", "active") {
+		t.Fatalf("users table column 'status' missing default value")
+	}
+
+	if users.Comment != "用户表" {
+		t.Fatalf("users table missing comment")
+	}
+
 	if len(orders.ForeignKeys) == 0 {
 		t.Fatalf("orders table should have foreign keys")
 	}
@@ -155,11 +170,25 @@ func TestSchemaDump_Pg_RealDB(t *testing.T) {
 		CREATE TABLE %s.%s (
 			id BIGSERIAL PRIMARY KEY,
 			email TEXT NOT NULL,
-			created_at TIMESTAMPTZ NULL
+			status TEXT NOT NULL DEFAULT 'active',
+			created_at TIMESTAMPTZ NULL DEFAULT NOW()
 		)
 	`, schema, prefix+usersTable))
 	if err != nil {
 		t.Fatalf("create users table failed: %v", err)
+	}
+
+	_, err = conn.ExecContext(ctx, fmt.Sprintf(`COMMENT ON TABLE %s.%s IS '用户表'`, schema, prefix+usersTable))
+	if err != nil {
+		t.Fatalf("comment table failed: %v", err)
+	}
+	_, err = conn.ExecContext(ctx, fmt.Sprintf(`COMMENT ON COLUMN %s.%s.id IS '主键'`, schema, prefix+usersTable))
+	if err != nil {
+		t.Fatalf("comment column failed: %v", err)
+	}
+	_, err = conn.ExecContext(ctx, fmt.Sprintf(`COMMENT ON COLUMN %s.%s.status IS '状态'`, schema, prefix+usersTable))
+	if err != nil {
+		t.Fatalf("comment column failed: %v", err)
 	}
 
 	_, err = conn.ExecContext(ctx, fmt.Sprintf(`
@@ -211,6 +240,20 @@ func TestSchemaDump_Pg_RealDB(t *testing.T) {
 		t.Fatalf("users table missing idx_email index")
 	}
 
+	if !hasColumnDefault(users, "status", "active") {
+		t.Fatalf("users table column 'status' missing default value")
+	}
+
+	if users.Comment != "用户表" {
+		t.Fatalf("users table missing comment")
+	}
+	if !hasColumnComment(users, "id", "主键") {
+		t.Fatalf("users table column 'id' missing comment")
+	}
+	if !hasColumnComment(users, "status", "状态") {
+		t.Fatalf("users table column 'status' missing comment")
+	}
+
 	if len(orders.ForeignKeys) == 0 {
 		t.Fatalf("orders table should have foreign keys")
 	}
@@ -258,6 +301,24 @@ func hasIndex(table *db.Table, indexName string) bool {
 func hasForeignKeyTo(table *db.Table, referencedTable string) bool {
 	for _, fk := range table.ForeignKeys {
 		if strings.EqualFold(fk.ReferencedTable, referencedTable) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasColumnComment(table *db.Table, name, comment string) bool {
+	for _, c := range table.Columns {
+		if c.Name == name && c.Comment == comment {
+			return true
+		}
+	}
+	return false
+}
+
+func hasColumnDefault(table *db.Table, name, want string) bool {
+	for _, c := range table.Columns {
+		if c.Name == name && strings.Contains(c.Default, want) {
 			return true
 		}
 	}
