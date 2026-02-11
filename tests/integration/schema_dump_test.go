@@ -52,7 +52,9 @@ func TestSchemaDump_MySQL_RealDB(t *testing.T) {
 			tenant_id BIGINT NOT NULL,
 			status VARCHAR(20) NOT NULL DEFAULT 'active' COMMENT '状态',
 			created_at DATETIME NULL DEFAULT CURRENT_TIMESTAMP,
-			INDEX idx_email (email)
+			INDEX idx_email (email),
+			UNIQUE KEY uq_tenant_id (tenant_id, id),
+			INDEX idx_tenant_email (tenant_id, email)
 		) ENGINE=InnoDB COMMENT='用户表'
 	`, usersTable))
 	if err != nil {
@@ -62,9 +64,11 @@ func TestSchemaDump_MySQL_RealDB(t *testing.T) {
 	_, err = conn.ExecContext(ctx, fmt.Sprintf(`
 		CREATE TABLE %s (
 			id BIGINT PRIMARY KEY,
+			tenant_id BIGINT NOT NULL,
 			user_id BIGINT NOT NULL,
 			amount DECIMAL(10,2) NOT NULL,
-			CONSTRAINT fk_%s_user FOREIGN KEY (user_id) REFERENCES %s(id)
+			INDEX idx_tenant_user (tenant_id, user_id),
+			CONSTRAINT fk_%s_user FOREIGN KEY (tenant_id, user_id) REFERENCES %s(tenant_id, id)
 		) ENGINE=InnoDB
 	`, ordersTable, ordersTable, usersTable))
 	if err != nil {
@@ -84,6 +88,24 @@ func TestSchemaDump_MySQL_RealDB(t *testing.T) {
 	}
 	if info.Database == "" {
 		t.Fatalf("database name is empty")
+	}
+
+	infoNoFilter, xe := db.DumpSchema(ctx, "mysql", conn, db.SchemaOptions{})
+	if xe != nil {
+		t.Fatalf("DumpSchema no-filter error: %v", xe)
+	}
+	if len(infoNoFilter.Tables) == 0 {
+		t.Fatalf("expected tables for no-filter dump")
+	}
+
+	infoEmpty, xe := db.DumpSchema(ctx, "mysql", conn, db.SchemaOptions{
+		TablePattern: "no_match_*",
+	})
+	if xe != nil {
+		t.Fatalf("DumpSchema empty filter error: %v", xe)
+	}
+	if len(infoEmpty.Tables) != 0 {
+		t.Fatalf("expected empty tables for no_match_* filter")
 	}
 
 	users := findTable(info.Tables, usersTable)
@@ -108,6 +130,12 @@ func TestSchemaDump_MySQL_RealDB(t *testing.T) {
 	if !hasIndex(users, "idx_email") {
 		t.Fatalf("users table missing idx_email index")
 	}
+	if !hasIndex(users, "uq_tenant_id") {
+		t.Fatalf("users table missing uq_tenant_id index")
+	}
+	if !hasIndex(users, "idx_tenant_email") {
+		t.Fatalf("users table missing idx_tenant_email index")
+	}
 
 	if !hasColumnComment(users, "id", "主键") {
 		t.Fatalf("users table column 'id' missing comment")
@@ -123,11 +151,17 @@ func TestSchemaDump_MySQL_RealDB(t *testing.T) {
 		t.Fatalf("users table missing comment")
 	}
 
+	if !hasIndex(orders, "idx_tenant_user") {
+		t.Fatalf("orders table missing idx_tenant_user index")
+	}
 	if len(orders.ForeignKeys) == 0 {
 		t.Fatalf("orders table should have foreign keys")
 	}
 	if !hasForeignKeyTo(orders, usersTable) {
 		t.Fatalf("orders table missing FK to %s", usersTable)
+	}
+	if !hasCompositeForeignKeyTo(orders, usersTable) {
+		t.Fatalf("orders table missing composite FK to %s", usersTable)
 	}
 }
 
@@ -169,9 +203,11 @@ func TestSchemaDump_Pg_RealDB(t *testing.T) {
 	_, err = conn.ExecContext(ctx, fmt.Sprintf(`
 		CREATE TABLE %s.%s (
 			id BIGSERIAL PRIMARY KEY,
-			email TEXT NOT NULL,
+			tenant_id BIGINT NOT NULL,
+			email VARCHAR(255) NOT NULL,
 			status TEXT NOT NULL DEFAULT 'active',
-			created_at TIMESTAMPTZ NULL DEFAULT NOW()
+			created_at TIMESTAMPTZ NULL DEFAULT NOW(),
+			UNIQUE (tenant_id, id)
 		)
 	`, schema, prefix+usersTable))
 	if err != nil {
@@ -197,17 +233,30 @@ func TestSchemaDump_Pg_RealDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create index failed: %v", err)
 	}
+	_, err = conn.ExecContext(ctx, fmt.Sprintf(`
+		CREATE INDEX idx_tenant_email ON %s.%s (tenant_id, email)
+	`, schema, prefix+usersTable))
+	if err != nil {
+		t.Fatalf("create index failed: %v", err)
+	}
 
 	_, err = conn.ExecContext(ctx, fmt.Sprintf(`
 		CREATE TABLE %s.%s (
 			id BIGSERIAL PRIMARY KEY,
+			tenant_id BIGINT NOT NULL,
 			user_id BIGINT NOT NULL,
 			amount NUMERIC(10,2) NOT NULL,
-			CONSTRAINT fk_%s_user FOREIGN KEY (user_id) REFERENCES %s.%s(id)
+			CONSTRAINT fk_%s_user FOREIGN KEY (tenant_id, user_id) REFERENCES %s.%s(tenant_id, id)
 		)
 	`, schema, prefix+ordersTable, prefix+ordersTable, schema, prefix+usersTable))
 	if err != nil {
 		t.Fatalf("create orders table failed: %v", err)
+	}
+	_, err = conn.ExecContext(ctx, fmt.Sprintf(`
+		CREATE INDEX idx_tenant_user ON %s.%s (tenant_id, user_id)
+	`, schema, prefix+ordersTable))
+	if err != nil {
+		t.Fatalf("create index failed: %v", err)
 	}
 
 	t.Cleanup(func() {
@@ -222,6 +271,35 @@ func TestSchemaDump_Pg_RealDB(t *testing.T) {
 	}
 	if info.Database == "" {
 		t.Fatalf("database name is empty")
+	}
+
+	infoNoFilter, xe := db.DumpSchema(ctx, "pg", conn, db.SchemaOptions{})
+	if xe != nil {
+		t.Fatalf("DumpSchema no-filter error: %v", xe)
+	}
+	if len(infoNoFilter.Tables) == 0 {
+		t.Fatalf("expected tables for no-filter dump")
+	}
+
+	infoWithSystem, xe := db.DumpSchema(ctx, "pg", conn, db.SchemaOptions{
+		TablePattern:  prefix + "*",
+		IncludeSystem: true,
+	})
+	if xe != nil {
+		t.Fatalf("DumpSchema include-system error: %v", xe)
+	}
+	if infoWithSystem.Database == "" {
+		t.Fatalf("database name is empty for include-system")
+	}
+
+	infoEmpty, xe := db.DumpSchema(ctx, "pg", conn, db.SchemaOptions{
+		TablePattern: "no_match_*",
+	})
+	if xe != nil {
+		t.Fatalf("DumpSchema empty filter error: %v", xe)
+	}
+	if len(infoEmpty.Tables) != 0 {
+		t.Fatalf("expected empty tables for no_match_* filter")
 	}
 
 	users := findTableWithSchema(info.Tables, schema, prefix+usersTable)
@@ -239,6 +317,9 @@ func TestSchemaDump_Pg_RealDB(t *testing.T) {
 	if !hasIndex(users, "idx_email") {
 		t.Fatalf("users table missing idx_email index")
 	}
+	if !hasIndex(users, "idx_tenant_email") {
+		t.Fatalf("users table missing idx_tenant_email index")
+	}
 
 	if !hasColumnDefault(users, "status", "active") {
 		t.Fatalf("users table column 'status' missing default value")
@@ -254,11 +335,17 @@ func TestSchemaDump_Pg_RealDB(t *testing.T) {
 		t.Fatalf("users table column 'status' missing comment")
 	}
 
+	if !hasIndex(orders, "idx_tenant_user") {
+		t.Fatalf("orders table missing idx_tenant_user index")
+	}
 	if len(orders.ForeignKeys) == 0 {
 		t.Fatalf("orders table should have foreign keys")
 	}
 	if !hasForeignKeyTo(orders, prefix+usersTable) {
 		t.Fatalf("orders table missing FK to %s", prefix+usersTable)
+	}
+	if !hasCompositeForeignKeyTo(orders, prefix+usersTable) {
+		t.Fatalf("orders table missing composite FK to %s", prefix+usersTable)
 	}
 }
 
@@ -301,6 +388,17 @@ func hasIndex(table *db.Table, indexName string) bool {
 func hasForeignKeyTo(table *db.Table, referencedTable string) bool {
 	for _, fk := range table.ForeignKeys {
 		if strings.EqualFold(fk.ReferencedTable, referencedTable) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasCompositeForeignKeyTo(table *db.Table, referencedTable string) bool {
+	for _, fk := range table.ForeignKeys {
+		if strings.EqualFold(fk.ReferencedTable, referencedTable) &&
+			len(fk.Columns) >= 2 &&
+			len(fk.ReferencedColumns) >= 2 {
 			return true
 		}
 	}

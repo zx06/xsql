@@ -92,6 +92,119 @@ func TestRunQuery_MissingDB(t *testing.T) {
 	}
 }
 
+func TestRunQuery_UnsupportedDriver(t *testing.T) {
+	GlobalConfig.Resolved.Profile = configProfile("sqlite")
+	GlobalConfig.FormatStr = "json"
+
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	err := runQuery(nil, []string{"select 1"}, &QueryFlags{}, &w)
+	if err == nil {
+		t.Fatal("expected error for unsupported driver")
+	}
+	if xe, ok := errors.As(err); !ok || xe.Code != errors.CodeDBDriverUnsupported {
+		t.Fatalf("expected CodeDBDriverUnsupported, got %v", err)
+	}
+}
+
+func TestRunQuery_PlaintextPasswordNotAllowed(t *testing.T) {
+	GlobalConfig.Resolved.Profile = config.Profile{
+		DB:             "mysql",
+		Password:       "plain_password",
+		AllowPlaintext: false,
+	}
+	GlobalConfig.FormatStr = "json"
+
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	err := runQuery(nil, []string{"select 1"}, &QueryFlags{}, &w)
+	if err == nil {
+		t.Fatal("expected error for plaintext password not allowed")
+	}
+	if xe, ok := errors.As(err); !ok || xe.Code != errors.CodeCfgInvalid {
+		t.Fatalf("expected CodeCfgInvalid, got %v", err)
+	}
+}
+
+func TestRunSchemaDump_UnsupportedDriver(t *testing.T) {
+	GlobalConfig.Resolved.Profile = configProfile("sqlite")
+	GlobalConfig.FormatStr = "json"
+
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	err := runSchemaDump(nil, nil, &SchemaFlags{}, &w)
+	if err == nil {
+		t.Fatal("expected error for unsupported driver")
+	}
+	if xe, ok := errors.As(err); !ok || xe.Code != errors.CodeDBDriverUnsupported {
+		t.Fatalf("expected CodeDBDriverUnsupported, got %v", err)
+	}
+}
+
+func TestRunSchemaDump_PlaintextPasswordNotAllowed(t *testing.T) {
+	GlobalConfig.Resolved.Profile = config.Profile{
+		DB:             "mysql",
+		Password:       "plain_password",
+		AllowPlaintext: false,
+	}
+	GlobalConfig.FormatStr = "json"
+
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	err := runSchemaDump(nil, nil, &SchemaFlags{}, &w)
+	if err == nil {
+		t.Fatal("expected error for plaintext password not allowed")
+	}
+	if xe, ok := errors.As(err); !ok || xe.Code != errors.CodeCfgInvalid {
+		t.Fatalf("expected CodeCfgInvalid, got %v", err)
+	}
+}
+
+func TestRunQuery_InvalidFormat(t *testing.T) {
+	GlobalConfig.Resolved.Profile = configProfile("mysql")
+	GlobalConfig.FormatStr = "invalid"
+
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	err := runQuery(nil, []string{"select 1"}, &QueryFlags{}, &w)
+	if err == nil {
+		t.Fatal("expected error for invalid format")
+	}
+	if xe, ok := errors.As(err); !ok || xe.Code != errors.CodeCfgInvalid {
+		t.Fatalf("expected CodeCfgInvalid, got %v", err)
+	}
+}
+
+func TestRunSchemaDump_MissingDB(t *testing.T) {
+	GlobalConfig.Resolved.Profile = configProfile("")
+	GlobalConfig.FormatStr = "json"
+
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	err := runSchemaDump(nil, nil, &SchemaFlags{}, &w)
+	if err == nil {
+		t.Fatal("expected error for missing db type")
+	}
+	if xe, ok := errors.As(err); !ok || xe.Code != errors.CodeCfgInvalid {
+		t.Fatalf("expected CodeCfgInvalid, got %v", err)
+	}
+}
+
+func TestRunSchemaDump_InvalidFormat(t *testing.T) {
+	GlobalConfig.Resolved.Profile = configProfile("mysql")
+	GlobalConfig.FormatStr = "invalid"
+
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	err := runSchemaDump(nil, nil, &SchemaFlags{}, &w)
+	if err == nil {
+		t.Fatal("expected error for invalid format")
+	}
+	if xe, ok := errors.As(err); !ok || xe.Code != errors.CodeCfgInvalid {
+		t.Fatalf("expected CodeCfgInvalid, got %v", err)
+	}
+}
+
 func TestRunProxy_ProfileRequired(t *testing.T) {
 	GlobalConfig.ProfileStr = ""
 	GlobalConfig.FormatStr = "json"
