@@ -27,6 +27,7 @@ func run() int {
 	root.AddCommand(NewVersionCommand(&a, &w))
 	root.AddCommand(NewQueryCommand(&w))
 	root.AddCommand(NewProfileCommand(&w))
+	root.AddCommand(NewSchemaCommand(&w))
 	root.AddCommand(NewMCPCommand())
 	root.AddCommand(NewProxyCommand(&w))
 
