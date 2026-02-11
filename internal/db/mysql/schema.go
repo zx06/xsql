@@ -3,7 +3,6 @@ package mysql
 import (
 	"context"
 	"database/sql"
-	"path/filepath"
 	"strings"
 
 	"github.com/zx06/xsql/internal/db"
@@ -263,11 +262,4 @@ func (d *Driver) getForeignKeys(ctx context.Context, conn *sql.DB, database, tab
 	}
 
 	return fks, nil
-}
-
-// matchPattern 检查表名是否匹配通配符模式
-func matchPattern(pattern, name string) bool {
-	// 简单实现：使用 filepath.Match
-	matched, _ := filepath.Match(pattern, name)
-	return matched
 }
