@@ -24,7 +24,6 @@ func TestDriver_Open_InvalidDSN(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	// 使用无效的 DSN 格式
 	opts := db.ConnOptions{
 		DSN: "invalid:::dsn",
 	}
@@ -39,10 +38,9 @@ func TestDriver_Open_ConnectionRefused(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	// 使用不存在的地址
 	opts := db.ConnOptions{
 		Host:     "127.0.0.1",
-		Port:     59999, // 不太可能有服务监听的端口
+		Port:     59999,
 		User:     "test",
 		Password: "test",
 		Database: "test",
@@ -53,7 +51,6 @@ func TestDriver_Open_ConnectionRefused(t *testing.T) {
 	}
 }
 
-// mockDialer 用于测试自定义 dialer 注册
 type mockDialer struct {
 	called bool
 }
@@ -79,11 +76,120 @@ func TestDriver_Open_WithDialer(t *testing.T) {
 	}
 
 	_, xe := drv.Open(ctx, opts)
-	// 应该失败，但 dialer 应该被调用
 	if xe == nil {
 		t.Fatal("expected error from mock dialer")
 	}
 	if !dialer.called {
 		t.Error("expected custom dialer to be called")
+	}
+}
+
+func TestDriver_Open_WithDSN_Valid(t *testing.T) {
+	drv, _ := db.Get("mysql")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	opts := db.ConnOptions{
+		DSN: "root:password@tcp(127.0.0.1:3306)/testdb?timeout=1s",
+	}
+
+	_, xe := drv.Open(ctx, opts)
+	if xe == nil {
+		t.Fatal("expected connection error for invalid DSN")
+	}
+}
+
+func TestDriver_Open_WithDSN_InvalidFormat(t *testing.T) {
+	drv, _ := db.Get("mysql")
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	opts := db.ConnOptions{
+		DSN: "invalid",
+	}
+
+	_, xe := drv.Open(ctx, opts)
+	if xe == nil {
+		t.Fatal("expected error for malformed DSN")
+	}
+}
+
+func TestDriver_Open_NoDBName(t *testing.T) {
+	drv, _ := db.Get("mysql")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	opts := db.ConnOptions{
+		Host:     "127.0.0.1",
+		Port:     59999,
+		User:     "test",
+		Password: "test",
+	}
+
+	_, xe := drv.Open(ctx, opts)
+	if xe == nil {
+		t.Fatal("expected connection error")
+	}
+}
+
+func TestDriver_Open_WithParams(t *testing.T) {
+	drv, _ := db.Get("mysql")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	opts := db.ConnOptions{
+		Host:     "127.0.0.1",
+		Port:     59999,
+		User:     "test",
+		Password: "test",
+		Database: "test",
+		Params: map[string]string{
+			"charset":   "utf8mb4",
+			"parseTime": "true",
+		},
+	}
+
+	_, xe := drv.Open(ctx, opts)
+	if xe == nil {
+		t.Fatal("expected connection error")
+	}
+}
+
+func TestDriver_Open_WithEmptyParams(t *testing.T) {
+	drv, _ := db.Get("mysql")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	opts := db.ConnOptions{
+		Host:     "127.0.0.1",
+		Port:     59999,
+		User:     "test",
+		Password: "test",
+		Database: "test",
+		Params:   map[string]string{},
+	}
+
+	_, xe := drv.Open(ctx, opts)
+	if xe == nil {
+		t.Fatal("expected connection error")
+	}
+}
+
+func TestDriver_Open_ContextCancelled(t *testing.T) {
+	drv, _ := db.Get("mysql")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	opts := db.ConnOptions{
+		Host:     "127.0.0.1",
+		Port:     3306,
+		User:     "test",
+		Password: "test",
+		Database: "test",
+	}
+
+	_, xe := drv.Open(ctx, opts)
+	if xe == nil {
+		t.Fatal("expected error for cancelled context")
 	}
 }
