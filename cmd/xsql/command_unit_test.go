@@ -296,8 +296,8 @@ func TestRunProxy_SSHConnectError(t *testing.T) {
 	}
 }
 
-func TestSetupSSH_NoConfig(t *testing.T) {
-	client, err := setupSSH(nil, configProfile(""), false, false)
+func TestResolveSSH_NoConfig(t *testing.T) {
+	client, err := app.ResolveSSH(nil, config.Profile{}, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -306,9 +306,8 @@ func TestSetupSSH_NoConfig(t *testing.T) {
 	}
 }
 
-func TestSetupSSH_PassphraseResolveError(t *testing.T) {
+func TestResolveSSH_PassphraseResolveError(t *testing.T) {
 	profile := config.Profile{
-		DB: "mysql",
 		SSHConfig: &config.SSHProxy{
 			Host:       "example.com",
 			Port:       22,
@@ -317,7 +316,7 @@ func TestSetupSSH_PassphraseResolveError(t *testing.T) {
 		},
 	}
 
-	_, err := setupSSH(context.Background(), profile, false, false)
+	_, err := app.ResolveSSH(context.Background(), profile, false, false)
 	if err == nil {
 		t.Fatal("expected error for passphrase resolve")
 	}
