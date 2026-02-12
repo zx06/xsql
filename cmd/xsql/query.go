@@ -6,14 +6,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/zx06/xsql/internal/config"
+	"github.com/zx06/xsql/internal/app"
 	"github.com/zx06/xsql/internal/db"
-	_ "github.com/zx06/xsql/internal/db/mysql"
-	_ "github.com/zx06/xsql/internal/db/pg"
 	"github.com/zx06/xsql/internal/errors"
 	"github.com/zx06/xsql/internal/output"
-	"github.com/zx06/xsql/internal/secret"
-	"github.com/zx06/xsql/internal/ssh"
 )
 
 // QueryFlags holds the flags for the query command
@@ -56,57 +52,21 @@ func runQuery(cmd *cobra.Command, args []string, flags *QueryFlags, w *output.Wr
 		return errors.New(errors.CodeCfgInvalid, "db type is required (mysql|pg)", nil)
 	}
 
-	// Allow plaintext passwords (CLI > Config)
-	allowPlaintext := flags.AllowPlaintext || p.AllowPlaintext
-
-	// Resolve password (supports keyring)
-	password := p.Password
-	if password != "" {
-		pw, xe := secret.Resolve(password, secret.Options{AllowPlaintext: allowPlaintext})
-		if xe != nil {
-			return xe
-		}
-		password = pw
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// SSH proxy (if configured)
-	sshClient, err := setupSSH(ctx, p, allowPlaintext, flags.SSHSkipHostKey)
-	if err != nil {
-		return err
-	}
-	if sshClient != nil {
-		defer sshClient.Close()
-	}
-
-	// Get driver
-	drv, ok := db.Get(p.DB)
-	if !ok {
-		return errors.New(errors.CodeDBDriverUnsupported, "unsupported db driver", map[string]any{"db": p.DB})
-	}
-
-	connOpts := db.ConnOptions{
-		DSN:      p.DSN,
-		Host:     p.Host,
-		Port:     p.Port,
-		User:     p.User,
-		Password: password,
-		Database: p.Database,
-	}
-	if sshClient != nil {
-		connOpts.Dialer = sshClient
-	}
-
-	conn, xe := drv.Open(ctx, connOpts)
+	conn, xe := app.ResolveConnection(ctx, app.ConnectionOptions{
+		Profile:          p,
+		AllowPlaintext:   flags.AllowPlaintext,
+		SkipHostKeyCheck: flags.SSHSkipHostKey,
+	})
 	if xe != nil {
 		return xe
 	}
 	defer conn.Close()
 
 	unsafeAllowWrite := flags.UnsafeAllowWrite || p.UnsafeAllowWrite
-	result, xe := db.Query(ctx, conn, sql, db.QueryOptions{
+	result, xe := db.Query(ctx, conn.DB, sql, db.QueryOptions{
 		UnsafeAllowWrite: unsafeAllowWrite,
 		DBType:           p.DB,
 	})
@@ -115,37 +75,4 @@ func runQuery(cmd *cobra.Command, args []string, flags *QueryFlags, w *output.Wr
 	}
 
 	return w.WriteOK(format, result)
-}
-
-// setupSSH sets up SSH proxy connection
-func setupSSH(ctx context.Context, p config.Profile, allowPlaintext, skipHostKeyCheck bool) (*ssh.Client, error) {
-	if p.SSHConfig == nil {
-		return nil, nil
-	}
-
-	passphrase := p.SSHConfig.Passphrase
-	if passphrase != "" {
-		pp, xe := secret.Resolve(passphrase, secret.Options{AllowPlaintext: allowPlaintext})
-		if xe != nil {
-			return nil, xe
-		}
-		passphrase = pp
-	}
-
-	sshOpts := ssh.Options{
-		Host:                p.SSHConfig.Host,
-		Port:                p.SSHConfig.Port,
-		User:                p.SSHConfig.User,
-		IdentityFile:        p.SSHConfig.IdentityFile,
-		Passphrase:          passphrase,
-		KnownHostsFile:      p.SSHConfig.KnownHostsFile,
-		SkipKnownHostsCheck: skipHostKeyCheck || p.SSHConfig.SkipHostKey,
-	}
-
-	sc, xe := ssh.Connect(ctx, sshOpts)
-	if xe != nil {
-		return nil, xe
-	}
-
-	return sc, nil
 }
