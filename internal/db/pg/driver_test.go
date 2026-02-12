@@ -26,7 +26,7 @@ func TestDriver_Open_ConnectionRefused(t *testing.T) {
 
 	opts := db.ConnOptions{
 		Host:     "127.0.0.1",
-		Port:     59998, // 不太可能有服务监听的端口
+		Port:     59998,
 		User:     "test",
 		Password: "test",
 		Database: "test",
@@ -41,7 +41,7 @@ func TestBuildDSN(t *testing.T) {
 	tests := []struct {
 		name     string
 		opts     db.ConnOptions
-		expected []string // 应包含的片段
+		expected []string
 	}{
 		{
 			name: "full options",
@@ -66,6 +66,32 @@ func TestBuildDSN(t *testing.T) {
 			name:     "empty options",
 			opts:     db.ConnOptions{},
 			expected: []string{},
+		},
+		{
+			name: "with port zero",
+			opts: db.ConnOptions{
+				Host:     "localhost",
+				Port:     0,
+				User:     "user",
+				Password: "pass",
+				Database: "mydb",
+			},
+			expected: []string{"host=localhost", "user=user", "password=pass", "dbname=mydb"},
+		},
+		{
+			name: "with params",
+			opts: db.ConnOptions{
+				Host:     "localhost",
+				Port:     5432,
+				User:     "user",
+				Password: "pass",
+				Database: "mydb",
+				Params: map[string]string{
+					"sslmode":        "disable",
+					"pool_max_conns": "10",
+				},
+			},
+			expected: []string{"sslmode=disable", "pool_max_conns=10"},
 		},
 	}
 
@@ -94,7 +120,6 @@ func findSubstring(s, substr string) bool {
 	return false
 }
 
-// mockDialer 用于测试自定义 dialer
 type mockDialer struct {
 	called bool
 }
@@ -120,11 +145,79 @@ func TestDriver_Open_WithDialer(t *testing.T) {
 	}
 
 	_, xe := drv.Open(ctx, opts)
-	// 应该失败，但 dialer 应该被调用
 	if xe == nil {
 		t.Fatal("expected error from mock dialer")
 	}
 	if !dialer.called {
 		t.Error("expected custom dialer to be called")
+	}
+}
+
+func TestDriver_Open_WithDSN(t *testing.T) {
+	drv, _ := db.Get("pg")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	opts := db.ConnOptions{
+		DSN: "postgres://user:pass@127.0.0.1:5432/testdb?sslmode=disable",
+	}
+
+	_, xe := drv.Open(ctx, opts)
+	if xe == nil {
+		t.Fatal("expected connection error")
+	}
+}
+
+func TestDriver_Open_WithDSN_Invalid(t *testing.T) {
+	drv, _ := db.Get("pg")
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	opts := db.ConnOptions{
+		DSN: "invalid://",
+	}
+
+	_, xe := drv.Open(ctx, opts)
+	if xe == nil {
+		t.Fatal("expected error for invalid DSN")
+	}
+}
+
+func TestDriver_Open_WithDSN_AndDialer(t *testing.T) {
+	drv, _ := db.Get("pg")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	dialer := &mockDialer{}
+	opts := db.ConnOptions{
+		DSN:    "postgres://user:pass@127.0.0.1:5432/testdb?sslmode=disable",
+		Dialer: dialer,
+	}
+
+	_, xe := drv.Open(ctx, opts)
+	if xe == nil {
+		t.Fatal("expected connection error")
+	}
+	if !dialer.called {
+		t.Error("expected custom dialer to be called when DSN and Dialer both provided")
+	}
+}
+
+func TestDriver_Open_ContextCancelled(t *testing.T) {
+	drv, _ := db.Get("pg")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	opts := db.ConnOptions{
+		Host:     "127.0.0.1",
+		Port:     5432,
+		User:     "test",
+		Password: "test",
+		Database: "test",
+	}
+
+	_, xe := drv.Open(ctx, opts)
+	if xe == nil {
+		t.Fatal("expected error for cancelled context")
 	}
 }
