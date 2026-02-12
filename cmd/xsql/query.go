@@ -63,7 +63,7 @@ func runQuery(cmd *cobra.Command, args []string, flags *QueryFlags, w *output.Wr
 	if xe != nil {
 		return xe
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	unsafeAllowWrite := flags.UnsafeAllowWrite || p.UnsafeAllowWrite
 	result, xe := db.Query(ctx, conn.DB, sql, db.QueryOptions{

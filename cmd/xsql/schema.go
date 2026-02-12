@@ -76,7 +76,7 @@ func runSchemaDump(cmd *cobra.Command, args []string, flags *SchemaFlags, w *out
 	if xe != nil {
 		return xe
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	schemaOpts := db.SchemaOptions{
 		TablePattern:  flags.TablePattern,
