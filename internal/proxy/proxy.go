@@ -120,12 +120,20 @@ func (p *Proxy) acceptConnections(remoteHost string, remotePort int) {
 // handleConnection handles a single connection by forwarding it through SSH.
 func (p *Proxy) handleConnection(localConn net.Conn, remoteAddr string) {
 	defer p.wg.Done()
-	defer func() { _ = localConn.Close() }()
+	defer func() {
+		if localConn != nil {
+			_ = localConn.Close()
+		}
+	}()
 
 	// Dial remote through SSH
 	remoteConn, err := p.dialer.DialContext(p.ctx, "tcp", remoteAddr)
 	if err != nil {
 		log.Printf("[proxy] failed to dial remote %s: %v", remoteAddr, err)
+		return
+	}
+	if remoteConn == nil {
+		log.Printf("[proxy] dial returned nil conn")
 		return
 	}
 	if remoteConn != nil {

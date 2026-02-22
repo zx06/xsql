@@ -12,10 +12,9 @@ import (
 )
 
 type Connection struct {
-	DB         *sql.DB
-	SSHClient  *ssh.Client
-	Profile    config.Profile
-	CloseFuncs []func() error
+	DB        *sql.DB
+	SSHClient *ssh.Client
+	Profile   config.Profile
 }
 
 func (c *Connection) Close() error {

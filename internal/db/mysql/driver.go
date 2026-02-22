@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sync"
 	"sync/atomic"
 
 	"github.com/go-sql-driver/mysql"
@@ -14,17 +15,36 @@ import (
 	"github.com/zx06/xsql/internal/errors"
 )
 
-var currentDialer atomic.Value
+var (
+	dialerCounter uint64
+	dialers       sync.Map
+	registeredDials sync.Map
+)
 
 func init() {
 	db.Register("mysql", &Driver{})
-	mysql.RegisterDialContext("xsql_ssh_tunnel", func(ctx context.Context, addr string) (net.Conn, error) {
-		dialer, ok := currentDialer.Load().(func(context.Context, string, string) (net.Conn, error))
-		if !ok || dialer == nil {
-			return nil, fmt.Errorf("no dialer configured")
-		}
-		return dialer(ctx, "tcp", addr)
-	})
+}
+
+func registerDialContext(dialer func(context.Context, string, string) (net.Conn, error)) string {
+	dialerNum := atomic.AddUint64(&dialerCounter, 1)
+	dialName := fmt.Sprintf("xsql_ssh_tunnel_%d", dialerNum)
+
+	if _, loaded := registeredDials.LoadOrStore(dialName, true); !loaded {
+		mysql.RegisterDialContext(dialName, func(ctx context.Context, addr string) (net.Conn, error) {
+			d, ok := dialers.Load(dialName)
+			if !ok {
+				return nil, fmt.Errorf("dialer not found: %s", dialName)
+			}
+			fn, ok := d.(func(context.Context, string, string) (net.Conn, error))
+			if !ok || fn == nil {
+				return nil, fmt.Errorf("invalid dialer for: %s", dialName)
+			}
+			return fn(ctx, "tcp", addr)
+		})
+	}
+
+	dialers.Store(dialName, dialer)
+	return dialName
 }
 
 type Driver struct{}
@@ -54,8 +74,8 @@ func (d *Driver) Open(ctx context.Context, opts db.ConnOptions) (*sql.DB, *error
 	}
 
 	if opts.Dialer != nil {
-		currentDialer.Store(opts.Dialer.DialContext)
-		cfg.Net = "xsql_ssh_tunnel"
+		dialName := registerDialContext(opts.Dialer.DialContext)
+		cfg.Net = dialName
 	}
 
 	dsn := cfg.FormatDSN()
