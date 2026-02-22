@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net"
-	"sync"
+	"sync/atomic"
 
 	"github.com/go-sql-driver/mysql"
 
@@ -13,11 +13,7 @@ import (
 	"github.com/zx06/xsql/internal/errors"
 )
 
-var (
-	dialerOnce   sync.Once
-	dialerName   string
-	dialerCalled bool
-)
+var dialerCounter uint64
 
 func init() {
 	db.Register("mysql", &Driver{})
@@ -50,18 +46,10 @@ func (d *Driver) Open(ctx context.Context, opts db.ConnOptions) (*sql.DB, *error
 	}
 
 	if opts.Dialer != nil {
-		dialerOnce.Do(func() {
-			dialerName = "xsql_ssh_tunnel"
-			mysql.RegisterDialContext(dialerName, func(ctx context.Context, addr string) (net.Conn, error) {
-				return opts.Dialer.DialContext(ctx, "tcp", addr)
-			})
-			dialerCalled = true
+		dialerName := fmt.Sprintf("xsql_ssh_tunnel_%d", atomic.AddUint64(&dialerCounter, 1))
+		mysql.RegisterDialContext(dialerName, func(ctx context.Context, addr string) (net.Conn, error) {
+			return opts.Dialer.DialContext(ctx, "tcp", addr)
 		})
-		if !dialerCalled {
-			mysql.RegisterDialContext(dialerName, func(ctx context.Context, addr string) (net.Conn, error) {
-				return opts.Dialer.DialContext(ctx, "tcp", addr)
-			})
-		}
 		cfg.Net = dialerName
 	}
 
