@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"sync"
 
@@ -124,9 +125,16 @@ func (p *Proxy) handleConnection(localConn net.Conn, remoteAddr string) {
 	// Dial remote through SSH
 	remoteConn, err := p.dialer.DialContext(p.ctx, "tcp", remoteAddr)
 	if err != nil {
+		log.Printf("[proxy] failed to dial remote %s: %v", remoteAddr, err)
 		return
 	}
-	defer func() { _ = remoteConn.Close() }()
+	if remoteConn != nil {
+		defer func() {
+			if closeErr := remoteConn.Close(); closeErr != nil {
+				log.Printf("[proxy] failed to close remote connection: %v", closeErr)
+			}
+		}()
+	}
 
 	// Bidirectional copy
 	var wg sync.WaitGroup
@@ -158,7 +166,12 @@ func (p *Proxy) handleConnection(localConn net.Conn, remoteAddr string) {
 // Stop gracefully shuts down the proxy.
 func (p *Proxy) Stop() error {
 	p.cancel()
-	err := p.listener.Close()
+	var err error
+	if p.listener != nil {
+		err = p.listener.Close()
+	} else {
+		log.Printf("[proxy] listener is nil during stop")
+	}
 	p.wg.Wait()
 	return err
 }

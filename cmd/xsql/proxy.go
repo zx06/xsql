@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -72,7 +73,13 @@ func runProxy(cmd *cobra.Command, flags *ProxyFlags, w *output.Writer) error {
 	if xe != nil {
 		return xe
 	}
-	defer func() { _ = sshClient.Close() }()
+	if sshClient != nil {
+		defer func() {
+			if err := sshClient.Close(); err != nil {
+				log.Printf("[proxy] failed to close ssh client: %v", err)
+			}
+		}()
+	}
 
 	proxyOpts := proxy.Options{
 		LocalHost:  flags.LocalHost,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"net"
 	"sync/atomic"
 
@@ -13,10 +14,17 @@ import (
 	"github.com/zx06/xsql/internal/errors"
 )
 
-var dialerCounter uint64
+var currentDialer atomic.Value
 
 func init() {
 	db.Register("mysql", &Driver{})
+	mysql.RegisterDialContext("xsql_ssh_tunnel", func(ctx context.Context, addr string) (net.Conn, error) {
+		dialer, ok := currentDialer.Load().(func(context.Context, string, string) (net.Conn, error))
+		if !ok || dialer == nil {
+			return nil, fmt.Errorf("no dialer configured")
+		}
+		return dialer(ctx, "tcp", addr)
+	})
 }
 
 type Driver struct{}
@@ -46,11 +54,8 @@ func (d *Driver) Open(ctx context.Context, opts db.ConnOptions) (*sql.DB, *error
 	}
 
 	if opts.Dialer != nil {
-		dialerName := fmt.Sprintf("xsql_ssh_tunnel_%d", atomic.AddUint64(&dialerCounter, 1))
-		mysql.RegisterDialContext(dialerName, func(ctx context.Context, addr string) (net.Conn, error) {
-			return opts.Dialer.DialContext(ctx, "tcp", addr)
-		})
-		cfg.Net = dialerName
+		currentDialer.Store(opts.Dialer.DialContext)
+		cfg.Net = "xsql_ssh_tunnel"
 	}
 
 	dsn := cfg.FormatDSN()
@@ -59,7 +64,9 @@ func (d *Driver) Open(ctx context.Context, opts db.ConnOptions) (*sql.DB, *error
 		return nil, errors.Wrap(errors.CodeDBConnectFailed, "failed to open mysql connection", nil, err)
 	}
 	if err := conn.PingContext(ctx); err != nil {
-		_ = conn.Close()
+		if closeErr := conn.Close(); closeErr != nil {
+			log.Printf("failed to close mysql connection: %v", closeErr)
+		}
 		return nil, errors.Wrap(errors.CodeDBConnectFailed, "failed to ping mysql", nil, err)
 	}
 	return conn, nil
