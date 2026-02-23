@@ -48,7 +48,7 @@ func TestResolveSSH_NoSSHConfig(t *testing.T) {
 func TestResolveConnection_PasswordNotAllowed(t *testing.T) {
 	profile := config.Profile{
 		DB:       "mysql",
-		Password: "plaintext_password",
+		Password: "plain-value",
 	}
 
 	conn, err := ResolveConnection(nil, ConnectionOptions{
@@ -76,7 +76,7 @@ func TestResolveConnection_PasswordAllowed(t *testing.T) {
 
 	profile := config.Profile{
 		DB:       driverName,
-		Password: "plaintext_password",
+		Password: "plain-value",
 	}
 
 	conn, err := ResolveConnection(context.Background(), ConnectionOptions{
@@ -98,7 +98,7 @@ func TestResolveSSH_PassphraseNotAllowed(t *testing.T) {
 			Host:       "example.com",
 			Port:       22,
 			User:       "user",
-			Passphrase: "some_passphrase",
+			Passphrase: "phrase-value",
 		},
 	}
 
@@ -121,7 +121,7 @@ func TestResolveSSH_PassphraseAllowed(t *testing.T) {
 			Host:       "example.com",
 			Port:       22,
 			User:       "user",
-			Passphrase: "some_passphrase",
+			Passphrase: "phrase-value",
 		},
 	}
 

@@ -49,10 +49,10 @@ func TestBuildDSN(t *testing.T) {
 				Host:     "localhost",
 				Port:     5432,
 				User:     "user",
-				Password: "pass",
+				Password: "pw",
 				Database: "mydb",
 			},
-			expected: []string{"host=localhost", "port=5432", "user=user", "password=pass", "dbname=mydb"},
+			expected: []string{"host=localhost", "port=5432", "user=user", "password=pw", "dbname=mydb"},
 		},
 		{
 			name: "partial options",
@@ -73,10 +73,10 @@ func TestBuildDSN(t *testing.T) {
 				Host:     "localhost",
 				Port:     0,
 				User:     "user",
-				Password: "pass",
+				Password: "pw",
 				Database: "mydb",
 			},
-			expected: []string{"host=localhost", "user=user", "password=pass", "dbname=mydb"},
+			expected: []string{"host=localhost", "user=user", "password=pw", "dbname=mydb"},
 		},
 		{
 			name: "with params",
@@ -84,7 +84,7 @@ func TestBuildDSN(t *testing.T) {
 				Host:     "localhost",
 				Port:     5432,
 				User:     "user",
-				Password: "pass",
+				Password: "pw",
 				Database: "mydb",
 				Params: map[string]string{
 					"sslmode":        "disable",
@@ -159,7 +159,7 @@ func TestDriver_Open_WithDSN(t *testing.T) {
 	defer cancel()
 
 	opts := db.ConnOptions{
-		DSN: "postgres://user:pass@127.0.0.1:5432/testdb?sslmode=disable",
+		DSN: "postgres://user:pw@127.0.0.1:5432/testdb?sslmode=disable",
 	}
 
 	_, xe := drv.Open(ctx, opts)
@@ -190,7 +190,7 @@ func TestDriver_Open_WithDSN_AndDialer(t *testing.T) {
 
 	dialer := &mockDialer{}
 	opts := db.ConnOptions{
-		DSN:    "postgres://user:pass@127.0.0.1:5432/testdb?sslmode=disable",
+		DSN:    "postgres://user:pw@127.0.0.1:5432/testdb?sslmode=disable",
 		Dialer: dialer,
 	}
 

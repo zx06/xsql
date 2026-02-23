@@ -91,7 +91,7 @@ func TestDriver_Open_WithDSN_Valid(t *testing.T) {
 	defer cancel()
 
 	opts := db.ConnOptions{
-		DSN: "root:password@tcp(127.0.0.1:3306)/testdb?timeout=1s",
+		DSN: "root:pw@tcp(127.0.0.1:3306)/testdb?timeout=1s",
 	}
 
 	_, xe := drv.Open(ctx, opts)
