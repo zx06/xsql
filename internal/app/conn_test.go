@@ -1,9 +1,14 @@
 package app
 
 import (
+	"context"
+	"database/sql"
+	"fmt"
+	"sync/atomic"
 	"testing"
 
 	"github.com/zx06/xsql/internal/config"
+	"github.com/zx06/xsql/internal/db"
 	"github.com/zx06/xsql/internal/errors"
 )
 
@@ -63,20 +68,27 @@ func TestResolveConnection_PasswordNotAllowed(t *testing.T) {
 }
 
 func TestResolveConnection_PasswordAllowed(t *testing.T) {
+	driverName := registerTestDriver(t, &testDriver{
+		openFn: func(ctx context.Context, opts db.ConnOptions) (*sql.DB, *errors.XError) {
+			return nil, nil
+		},
+	})
+
 	profile := config.Profile{
-		DB:       "mysql",
+		DB:       driverName,
 		Password: "plaintext_password",
 	}
 
-	conn, err := ResolveConnection(nil, ConnectionOptions{
+	conn, err := ResolveConnection(context.Background(), ConnectionOptions{
 		Profile:        profile,
 		AllowPlaintext: true,
 	})
 
-	if err == nil {
-		if conn != nil {
-			conn.Close()
-		}
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if conn == nil {
+		t.Fatal("expected non-nil connection wrapper")
 	}
 }
 
@@ -139,5 +151,83 @@ func TestConnectionOptions_Fields(t *testing.T) {
 	}
 	if !opts.SkipHostKeyCheck {
 		t.Error("expected SkipHostKeyCheck to be true")
+	}
+}
+
+type testDriver struct {
+	openFn func(ctx context.Context, opts db.ConnOptions) (*sql.DB, *errors.XError)
+}
+
+func (d *testDriver) Open(ctx context.Context, opts db.ConnOptions) (*sql.DB, *errors.XError) {
+	return d.openFn(ctx, opts)
+}
+
+var driverSeq uint64
+
+func registerTestDriver(t *testing.T, d db.Driver) string {
+	t.Helper()
+	name := fmt.Sprintf("test_conn_driver_%d", atomic.AddUint64(&driverSeq, 1))
+	db.Register(name, d)
+	return name
+}
+
+func TestResolveConnection_Success_CloseRunsHook(t *testing.T) {
+	var hookCalls int32
+	driverName := registerTestDriver(t, &testDriver{
+		openFn: func(ctx context.Context, opts db.ConnOptions) (*sql.DB, *errors.XError) {
+			if opts.RegisterCloseHook != nil {
+				opts.RegisterCloseHook(func() {
+					atomic.AddInt32(&hookCalls, 1)
+				})
+			}
+			return nil, nil
+		},
+	})
+
+	conn, xe := ResolveConnection(context.Background(), ConnectionOptions{
+		Profile: config.Profile{
+			DB: driverName,
+		},
+	})
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+	if conn == nil {
+		t.Fatal("expected connection")
+	}
+	if err := conn.Close(); err != nil {
+		t.Fatalf("unexpected close error: %v", err)
+	}
+	if got := atomic.LoadInt32(&hookCalls); got != 1 {
+		t.Fatalf("expected hook call count 1, got %d", got)
+	}
+}
+
+func TestResolveConnection_OpenErrorRunsHook(t *testing.T) {
+	var hookCalls int32
+	driverName := registerTestDriver(t, &testDriver{
+		openFn: func(ctx context.Context, opts db.ConnOptions) (*sql.DB, *errors.XError) {
+			if opts.RegisterCloseHook != nil {
+				opts.RegisterCloseHook(func() {
+					atomic.AddInt32(&hookCalls, 1)
+				})
+			}
+			return nil, errors.New(errors.CodeDBConnectFailed, "open failed", nil)
+		},
+	})
+
+	conn, xe := ResolveConnection(context.Background(), ConnectionOptions{
+		Profile: config.Profile{
+			DB: driverName,
+		},
+	})
+	if conn != nil {
+		t.Fatal("expected nil connection")
+	}
+	if xe == nil {
+		t.Fatal("expected error")
+	}
+	if got := atomic.LoadInt32(&hookCalls); got != 1 {
+		t.Fatalf("expected hook call count 1, got %d", got)
 	}
 }
