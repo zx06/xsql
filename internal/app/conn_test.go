@@ -231,3 +231,92 @@ func TestResolveConnection_OpenErrorRunsHook(t *testing.T) {
 		t.Fatalf("expected hook call count 1, got %d", got)
 	}
 }
+
+func TestResolveConnection_AllowPlaintextFromProfile(t *testing.T) {
+	var gotPassword string
+	driverName := registerTestDriver(t, &testDriver{
+		openFn: func(ctx context.Context, opts db.ConnOptions) (*sql.DB, *errors.XError) {
+			gotPassword = opts.Password
+			return nil, nil
+		},
+	})
+
+	conn, xe := ResolveConnection(context.Background(), ConnectionOptions{
+		Profile: config.Profile{
+			DB:             driverName,
+			Password:       "plain-value",
+			AllowPlaintext: true,
+		},
+		AllowPlaintext: false,
+	})
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+	if conn == nil {
+		t.Fatal("expected connection")
+	}
+	if gotPassword != "plain-value" {
+		t.Fatalf("expected resolved password to be passed, got %q", gotPassword)
+	}
+}
+
+func TestResolveConnection_SSHPassphraseNotAllowed(t *testing.T) {
+	driverName := registerTestDriver(t, &testDriver{
+		openFn: func(ctx context.Context, opts db.ConnOptions) (*sql.DB, *errors.XError) {
+			t.Fatal("driver should not be called when ssh passphrase resolve fails")
+			return nil, nil
+		},
+	})
+
+	conn, xe := ResolveConnection(context.Background(), ConnectionOptions{
+		Profile: config.Profile{
+			DB: driverName,
+			SSHConfig: &config.SSHProxy{
+				Host:       "127.0.0.1",
+				Port:       22,
+				User:       "user",
+				Passphrase: "plain-phrase",
+			},
+		},
+		AllowPlaintext: false,
+	})
+	if conn != nil {
+		t.Fatal("expected nil connection")
+	}
+	if xe == nil {
+		t.Fatal("expected error")
+	}
+	if xe.Code != errors.CodeCfgInvalid {
+		t.Fatalf("expected CodeCfgInvalid, got %s", xe.Code)
+	}
+}
+
+func TestResolveConnection_SSHAuthFailed(t *testing.T) {
+	driverName := registerTestDriver(t, &testDriver{
+		openFn: func(ctx context.Context, opts db.ConnOptions) (*sql.DB, *errors.XError) {
+			t.Fatal("driver should not be called when ssh connect fails")
+			return nil, nil
+		},
+	})
+
+	conn, xe := ResolveConnection(context.Background(), ConnectionOptions{
+		Profile: config.Profile{
+			DB: driverName,
+			SSHConfig: &config.SSHProxy{
+				Host: "127.0.0.1",
+				Port: 22,
+				User: "user",
+			},
+		},
+		AllowPlaintext: true,
+	})
+	if conn != nil {
+		t.Fatal("expected nil connection")
+	}
+	if xe == nil {
+		t.Fatal("expected error")
+	}
+	if xe.Code != errors.CodeSSHAuthFailed && xe.Code != errors.CodeSSHDialFailed {
+		t.Fatalf("expected ssh auth/dial failure, got %s", xe.Code)
+	}
+}
