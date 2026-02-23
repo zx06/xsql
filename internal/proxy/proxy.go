@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"sync"
 
@@ -119,14 +120,29 @@ func (p *Proxy) acceptConnections(remoteHost string, remotePort int) {
 // handleConnection handles a single connection by forwarding it through SSH.
 func (p *Proxy) handleConnection(localConn net.Conn, remoteAddr string) {
 	defer p.wg.Done()
-	defer func() { _ = localConn.Close() }()
+	defer func() {
+		if localConn != nil {
+			_ = localConn.Close()
+		}
+	}()
 
 	// Dial remote through SSH
 	remoteConn, err := p.dialer.DialContext(p.ctx, "tcp", remoteAddr)
 	if err != nil {
+		log.Printf("[proxy] failed to dial remote %s: %v", remoteAddr, err)
 		return
 	}
-	defer func() { _ = remoteConn.Close() }()
+	if remoteConn == nil {
+		log.Printf("[proxy] dial returned nil conn")
+		return
+	}
+	if remoteConn != nil {
+		defer func() {
+			if closeErr := remoteConn.Close(); closeErr != nil {
+				log.Printf("[proxy] failed to close remote connection: %v", closeErr)
+			}
+		}()
+	}
 
 	// Bidirectional copy
 	var wg sync.WaitGroup
@@ -158,7 +174,12 @@ func (p *Proxy) handleConnection(localConn net.Conn, remoteAddr string) {
 // Stop gracefully shuts down the proxy.
 func (p *Proxy) Stop() error {
 	p.cancel()
-	err := p.listener.Close()
+	var err error
+	if p.listener != nil {
+		err = p.listener.Close()
+	} else {
+		log.Printf("[proxy] listener is nil during stop")
+	}
 	p.wg.Wait()
 	return err
 }

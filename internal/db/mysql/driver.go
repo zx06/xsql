@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"net"
+	"sync"
 	"sync/atomic"
 
 	"github.com/go-sql-driver/mysql"
@@ -13,16 +15,43 @@ import (
 	"github.com/zx06/xsql/internal/errors"
 )
 
-var dialerCounter uint64
+var (
+	dialerCounter   uint64
+	dialers         sync.Map
+	registeredDials sync.Map
+)
 
 func init() {
 	db.Register("mysql", &Driver{})
+}
+
+func registerDialContext(dialer func(context.Context, string, string) (net.Conn, error)) string {
+	dialerNum := atomic.AddUint64(&dialerCounter, 1)
+	dialName := fmt.Sprintf("xsql_ssh_tunnel_%d", dialerNum)
+
+	if _, loaded := registeredDials.LoadOrStore(dialName, true); !loaded {
+		mysql.RegisterDialContext(dialName, func(ctx context.Context, addr string) (net.Conn, error) {
+			d, ok := dialers.Load(dialName)
+			if !ok {
+				return nil, fmt.Errorf("dialer not found: %s", dialName)
+			}
+			fn, ok := d.(func(context.Context, string, string) (net.Conn, error))
+			if !ok || fn == nil {
+				return nil, fmt.Errorf("invalid dialer for: %s", dialName)
+			}
+			return fn(ctx, "tcp", addr)
+		})
+	}
+
+	dialers.Store(dialName, dialer)
+	return dialName
 }
 
 type Driver struct{}
 
 func (d *Driver) Open(ctx context.Context, opts db.ConnOptions) (*sql.DB, *errors.XError) {
 	cfg := mysql.NewConfig()
+	var dialName string
 
 	if opts.DSN != "" {
 		parsed, err := mysql.ParseDSN(opts.DSN)
@@ -45,13 +74,14 @@ func (d *Driver) Open(ctx context.Context, opts db.ConnOptions) (*sql.DB, *error
 		}
 	}
 
-	// 注册自定义 dialer（用于 SSH tunnel）
 	if opts.Dialer != nil {
-		netName := fmt.Sprintf("xsql_ssh_%d", atomic.AddUint64(&dialerCounter, 1))
-		mysql.RegisterDialContext(netName, func(ctx context.Context, addr string) (net.Conn, error) {
-			return opts.Dialer.DialContext(ctx, "tcp", addr)
-		})
-		cfg.Net = netName
+		dialName = registerDialContext(opts.Dialer.DialContext)
+		cfg.Net = dialName
+		if opts.RegisterCloseHook != nil {
+			opts.RegisterCloseHook(func() {
+				dialers.Delete(dialName)
+			})
+		}
 	}
 
 	dsn := cfg.FormatDSN()
@@ -60,7 +90,12 @@ func (d *Driver) Open(ctx context.Context, opts db.ConnOptions) (*sql.DB, *error
 		return nil, errors.Wrap(errors.CodeDBConnectFailed, "failed to open mysql connection", nil, err)
 	}
 	if err := conn.PingContext(ctx); err != nil {
-		_ = conn.Close()
+		if closeErr := conn.Close(); closeErr != nil {
+			log.Printf("failed to close mysql connection: %v", closeErr)
+		}
+		if dialName != "" {
+			dialers.Delete(dialName)
+		}
 		return nil, errors.Wrap(errors.CodeDBConnectFailed, "failed to ping mysql", nil, err)
 	}
 	return conn, nil

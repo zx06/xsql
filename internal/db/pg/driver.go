@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"net"
 	"strings"
 
@@ -37,7 +38,9 @@ func (d *Driver) Open(ctx context.Context, opts db.ConnOptions) (*sql.DB, *error
 		}
 		conn := stdlib.OpenDB(*config)
 		if err := conn.PingContext(ctx); err != nil {
-			_ = conn.Close()
+			if closeErr := conn.Close(); closeErr != nil {
+				log.Printf("failed to close pg connection: %v", closeErr)
+			}
 			return nil, errors.Wrap(errors.CodeDBConnectFailed, "failed to ping pg", nil, err)
 		}
 		return conn, nil
@@ -48,7 +51,9 @@ func (d *Driver) Open(ctx context.Context, opts db.ConnOptions) (*sql.DB, *error
 		return nil, errors.Wrap(errors.CodeDBConnectFailed, "failed to open pg connection", nil, err)
 	}
 	if err := conn.PingContext(ctx); err != nil {
-		_ = conn.Close()
+		if closeErr := conn.Close(); closeErr != nil {
+			log.Printf("failed to close pg connection: %v", closeErr)
+		}
 		return nil, errors.Wrap(errors.CodeDBConnectFailed, "failed to ping pg", nil, err)
 	}
 	return conn, nil

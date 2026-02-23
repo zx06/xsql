@@ -6,12 +6,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/zx06/xsql/internal/app"
 	"github.com/zx06/xsql/internal/db"
-	_ "github.com/zx06/xsql/internal/db/mysql"
-	_ "github.com/zx06/xsql/internal/db/pg"
 	"github.com/zx06/xsql/internal/errors"
 	"github.com/zx06/xsql/internal/output"
-	"github.com/zx06/xsql/internal/secret"
 )
 
 // SchemaFlags holds the flags for the schema command
@@ -67,62 +65,25 @@ func runSchemaDump(cmd *cobra.Command, args []string, flags *SchemaFlags, w *out
 		return errors.New(errors.CodeCfgInvalid, "db type is required (mysql|pg)", nil)
 	}
 
-	// Allow plaintext passwords (CLI > Config)
-	allowPlaintext := flags.AllowPlaintext || p.AllowPlaintext
-
-	// Resolve password (supports keyring)
-	password := p.Password
-	if password != "" {
-		pw, xe := secret.Resolve(password, secret.Options{AllowPlaintext: allowPlaintext})
-		if xe != nil {
-			return xe
-		}
-		password = pw
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	// SSH proxy (if configured)
-	sshClient, err := setupSSH(ctx, p, allowPlaintext, flags.SSHSkipHostKey)
-	if err != nil {
-		return err
-	}
-	if sshClient != nil {
-		defer sshClient.Close()
-	}
-
-	// Get driver
-	drv, ok := db.Get(p.DB)
-	if !ok {
-		return errors.New(errors.CodeDBDriverUnsupported, "unsupported db driver", map[string]any{"db": p.DB})
-	}
-
-	connOpts := db.ConnOptions{
-		DSN:      p.DSN,
-		Host:     p.Host,
-		Port:     p.Port,
-		User:     p.User,
-		Password: password,
-		Database: p.Database,
-	}
-	if sshClient != nil {
-		connOpts.Dialer = sshClient
-	}
-
-	conn, xe := drv.Open(ctx, connOpts)
+	conn, xe := app.ResolveConnection(ctx, app.ConnectionOptions{
+		Profile:          p,
+		AllowPlaintext:   flags.AllowPlaintext,
+		SkipHostKeyCheck: flags.SSHSkipHostKey,
+	})
 	if xe != nil {
 		return xe
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
-	// Dump schema
 	schemaOpts := db.SchemaOptions{
 		TablePattern:  flags.TablePattern,
 		IncludeSystem: flags.IncludeSystem,
 	}
 
-	result, xe := db.DumpSchema(ctx, p.DB, conn, schemaOpts)
+	result, xe := db.DumpSchema(ctx, p.DB, conn.DB, schemaOpts)
 	if xe != nil {
 		return xe
 	}
