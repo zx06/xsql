@@ -16,8 +16,8 @@ import (
 )
 
 var (
-	dialerCounter uint64
-	dialers       sync.Map
+	dialerCounter   uint64
+	dialers         sync.Map
 	registeredDials sync.Map
 )
 
@@ -51,6 +51,7 @@ type Driver struct{}
 
 func (d *Driver) Open(ctx context.Context, opts db.ConnOptions) (*sql.DB, *errors.XError) {
 	cfg := mysql.NewConfig()
+	var dialName string
 
 	if opts.DSN != "" {
 		parsed, err := mysql.ParseDSN(opts.DSN)
@@ -74,8 +75,13 @@ func (d *Driver) Open(ctx context.Context, opts db.ConnOptions) (*sql.DB, *error
 	}
 
 	if opts.Dialer != nil {
-		dialName := registerDialContext(opts.Dialer.DialContext)
+		dialName = registerDialContext(opts.Dialer.DialContext)
 		cfg.Net = dialName
+		if opts.RegisterCloseHook != nil {
+			opts.RegisterCloseHook(func() {
+				dialers.Delete(dialName)
+			})
+		}
 	}
 
 	dsn := cfg.FormatDSN()
@@ -86,6 +92,9 @@ func (d *Driver) Open(ctx context.Context, opts db.ConnOptions) (*sql.DB, *error
 	if err := conn.PingContext(ctx); err != nil {
 		if closeErr := conn.Close(); closeErr != nil {
 			log.Printf("failed to close mysql connection: %v", closeErr)
+		}
+		if dialName != "" {
+			dialers.Delete(dialName)
 		}
 		return nil, errors.Wrap(errors.CodeDBConnectFailed, "failed to ping mysql", nil, err)
 	}

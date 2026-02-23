@@ -12,9 +12,10 @@ import (
 )
 
 type Connection struct {
-	DB        *sql.DB
-	SSHClient *ssh.Client
-	Profile   config.Profile
+	DB         *sql.DB
+	SSHClient  *ssh.Client
+	Profile    config.Profile
+	closeHooks []func()
 }
 
 func (c *Connection) Close() error {
@@ -27,6 +28,11 @@ func (c *Connection) Close() error {
 	if c.SSHClient != nil {
 		if err := c.SSHClient.Close(); err != nil {
 			errs = append(errs, err)
+		}
+	}
+	for _, fn := range c.closeHooks {
+		if fn != nil {
+			fn()
 		}
 	}
 	if len(errs) > 0 {
@@ -82,9 +88,13 @@ func ResolveConnection(ctx context.Context, opts ConnectionOptions) (*Connection
 
 	drv, ok := db.Get(opts.Profile.DB)
 	if !ok {
+		if sshClient != nil {
+			_ = sshClient.Close()
+		}
 		return nil, errors.New(errors.CodeDBDriverUnsupported, "unsupported db driver", map[string]any{"db": opts.Profile.DB})
 	}
 
+	closeHooks := make([]func(), 0, 1)
 	connOpts := db.ConnOptions{
 		DSN:      opts.Profile.DSN,
 		Host:     opts.Profile.Host,
@@ -92,6 +102,11 @@ func ResolveConnection(ctx context.Context, opts ConnectionOptions) (*Connection
 		User:     opts.Profile.User,
 		Password: password,
 		Database: opts.Profile.Database,
+		RegisterCloseHook: func(fn func()) {
+			if fn != nil {
+				closeHooks = append(closeHooks, fn)
+			}
+		},
 	}
 	if sshClient != nil {
 		connOpts.Dialer = sshClient
@@ -99,13 +114,22 @@ func ResolveConnection(ctx context.Context, opts ConnectionOptions) (*Connection
 
 	conn, xe := drv.Open(ctx, connOpts)
 	if xe != nil {
+		if sshClient != nil {
+			_ = sshClient.Close()
+		}
+		for _, fn := range closeHooks {
+			if fn != nil {
+				fn()
+			}
+		}
 		return nil, xe
 	}
 
 	return &Connection{
-		DB:        conn,
-		SSHClient: sshClient,
-		Profile:   opts.Profile,
+		DB:         conn,
+		SSHClient:  sshClient,
+		Profile:    opts.Profile,
+		closeHooks: closeHooks,
 	}, nil
 }
 

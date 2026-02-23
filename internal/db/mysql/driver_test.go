@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -192,4 +193,59 @@ func TestDriver_Open_ContextCancelled(t *testing.T) {
 	if xe == nil {
 		t.Fatal("expected error for cancelled context")
 	}
+}
+
+func TestDriver_Open_WithDialer_CleanupOnFailure(t *testing.T) {
+	resetSyncMap(&dialers)
+	resetSyncMap(&registeredDials)
+
+	drv, _ := db.Get("mysql")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	var hooks []func()
+	dialer := &mockDialer{}
+	opts := db.ConnOptions{
+		Host:     "127.0.0.1",
+		Port:     3306,
+		User:     "test",
+		Password: "test",
+		Database: "test",
+		Dialer:   dialer,
+		RegisterCloseHook: func(fn func()) {
+			hooks = append(hooks, fn)
+		},
+	}
+
+	_, xe := drv.Open(ctx, opts)
+	if xe == nil {
+		t.Fatal("expected error from mock dialer")
+	}
+	if len(hooks) != 1 {
+		t.Fatalf("expected one close hook, got %d", len(hooks))
+	}
+	if countSyncMap(&dialers) != 0 {
+		t.Fatal("expected dialers map to be cleaned on open failure")
+	}
+
+	hooks[0]()
+	if countSyncMap(&dialers) != 0 {
+		t.Fatal("expected hook cleanup to be idempotent")
+	}
+}
+
+func countSyncMap(m *sync.Map) int {
+	count := 0
+	m.Range(func(_, _ any) bool {
+		count++
+		return true
+	})
+	return count
+}
+
+func resetSyncMap(m *sync.Map) {
+	m.Range(func(k, _ any) bool {
+		m.Delete(k)
+		return true
+	})
 }

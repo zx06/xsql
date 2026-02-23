@@ -30,6 +30,9 @@ type ConnOptions struct {
 	Database string
 	Params   map[string]string // 额外参数
 	Dialer   Dialer            // 自定义 dialer（如 SSH tunnel）
+	// RegisterCloseHook allows drivers to register cleanup callbacks that should run
+	// when the owning connection is closed or setup fails.
+	RegisterCloseHook func(fn func())
 }
 
 var (
