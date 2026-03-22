@@ -463,7 +463,10 @@ func (h *ToolHandler) formatError(err error) string {
 			"details": xe.Details,
 		},
 	}
-	jsonData, _ := json.MarshalIndent(output, "", "  ")
+	jsonData, jsonErr := json.MarshalIndent(output, "", "  ")
+	if jsonErr != nil {
+		return `{"ok":false,"error":{"code":"XSQL_INTERNAL","message":"failed to format error"}}`
+	}
 	return string(jsonData)
 }
 
