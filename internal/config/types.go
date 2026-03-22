@@ -36,6 +36,10 @@ type Profile struct {
 	AllowPlaintext   bool `yaml:"allow_plaintext"`    // 允许明文密码
 	UnsafeAllowWrite bool `yaml:"unsafe_allow_write"` // 允许写操作（绕过只读保护）
 
+	// 超时配置（秒）
+	QueryTimeout  int `yaml:"query_timeout"`  // 查询超时，默认 30 秒
+	SchemaTimeout int `yaml:"schema_timeout"` // Schema 导出超时，默认 60 秒
+
 	// SSH proxy 引用（引用 ssh_proxies 中定义的名称）
 	SSHProxy string `yaml:"ssh_proxy"`
 
