@@ -87,3 +87,23 @@ type Options struct {
 	// WorkDir 用于默认路径（为空则使用进程当前工作目录）。
 	WorkDir string
 }
+
+type ProfileInfo struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	DB          string `json:"db"`
+	Mode        string `json:"mode"` // "read-only" or "read-write"
+}
+
+func ProfileToInfo(name string, p Profile) ProfileInfo {
+	mode := "read-only"
+	if p.UnsafeAllowWrite {
+		mode = "read-write"
+	}
+	return ProfileInfo{
+		Name:        name,
+		Description: p.Description,
+		DB:          p.DB,
+		Mode:        mode,
+	}
+}

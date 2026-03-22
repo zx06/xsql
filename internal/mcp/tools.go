@@ -309,25 +309,9 @@ func (h *ToolHandler) Query(ctx context.Context, req *mcp.CallToolRequest, input
 
 // ProfileList lists all profiles
 func (h *ToolHandler) ProfileList(ctx context.Context, req *mcp.CallToolRequest, input struct{}) (*mcp.CallToolResult, any, error) {
-	type profileInfo struct {
-		Name        string `json:"name"`
-		Description string `json:"description,omitempty"`
-		DB          string `json:"db"`
-		Mode        string `json:"mode"`
-	}
-
-	profiles := make([]profileInfo, 0, len(h.config.Profiles))
+	profiles := make([]config.ProfileInfo, 0, len(h.config.Profiles))
 	for name, p := range h.config.Profiles {
-		mode := "read-only"
-		if p.UnsafeAllowWrite {
-			mode = "read-write"
-		}
-		profiles = append(profiles, profileInfo{
-			Name:        name,
-			Description: p.Description,
-			DB:          p.DB,
-			Mode:        mode,
-		})
+		profiles = append(profiles, config.ProfileToInfo(name, p))
 	}
 
 	output := map[string]any{
@@ -347,7 +331,6 @@ func (h *ToolHandler) ProfileList(ctx context.Context, req *mcp.CallToolRequest,
 		}, nil, nil
 	}
 
-	// Return result directly in content per RFC
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: string(jsonData)},
