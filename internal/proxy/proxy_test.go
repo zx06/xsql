@@ -326,3 +326,54 @@ func TestProxy_ContextCancellation(t *testing.T) {
 		t.Errorf("failed to stop proxy: %v", err)
 	}
 }
+
+type nilConnDialer struct{}
+
+func (d *nilConnDialer) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	return nil, nil
+}
+
+func (d *nilConnDialer) Close() error { return nil }
+
+func TestProxy_StopAndLocalAddress_WithNilListener(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	p := &Proxy{
+		dialer: &nilConnDialer{},
+		ctx:    ctx,
+		cancel: cancel,
+	}
+
+	if got := p.LocalAddress(); got != "" {
+		t.Fatalf("expected empty local address, got %q", got)
+	}
+	if err := p.Stop(); err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+}
+
+func TestProxy_HandleConnection_DialReturnsNilConn(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	p := &Proxy{
+		dialer: &nilConnDialer{},
+		ctx:    ctx,
+		cancel: cancel,
+	}
+
+	localConn, peer := net.Pipe()
+	defer func() { _ = peer.Close() }()
+
+	done := make(chan struct{})
+	p.wg.Add(1)
+	go func() {
+		defer close(done)
+		p.handleConnection(localConn, "127.0.0.1:65535")
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handleConnection should return quickly when dialer returns nil conn")
+	}
+}
