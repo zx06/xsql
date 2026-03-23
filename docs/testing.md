@@ -197,6 +197,59 @@ func TestMain(m *testing.M) {
 
 ---
 
+## SSH 测试
+
+### 单元测试
+SSH 客户端单元测试位于 `internal/ssh/client_test.go`，测试：
+- 路径扩展（tilde expansion）
+- 认证方法构建（私钥、默认密钥查找）
+- known_hosts 校验
+- SSH dial 失败错误码返回
+- Passphrase 保护的密钥（正确/错误 passphrase）
+
+```bash
+# 运行 SSH 单元测试
+go test -v ./internal/ssh/...
+```
+
+### E2E SSH 测试
+
+#### CLI Flags 测试
+测试 SSH CLI flags 与配置文件的合并行为：
+- `--ssh-skip-known-hosts-check`
+- `--ssh-identity-file`
+- `--ssh-user`
+- `--ssh-host`
+
+```bash
+# 运行 SSH CLI flag 测试
+go test -tags=e2e -v -run "SSH" ./tests/e2e/...
+```
+
+#### 真实 SSH 测试
+需要真实 SSH 服务器的测试（跳过如果环境未配置）：
+- `ssh_proxy_success_test.go`
+
+设置环境变量：
+```bash
+export SSH_TEST_HOST=your-ssh-server
+export SSH_TEST_PORT=22
+export SSH_TEST_USER=your-user
+export SSH_TEST_KEY_PATH=/path/to/private/key
+export SSH_KNOWN_HOSTS_FILE=/path/to/known_hosts  # 可选
+
+# 可选：MySQL/PG over SSH
+export XSQL_TEST_MYSQL_DSN="..."
+export XSQL_TEST_PG_DSN="..."
+```
+
+### 注意事项
+- SSH 代理测试需要可访问的 SSH 服务器
+- 使用 `SkipKnownHostsCheck: true` 进行测试，避免 known_hosts 问题
+- SSH 密钥应有适当的权限（600 或 400）
+
+---
+
 ## E2E 测试
 
 ### 定位
@@ -213,7 +266,8 @@ tests/e2e/
   ├── profile_test.go            # profile 命令测试
   ├── proxy_test.go              # proxy 命令测试
   ├── readonly_test.go           # 只读策略测试
-  └── ssh_proxy_success_test.go  # SSH 代理成功测试
+  ├── ssh_cli_flags_test.go      # SSH CLI flags 测试
+  └── ssh_proxy_success_test.go  # SSH 代理成功测试（需要真实 SSH）
 ```
 
 ### 运行测试

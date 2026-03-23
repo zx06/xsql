@@ -336,19 +336,67 @@ func TestClientClose_NoClient(t *testing.T) {
 
 func writeTestKey(t *testing.T, dir, name string) string {
 	t.Helper()
+	return writeTestKeyWithPassphrase(t, dir, name, "")
+}
+
+func writeTestKeyWithPassphrase(t *testing.T, dir, name, passphrase string) string {
+	t.Helper()
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("failed to generate key: %v", err)
 	}
 
-	keyBytes := x509.MarshalPKCS1PrivateKey(key)
-	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyBytes})
+	var pemBytes []byte
+	if passphrase != "" {
+		block, _ := ssh.MarshalPrivateKeyWithPassphrase(key, passphrase, []byte(passphrase))
+		pemBytes = pem.EncodeToMemory(block)
+	} else {
+		keyBytes := x509.MarshalPKCS1PrivateKey(key)
+		pemBytes = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyBytes})
+	}
 	path := filepath.Join(dir, name)
 	if err := os.WriteFile(path, pemBytes, 0600); err != nil {
 		t.Fatalf("failed to write key: %v", err)
 	}
 	return path
+}
+
+func TestBuildAuthMethods_WithPassphrase(t *testing.T) {
+	keyPath := writeTestKeyWithPassphrase(t, t.TempDir(), "id_rsa_passphrase", "testpassphrase")
+
+	opts := Options{
+		IdentityFile: keyPath,
+		Passphrase:   "testpassphrase",
+	}
+
+	methods, xe := buildAuthMethods(opts)
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+	if len(methods) == 0 {
+		t.Fatal("expected auth methods")
+	}
+}
+
+func TestBuildAuthMethods_WithWrongPassphrase(t *testing.T) {
+	keyPath := writeTestKeyWithPassphrase(t, t.TempDir(), "id_rsa_wrong_pass", "correctpassphrase")
+
+	opts := Options{
+		IdentityFile: keyPath,
+		Passphrase:   "wrongpassphrase",
+	}
+
+	methods, xe := buildAuthMethods(opts)
+	if xe == nil {
+		t.Fatal("expected error for wrong passphrase")
+	}
+	if xe.Code != errors.CodeCfgInvalid && xe.Code != errors.CodeSSHAuthFailed {
+		t.Errorf("expected CodeCfgInvalid or CodeSSHAuthFailed, got %s", xe.Code)
+	}
+	if len(methods) != 0 {
+		t.Error("expected no auth methods for wrong passphrase")
+	}
 }
 
 // Helper function to check if a path contains another path component (cross-platform)

@@ -39,25 +39,9 @@ func newProfileListCommand(w *output.Writer) *cobra.Command {
 				return xe
 			}
 
-			type profileInfo struct {
-				Name        string `json:"name"`
-				Description string `json:"description,omitempty"`
-				DB          string `json:"db"`
-				Mode        string `json:"mode"` // "read-only" or "read-write"
-			}
-
-			profiles := make([]profileInfo, 0, len(cfg.Profiles))
+			profiles := make([]config.ProfileInfo, 0, len(cfg.Profiles))
 			for name, p := range cfg.Profiles {
-				mode := "read-only"
-				if p.UnsafeAllowWrite {
-					mode = "read-write"
-				}
-				profiles = append(profiles, profileInfo{
-					Name:        name,
-					Description: p.Description,
-					DB:          p.DB,
-					Mode:        mode,
-				})
+				profiles = append(profiles, config.ProfileToInfo(name, p))
 			}
 
 			result := map[string]any{

@@ -131,6 +131,15 @@ profiles:
 | `allow_plaintext` | bool | 允许明文密码（默认 false） |
 | `format` | string | 输出格式：json/yaml/table/csv/auto |
 | `ssh_proxy` | string | SSH 代理名称（引用 `ssh_proxies` 中定义的名称） |
+| `query_timeout` | int | 查询超时秒数（默认 30 秒） |
+| `schema_timeout` | int | Schema 导出超时秒数（默认 60 秒） |
+
+## CLI Timeout Flags
+
+| Flag | 说明 |
+|------|------|
+| `--query-timeout <seconds>` | 查询超时（覆盖 profile 配置） |
+| `--schema-timeout <seconds>` | Schema 导出超时（覆盖 profile 配置） |
 
 ## Secrets
 

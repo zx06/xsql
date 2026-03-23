@@ -152,9 +152,12 @@ func writeTable(out io.Writer, env Envelope) error {
 				_, _ = fmt.Fprintf(tw, "%s\t%v\n", k, m[k])
 			}
 		} else {
-			// 只有这里不得已才使用 JSON 格式化
-			b, _ := json.MarshalIndent(env.Data, "", "  ")
-			_, _ = fmt.Fprintf(tw, "%s\n", b)
+			b, err := json.MarshalIndent(env.Data, "", "  ")
+			if err == nil {
+				_, _ = fmt.Fprintf(tw, "%s\n", b)
+			} else {
+				_, _ = fmt.Fprintf(tw, "%v\n", env.Data)
+			}
 		}
 	}
 	return tw.Flush()

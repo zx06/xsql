@@ -1,9 +1,11 @@
 package mcp
 
 import (
+	"context"
 	"crypto/subtle"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -20,10 +22,15 @@ const (
 	bearerPrefix  = "Bearer "
 	unauthorized  = "unauthorized"
 	headerMissing = "authorization header is required"
+
+	DefaultHTTPTimeout = 60 * time.Second
 )
 
-// NewStreamableHTTPHandler creates a streamable HTTP handler with required auth.
 func NewStreamableHTTPHandler(server *mcp.Server, authToken string) (http.Handler, error) {
+	return NewStreamableHTTPHandlerWithTimeout(server, authToken, DefaultHTTPTimeout)
+}
+
+func NewStreamableHTTPHandlerWithTimeout(server *mcp.Server, authToken string, timeout time.Duration) (http.Handler, error) {
 	if server == nil {
 		return nil, errors.New(errors.CodeInternal, "mcp server is nil", nil)
 	}
@@ -33,7 +40,16 @@ func NewStreamableHTTPHandler(server *mcp.Server, authToken string) (http.Handle
 	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 		return server
 	}, &mcp.StreamableHTTPOptions{JSONResponse: true})
-	return requireAuth(handler, authToken), nil
+	authHandler := requireAuth(handler, authToken)
+	return withTimeout(authHandler, timeout), nil
+}
+
+func withTimeout(next http.Handler, timeout time.Duration) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		ctx, cancel := context.WithTimeout(req.Context(), timeout)
+		defer cancel()
+		next.ServeHTTP(w, req.WithContext(ctx))
+	})
 }
 
 func requireAuth(next http.Handler, token string) http.Handler {

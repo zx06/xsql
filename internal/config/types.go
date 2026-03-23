@@ -36,6 +36,10 @@ type Profile struct {
 	AllowPlaintext   bool `yaml:"allow_plaintext"`    // 允许明文密码
 	UnsafeAllowWrite bool `yaml:"unsafe_allow_write"` // 允许写操作（绕过只读保护）
 
+	// 超时配置（秒）
+	QueryTimeout  int `yaml:"query_timeout"`  // 查询超时，默认 30 秒
+	SchemaTimeout int `yaml:"schema_timeout"` // Schema 导出超时，默认 60 秒
+
 	// SSH proxy 引用（引用 ssh_proxies 中定义的名称）
 	SSHProxy string `yaml:"ssh_proxy"`
 
@@ -82,4 +86,24 @@ type Options struct {
 
 	// WorkDir 用于默认路径（为空则使用进程当前工作目录）。
 	WorkDir string
+}
+
+type ProfileInfo struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	DB          string `json:"db"`
+	Mode        string `json:"mode"` // "read-only" or "read-write"
+}
+
+func ProfileToInfo(name string, p Profile) ProfileInfo {
+	mode := "read-only"
+	if p.UnsafeAllowWrite {
+		mode = "read-write"
+	}
+	return ProfileInfo{
+		Name:        name,
+		Description: p.Description,
+		DB:          p.DB,
+		Mode:        mode,
+	}
 }
