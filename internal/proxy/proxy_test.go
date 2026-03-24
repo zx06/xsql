@@ -262,8 +262,8 @@ func TestProxy_PortInUse(t *testing.T) {
 	if xe == nil {
 		t.Error("expected error when port is already in use")
 	}
-	if xe != nil && xe.Code != errors.CodeInternal {
-		t.Errorf("expected CodeInternal, got %s", xe.Code)
+	if xe != nil && xe.Code != errors.CodePortInUse {
+		t.Errorf("expected CodePortInUse, got %s", xe.Code)
 	}
 }
 
@@ -375,5 +375,114 @@ func TestProxy_HandleConnection_DialReturnsNilConn(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("handleConnection should return quickly when dialer returns nil conn")
+	}
+}
+
+func TestIsPortAvailable(t *testing.T) {
+	t.Run("available port", func(t *testing.T) {
+		// Port 0 always resolves to an available port; just verify the function works
+		// by finding a free port first
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		port := ln.Addr().(*net.TCPAddr).Port
+		_ = ln.Close()
+
+		// Port should now be available
+		if !IsPortAvailable("127.0.0.1", port) {
+			t.Error("port should be available after closing listener")
+		}
+	})
+
+	t.Run("unavailable port", func(t *testing.T) {
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = ln.Close() }()
+
+		port := ln.Addr().(*net.TCPAddr).Port
+		if IsPortAvailable("127.0.0.1", port) {
+			t.Error("port should not be available while listener is active")
+		}
+	})
+
+	t.Run("default host", func(t *testing.T) {
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = ln.Close() }()
+
+		port := ln.Addr().(*net.TCPAddr).Port
+		if IsPortAvailable("", port) {
+			t.Error("port should not be available (empty host defaults to 127.0.0.1)")
+		}
+	})
+}
+
+func TestIsPortInUse(t *testing.T) {
+	tests := []struct {
+		errMsg string
+		want   bool
+	}{
+		{"listen tcp 127.0.0.1:8080: bind: address already in use", true},
+		{"address already in use", true},
+		{"Only one usage of each socket address", true},
+		{"connection refused", false},
+		{"", false},
+	}
+
+	for _, tt := range tests {
+		var err error
+		if tt.errMsg != "" {
+			err = &net.OpError{Op: "listen", Err: &net.AddrError{Err: tt.errMsg, Addr: "127.0.0.1:8080"}}
+		}
+		got := isPortInUse(err)
+		if got != tt.want {
+			t.Errorf("isPortInUse(%q) = %v, want %v", tt.errMsg, got, tt.want)
+		}
+	}
+
+	// nil error
+	if isPortInUse(nil) {
+		t.Error("isPortInUse(nil) should return false")
+	}
+}
+
+func TestProxy_PortInUse_ReturnsCorrectErrorCode(t *testing.T) {
+	// Bind to a port
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = ln.Close() }()
+
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	dialer := newMockSSHClient(t, "127.0.0.1:18500")
+	defer func() { _ = dialer.Close() }()
+
+	ctx := context.Background()
+	_, _, xe := Start(ctx, Options{
+		LocalHost:  "127.0.0.1",
+		LocalPort:  port,
+		RemoteHost: "127.0.0.1",
+		RemotePort: 18500,
+		Dialer:     dialer,
+	})
+
+	if xe == nil {
+		t.Fatal("expected error")
+	}
+	if xe.Code != errors.CodePortInUse {
+		t.Errorf("expected CodePortInUse, got %s", xe.Code)
+	}
+	if xe.Details == nil {
+		t.Fatal("expected details")
+	}
+	if xe.Details["port"] != port {
+		t.Errorf("expected port=%d in details, got %v", port, xe.Details["port"])
 	}
 }

@@ -56,6 +56,11 @@ func Start(ctx context.Context, opts Options) (*Proxy, *Result, *errors.XError) 
 	addr := fmt.Sprintf("%s:%d", opts.LocalHost, opts.LocalPort)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
+		// Check if this is a port-in-use error
+		if isPortInUse(err) {
+			return nil, nil, errors.New(errors.CodePortInUse, "port is already in use",
+				map[string]any{"address": addr, "port": opts.LocalPort})
+		}
 		return nil, nil, errors.Wrap(errors.CodeInternal, "failed to listen on local port", map[string]any{"address": addr}, err)
 	}
 
@@ -190,4 +195,41 @@ func (p *Proxy) LocalAddress() string {
 		return p.listener.Addr().String()
 	}
 	return ""
+}
+
+// IsPortAvailable checks if a port is available for binding.
+func IsPortAvailable(host string, port int) bool {
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	addr := fmt.Sprintf("%s:%d", host, port)
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return false
+	}
+	_ = ln.Close()
+	return true
+}
+
+// isPortInUse checks if the error is caused by the port being in use.
+func isPortInUse(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return contains(s, "address already in use") || contains(s, "bind: address already in use") ||
+		contains(s, "Only one usage of each socket address")
+}
+
+func contains(s, sub string) bool {
+	return len(s) >= len(sub) && (s == sub || len(s) > 0 && containsSubstr(s, sub))
+}
+
+func containsSubstr(s, sub string) bool {
+	for i := 0; i <= len(s)-len(sub); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
 }

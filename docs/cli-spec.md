@@ -269,9 +269,20 @@ xsql proxy -p prod-mysql
 # 指定本地端口
 xsql -p prod-mysql proxy --local-port 13306
 
+# 使用 profile 中配置的 local_port（如果设置了的话）
+xsql proxy -p prod-mysql   # 自动使用 profile 中的 local_port
+
 # 输出 JSON 格式
 xsql -p prod-mysql proxy --format json
 ```
+
+**端口优先级：**`--local-port` flag > `profile.local_port` > 0（自动分配）
+
+**端口冲突处理：**
+- 当端口来源于**配置文件**且端口已被占用时：
+  - TTY 环境：交互式询问用户选择随机端口或退出
+  - 非 TTY 环境：返回错误 `XSQL_PORT_IN_USE`
+- 当端口来源于 `--local-port` CLI flag 且被占用时：直接返回错误
 
 **要求：**
 - Profile 必须配置 `ssh_proxy`，否则无法启动
@@ -324,6 +335,63 @@ Press Ctrl+C to stop
 - 复用 SSH 配置的 known_hosts 校验
 - 密码/passphrase 复用 keyring 机制，不泄露明文
 - 按 Ctrl+C 或发送 SIGTERM 信号优雅关闭代理
+
+### `xsql config init`
+
+创建配置文件模板。
+
+```bash
+# 在默认路径创建
+xsql config init
+
+# 指定路径
+xsql config init --path ./xsql.yaml
+```
+
+**Flags:**
+| Flag | 默认值 | 说明 |
+|------|--------|------|
+| `--path` | `$HOME/.config/xsql/xsql.yaml` | 配置文件路径 |
+
+**输出示例（JSON）：**
+```json
+{
+  "ok": true,
+  "schema_version": 1,
+  "data": {
+    "config_path": "/home/user/.config/xsql/xsql.yaml"
+  }
+}
+```
+
+### `xsql config set <key> <value>`
+
+快速修改配置项，使用点号分隔的路径定位配置字段。
+
+```bash
+# 设置 profile 字段
+xsql config set profile.dev.host localhost
+xsql config set profile.dev.port 3306
+xsql config set profile.dev.db mysql
+xsql config set profile.dev.local_port 13306
+
+# 设置 SSH proxy 字段
+xsql config set ssh_proxy.bastion.host bastion.example.com
+xsql config set ssh_proxy.bastion.user admin
+```
+
+**输出示例（JSON）：**
+```json
+{
+  "ok": true,
+  "schema_version": 1,
+  "data": {
+    "config_path": "/home/user/.config/xsql/xsql.yaml",
+    "key": "profile.dev.host",
+    "value": "localhost"
+  }
+}
+```
 
 ## 全局 Flags
 

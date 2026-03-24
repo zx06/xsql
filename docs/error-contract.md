@@ -55,6 +55,9 @@ DB 类：
 只读策略：
 - `XSQL_RO_BLOCKED` - 写操作被只读策略拦截
 
+端口：
+- `XSQL_PORT_IN_USE` - 代理端口被占用
+
 内部：
 - `XSQL_INTERNAL` - 内部错误
 

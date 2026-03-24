@@ -31,6 +31,8 @@ func ExitCodeFor(code Code) ExitCode {
 		return ExitConnect
 	case CodeROBlocked:
 		return ExitReadOnly
+	case CodePortInUse:
+		return ExitInternal
 	case CodeDBExecFailed:
 		return ExitDBExec
 	case CodeInternal:

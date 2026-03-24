@@ -30,6 +30,7 @@ func run() int {
 	root.AddCommand(NewSchemaCommand(&w))
 	root.AddCommand(NewMCPCommand())
 	root.AddCommand(NewProxyCommand(&w))
+	root.AddCommand(NewConfigCommand(&w))
 
 	// Execute and handle errors
 	if err := root.Execute(); err != nil {
