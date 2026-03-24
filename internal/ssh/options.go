@@ -1,15 +1,15 @@
 package ssh
 
-// Options 包含 SSH 连接所需参数。
+// Options contains the parameters required for an SSH connection.
 type Options struct {
 	Host           string
 	Port           int
 	User           string
-	IdentityFile   string // 私钥路径
-	Passphrase     string // 私钥 passphrase（若有）
-	KnownHostsFile string // 默认 ~/.ssh/known_hosts
+	IdentityFile   string // path to the private key
+	Passphrase     string // private key passphrase (if any)
+	KnownHostsFile string // defaults to ~/.ssh/known_hosts
 
-	// SkipKnownHostsCheck 跳过 known_hosts 校验（极不推荐！）
+	// SkipKnownHostsCheck disables known_hosts verification (strongly discouraged!).
 	SkipKnownHostsCheck bool
 }
 

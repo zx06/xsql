@@ -61,17 +61,17 @@ func (w Writer) write(format Format, env Envelope) error {
 	}
 }
 
-// TableFormatter 接口：支持表格输出的数据结构实现此接口
+// TableFormatter is the interface for data structures that support table output.
 type TableFormatter interface {
 	ToTableData() (columns []string, rows []map[string]any, ok bool)
 }
 
-// SchemaFormatter 接口：支持 schema 输出的结构实现此接口
+// SchemaFormatter is the interface for data structures that support schema output.
 type SchemaFormatter interface {
 	ToSchemaData() (database string, tables []SchemaTable, ok bool)
 }
 
-// SchemaTable schema 表格输出的简化结构
+// SchemaTable is a simplified structure for schema table output.
 type SchemaTable struct {
 	Schema  string
 	Name    string
@@ -79,51 +79,51 @@ type SchemaTable struct {
 	Columns []SchemaColumn
 }
 
-// ProfileListFormatter 接口：支持 profile list 输出的结构实现此接口
+// ProfileListFormatter is the interface for data structures that support profile list output.
 type ProfileListFormatter interface {
 	ToProfileListData() (configPath string, profiles []profileListItem, ok bool)
 }
 
 func writeTable(out io.Writer, env Envelope) error {
 	if !env.OK {
-		// 错误输出：简洁显示错误信息
+		// Error output: display error message concisely
 		if env.Error != nil {
 			_, _ = fmt.Fprintf(out, "Error [%s]: %s\n", env.Error.Code, env.Error.Message)
 		}
 		return nil
 	}
 
-	// 优先检查是否实现了 TableFormatter 接口（无 JSON 编解码）
+	// First check if the data implements the TableFormatter interface (no JSON encode/decode)
 	if formatter, ok := env.Data.(TableFormatter); ok {
 		if cols, rows, ok := formatter.ToTableData(); ok {
 			return writeQueryResultTable(out, cols, rows)
 		}
 	}
 
-	// 优先检查是否实现了 ProfileListFormatter 接口
+	// Check if the data implements the ProfileListFormatter interface
 	if formatter, ok := env.Data.(ProfileListFormatter); ok {
 		if cfgPath, profiles, ok := formatter.ToProfileListData(); ok {
 			return writeProfileListTable(out, cfgPath, profiles)
 		}
 	}
 
-	// 检查是否实现了 SchemaFormatter 接口
+	// Check if the data implements the SchemaFormatter interface
 	if formatter, ok := env.Data.(SchemaFormatter); ok {
 		if database, tables, ok := formatter.ToSchemaData(); ok {
 			return writeSchemaTable(out, database, tables)
 		}
 	}
 
-	// 回退：使用类型断言从 map[string]any 提取
+	// Fallback: use type assertion to extract from map[string]any
 	if m, ok := env.Data.(map[string]any); ok {
-		// 尝试提取查询结果
+		// Try to extract query result
 		if cols, ok := extractStringSlice(m["columns"]); ok {
 			if rows, ok := extractMapSlice(m["rows"]); ok {
 				return writeQueryResultTable(out, cols, rows)
 			}
 		}
 
-		// 尝试提取 profile list
+		// Try to extract profile list
 		if profilesRaw, hasProfiles := m["profiles"]; hasProfiles {
 			if profileList, ok := tryAsProfileList(profilesRaw); ok {
 				cfgPath, _ := m["config_path"].(string)
@@ -131,7 +131,7 @@ func writeTable(out io.Writer, env Envelope) error {
 			}
 		}
 
-		// 默认：直接输出 key-value（按 key 排序以保证稳定性）
+		// Default: output key-value pairs (sorted by key for stability)
 		tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
 		for _, k := range sortedMapKeys(m) {
 			_, _ = fmt.Fprintf(tw, "%s\t%v\n", k, m[k])
@@ -139,12 +139,12 @@ func writeTable(out io.Writer, env Envelope) error {
 		return tw.Flush()
 	}
 
-	// 最后尝试反射提取（无 JSON 编解码）
+	// Last resort: try reflection-based extraction (no JSON encode/decode)
 	if result, ok := tryAsQueryResultReflect(env.Data); ok {
 		return writeQueryResultTable(out, result.columns, result.rows)
 	}
 
-	// 默认：直接输出数据的 key-value
+	// Default: output data as key-value pairs
 	tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
 	if env.Data != nil {
 		if m, ok := env.Data.(map[string]any); ok {
@@ -163,20 +163,20 @@ func writeTable(out io.Writer, env Envelope) error {
 	return tw.Flush()
 }
 
-// writeProfileListTable 输出 profile list 表格
+// writeProfileListTable writes the profile list as a table.
 func writeProfileListTable(out io.Writer, cfgPath string, profiles []profileListItem) error {
 	tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
-	// 先输出 config_path
+	// Output config_path first
 	if cfgPath != "" {
 		_, _ = fmt.Fprintf(tw, "Config: %s\n\n", cfgPath)
 	}
-	// 输出 profiles 表格
+	// Output profiles table
 	_, _ = fmt.Fprintln(tw, "NAME\tDESCRIPTION\tDB\tMODE")
 	_, _ = fmt.Fprintln(tw, "----\t-----------\t--\t----")
 	for _, p := range profiles {
 		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", p.Name, p.Description, p.DB, p.Mode)
 	}
-	// 使用正确的单数/复数形式
+	// Use correct singular/plural form
 	suffix := "profiles"
 	if len(profiles) == 1 {
 		suffix = "profile"
@@ -185,16 +185,16 @@ func writeProfileListTable(out io.Writer, cfgPath string, profiles []profileList
 	return tw.Flush()
 }
 
-// extractStringSlice 从 any 提取 []string
+// extractStringSlice extracts a []string from any.
 func extractStringSlice(v any) ([]string, bool) {
 	if v == nil {
 		return nil, false
 	}
-	// 已经是 []string
+	// Already a []string
 	if ss, ok := v.([]string); ok {
 		return ss, true
 	}
-	// 尝试 []any
+	// Try []any
 	if arr, ok := v.([]any); ok {
 		result := make([]string, len(arr))
 		for i, item := range arr {
@@ -209,7 +209,7 @@ func extractStringSlice(v any) ([]string, bool) {
 	return nil, false
 }
 
-// extractMapSlice 从 any 提取 []map[string]any
+// extractMapSlice extracts a []map[string]any from any.
 func extractMapSlice(v any) ([]map[string]any, bool) {
 	if v == nil {
 		return nil, false
@@ -239,12 +239,12 @@ type profileListItem struct {
 }
 
 func tryAsProfileList(data any) ([]profileListItem, bool) {
-	// 处理 []profileListItem
+	// Handle []profileListItem
 	if arr, ok := data.([]profileListItem); ok {
 		return arr, len(arr) > 0
 	}
 
-	// 处理 []map[string]any
+	// Handle []map[string]any
 	if arr, ok := data.([]map[string]any); ok {
 		result := make([]profileListItem, 0, len(arr))
 		for _, m := range arr {
@@ -269,22 +269,22 @@ func tryAsProfileList(data any) ([]profileListItem, bool) {
 		return result, len(result) > 0
 	}
 
-	// 使用反射处理任意结构体切片（如 cmd/xsql/profile.go 中的 []profileInfo）
+	// Use reflection to handle arbitrary struct slices (e.g., []profileInfo in cmd/xsql/profile.go)
 	v := reflect.ValueOf(data)
 	if v.IsValid() && v.Kind() == reflect.Slice {
 		result := make([]profileListItem, 0, v.Len())
 		for i := 0; i < v.Len(); i++ {
 			elem := v.Index(i)
-			// 解引用指针
+			// Dereference pointer
 			if elem.Kind() == reflect.Ptr {
 				elem = elem.Elem()
 			}
-			// 只处理结构体
+			// Only handle structs
 			if elem.Kind() != reflect.Struct {
 				return nil, false
 			}
 			p := profileListItem{}
-			// 读取字段
+			// Read fields
 			if f := elem.FieldByName("Name"); f.IsValid() && f.Kind() == reflect.String {
 				p.Name = f.String()
 			}
@@ -305,7 +305,7 @@ func tryAsProfileList(data any) ([]profileListItem, bool) {
 		return result, len(result) > 0
 	}
 
-	// 处理 []any
+	// Handle []any
 	arr, ok := data.([]any)
 	if !ok {
 		return nil, false
@@ -343,7 +343,7 @@ type queryResultLike struct {
 	rows    []map[string]any
 }
 
-// tryAsQueryResultReflect 使用反射检查字段 Columns 和 Rows（无 JSON 编解码）
+// tryAsQueryResultReflect uses reflection to check for Columns and Rows fields (no JSON encode/decode).
 func tryAsQueryResultReflect(data any) (*queryResultLike, bool) {
 	if data == nil {
 		return nil, false
@@ -357,7 +357,7 @@ func tryAsQueryResultReflect(data any) (*queryResultLike, bool) {
 		return nil, false
 	}
 
-	// 查找 Columns 和 Rows 字段
+	// Find the Columns and Rows fields
 	var colsValue, rowsValue reflect.Value
 	t := v.Type()
 	for i := 0; i < v.NumField(); i++ {
@@ -374,7 +374,7 @@ func tryAsQueryResultReflect(data any) (*queryResultLike, bool) {
 		return nil, false
 	}
 
-	// 提取 columns
+	// Extract columns
 	if colsValue.Kind() != reflect.Slice {
 		return nil, false
 	}
@@ -394,7 +394,7 @@ func tryAsQueryResultReflect(data any) (*queryResultLike, bool) {
 		}
 	}
 
-	// 提取 rows
+	// Extract rows
 	if rowsValue.Kind() != reflect.Slice {
 		return nil, false
 	}
@@ -429,17 +429,17 @@ func tryAsQueryResultReflect(data any) (*queryResultLike, bool) {
 func writeQueryResultTable(out io.Writer, cols []string, rows []map[string]any) error {
 	tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
 
-	// 表头
+	// Header
 	_, _ = fmt.Fprintln(tw, strings.Join(cols, "\t"))
 
-	// 分隔线
+	// Separator line
 	dashes := make([]string, len(cols))
 	for i, c := range cols {
 		dashes[i] = strings.Repeat("-", len(c))
 	}
 	_, _ = fmt.Fprintln(tw, strings.Join(dashes, "\t"))
 
-	// 数据行
+	// Data rows
 	for _, row := range rows {
 		vals := make([]string, len(cols))
 		for i, c := range cols {
@@ -448,7 +448,7 @@ func writeQueryResultTable(out io.Writer, cols []string, rows []map[string]any) 
 		_, _ = fmt.Fprintln(tw, strings.Join(vals, "\t"))
 	}
 
-	// 行数统计
+	// Row count
 	_, _ = fmt.Fprintf(tw, "\n(%d rows)\n", len(rows))
 
 	return tw.Flush()
@@ -462,7 +462,7 @@ func formatCellValue(v any, nullValue string) string {
 	case string:
 		return val
 	case float64:
-		// JSON 数字都是 float64
+		// JSON numbers are always float64
 		if val == float64(int64(val)) {
 			return fmt.Sprintf("%d", int64(val))
 		}
@@ -477,24 +477,24 @@ func writeCSV(out io.Writer, env Envelope) error {
 	defer cw.Flush()
 
 	if !env.OK {
-		// 错误输出
+		// Error output
 		if env.Error != nil {
 			_ = cw.Write([]string{"error", string(env.Error.Code), env.Error.Message})
 		}
 		return cw.Error()
 	}
 
-	// 尝试解析为查询结果（优先使用接口，然后反射）
+	// Try to parse as query result (prefer interface, then reflection)
 	var cols []string
 	var rows []map[string]any
 	var dataOK bool
 
-	// 先尝试 TableFormatter 接口
+	// First try the TableFormatter interface
 	if formatter, isFormatter := env.Data.(TableFormatter); isFormatter {
 		cols, rows, dataOK = formatter.ToTableData()
 	}
 
-	// 回退：使用反射
+	// Fallback: use reflection
 	if !dataOK {
 		if result, ok2 := tryAsQueryResultReflect(env.Data); ok2 {
 			cols = result.columns
@@ -503,7 +503,7 @@ func writeCSV(out io.Writer, env Envelope) error {
 		}
 	}
 
-	// 回退：使用 map 提取
+	// Fallback: extract from map
 	if !dataOK {
 		if m, ok2 := env.Data.(map[string]any); ok2 {
 			var ok3 bool
@@ -515,9 +515,9 @@ func writeCSV(out io.Writer, env Envelope) error {
 	}
 
 	if dataOK {
-		// 输出表头
+		// Write header
 		_ = cw.Write(cols)
-		// 输出数据行
+		// Write data rows
 		for _, row := range rows {
 			vals := make([]string, len(cols))
 			for i, c := range cols {
@@ -528,7 +528,7 @@ func writeCSV(out io.Writer, env Envelope) error {
 		return cw.Error()
 	}
 
-	// 默认：输出为 key,value 格式
+	// Default: output as key,value format
 	if m, ok := env.Data.(map[string]any); ok {
 		for _, k := range sortedMapKeys(m) {
 			_ = cw.Write([]string{k, fmt.Sprintf("%v", m[k])})
@@ -546,20 +546,20 @@ func sortedMapKeys(m map[string]any) []string {
 	return keys
 }
 
-// writeSchemaTable 输出 schema 表格
+// writeSchemaTable writes the schema as a table.
 func writeSchemaTable(out io.Writer, database string, tables []SchemaTable) error {
-	// 输出数据库名
+	// Output database name
 	if database != "" {
 		_, _ = fmt.Fprintf(out, "Database: %s\n\n", database)
 	}
 
-	// 遍历每个表
+	// Iterate over each table
 	for i, table := range tables {
 		if i > 0 {
-			_, _ = fmt.Fprintln(out) // 表之间空一行
+			_, _ = fmt.Fprintln(out) // Blank line between tables
 		}
 
-		// 表头
+		// Table header
 		header := table.Name
 		if table.Schema != "" && table.Schema != database {
 			header = table.Schema + "." + table.Name
@@ -569,7 +569,7 @@ func writeSchemaTable(out io.Writer, database string, tables []SchemaTable) erro
 		}
 		_, _ = fmt.Fprintf(out, "Table: %s\n", header)
 
-		// 列信息
+		// Column information
 		if len(table.Columns) > 0 {
 			_, _ = fmt.Fprintln(out, "  Columns:")
 			tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
@@ -595,7 +595,7 @@ func writeSchemaTable(out io.Writer, database string, tables []SchemaTable) erro
 		}
 	}
 
-	// 表数量统计
+	// Table count
 	suffix := "tables"
 	if len(tables) == 1 {
 		suffix = "table"
@@ -604,7 +604,7 @@ func writeSchemaTable(out io.Writer, database string, tables []SchemaTable) erro
 	return nil
 }
 
-// SchemaColumn schema 列输出的简化结构
+// SchemaColumn is a simplified structure for schema column output.
 type SchemaColumn struct {
 	Name       string
 	Type       string

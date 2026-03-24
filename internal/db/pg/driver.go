@@ -1,3 +1,4 @@
+// Package pg implements the PostgreSQL database driver.
 package pg
 
 import (
@@ -27,7 +28,7 @@ func (d *Driver) Open(ctx context.Context, opts db.ConnOptions) (*sql.DB, *error
 		dsn = buildDSN(opts)
 	}
 
-	// 使用 pgx 自定义 dialer
+	// Use pgx custom dialer
 	if opts.Dialer != nil {
 		config, err := pgx.ParseConfig(dsn)
 		if err != nil {

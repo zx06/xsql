@@ -1,24 +1,24 @@
 package errors
 
-// ExitCode 是进程退出码（稳定契约）；详见 docs/error-contract.md。
+// ExitCode represents process exit codes (stable contract); see docs/error-contract.md.
 type ExitCode int
 
 const (
 	ExitOK ExitCode = 0
 
-	// 2: 参数/配置错误
+	// 2: argument/configuration error
 	ExitConfig ExitCode = 2
 
-	// 3: 连接错误（DB/SSH）
+	// 3: connection error (DB/SSH)
 	ExitConnect ExitCode = 3
 
-	// 4: 只读策略拦截写入
+	// 4: read-only policy blocked a write
 	ExitReadOnly ExitCode = 4
 
-	// 5: DB 执行错误
+	// 5: DB execution error
 	ExitDBExec ExitCode = 5
 
-	// 10: 内部错误
+	// 10: internal error
 	ExitInternal ExitCode = 10
 )
 

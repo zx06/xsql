@@ -1,3 +1,4 @@
+// Package mysql implements the MySQL database driver.
 package mysql
 
 import (

@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/zx06/xsql/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/zx06/xsql/actions/workflows/ci.yml?query=branch%3Amain)
 [![codecov](https://codecov.io/github/zx06/xsql/graph/badge.svg?token=LrcR0pifCj)](https://codecov.io/github/zx06/xsql)
+[![Go Reference](https://pkg.go.dev/badge/github.com/zx06/xsql.svg)](https://pkg.go.dev/github.com/zx06/xsql)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/zx06/xsql)](https://github.com/zx06/xsql/blob/main/go.mod)
 [![Go Report Card](https://goreportcard.com/badge/github.com/zx06/xsql)](https://goreportcard.com/report/github.com/zx06/xsql)
 [![License](https://img.shields.io/github/license/zx06/xsql)](https://github.com/zx06/xsql/blob/main/LICENSE)
@@ -10,28 +11,30 @@
 [![npm](https://img.shields.io/npm/v/xsql-cli)](https://www.npmjs.com/package/xsql-cli)
 [![npm downloads](https://img.shields.io/npm/dm/xsql-cli)](https://www.npmjs.com/package/xsql-cli)
 
-**让 AI 安全地查询你的数据库** 🤖🔒
+**Let AI safely query your databases** 🤖🔒
 
-xsql 是专为 AI Agent 设计的跨数据库 CLI 工具。默认只读、结构化输出、开箱即用。
+[中文文档](README_zh.md)
+
+xsql is a cross-database CLI tool designed for AI agents. Read-only by default, structured output, ready out of the box.
 
 ```bash
-# AI 可以这样查询你的数据库
+# AI can query your database like this
 xsql query "SELECT * FROM users WHERE created_at > '2024-01-01'" -p prod -f json
 ```
 
-## ✨ 为什么选择 xsql？
+## ✨ Why xsql?
 
-| 特性 | 说明 |
-|------|------|
-| 🔒 **默认安全** | 双重只读保护，防止 AI 误操作 |
-| 🤖 **AI-first** | JSON 结构化输出，便于 AI 解析 |
-| 🔑 **密钥安全** | 集成 OS Keyring，密码不落盘 |
-| 🌐 **SSH 隧道** | 一行配置连接内网数据库 |
-| 📦 **零依赖** | 单二进制文件，开箱即用 |
+| Feature | Description |
+|---------|-------------|
+| 🔒 **Safe by Default** | Dual-layer read-only protection prevents accidental writes by AI |
+| 🤖 **AI-first** | JSON structured output designed for machine consumption |
+| 🔑 **Secure Credentials** | OS Keyring integration — passwords never touch disk |
+| 🌐 **SSH Tunneling** | One-line config to connect to internal databases |
+| 📦 **Zero Dependencies** | Single binary, works out of the box |
 
-## 🚀 30 秒上手
+## 🚀 Quick Start
 
-### 1. 安装
+### 1. Install
 
 ```bash
 # macOS
@@ -43,10 +46,10 @@ scoop bucket add zx06 https://github.com/zx06/scoop-bucket && scoop install xsql
 # npm / npx
 npm install -g xsql-cli
 
-# 或直接下载: https://github.com/zx06/xsql/releases
+# Or download directly: https://github.com/zx06/xsql/releases
 ```
 
-### 2. 配置
+### 2. Configure
 
 ```bash
 mkdir -p ~/.config/xsql
@@ -59,11 +62,11 @@ profiles:
     user: root
     password: your_password
     database: mydb
-    allow_plaintext: true  # 生产环境建议用 keyring
+    allow_plaintext: true  # Use keyring for production
 EOF
 ```
 
-### 3. 使用
+### 3. Use
 
 ```bash
 xsql query "SELECT 1" -p dev -f json
@@ -72,58 +75,58 @@ xsql query "SELECT 1" -p dev -f json
 
 ---
 
-## 🤖 让 AI 使用 xsql
+## 🤖 Let AI Use xsql
 
-### 方式一：Claude Code Plugin（推荐）
+### Option 1: Claude Code Plugin (Recommended)
 
 ```bash
-# 1. 添加 marketplace
+# 1. Add marketplace
 /plugin marketplace add zx06/xsql
 
-# 2. 安装插件
+# 2. Install plugin
 /plugin install xsql@xsql
 ```
 
-安装后 Claude 自动获得 xsql 技能，可直接查询数据库。
+After installation, Claude automatically gains xsql skills and can query databases directly.
 
-### 方式二：复制 Skill 给任意 AI
+### Option 2: Copy Skill Prompt to Any AI
 
-将以下内容发送给你的 AI 助手（ChatGPT/Claude/Cursor 等）：
+Send the following to your AI assistant (ChatGPT/Claude/Cursor, etc.):
 
 <details>
-<summary>📋 点击展开 AI Skill Prompt（复制即用）</summary>
+<summary>📋 Click to expand AI Skill Prompt (copy & paste)</summary>
 
 ```
-你现在可以使用 xsql 工具查询数据库。
+You can now use the xsql tool to query databases.
 
-## 基本用法
+## Basic Usage
 xsql query "<SQL>" -p <profile> -f json
 
-## 可用命令
-- xsql query "SQL" -p <profile> -f json  # 执行查询
-- xsql schema dump -p <profile> -f json  # 导出数据库结构
-- xsql profile list -f json               # 列出所有 profile
-- xsql profile show <name> -f json        # 查看 profile 详情
+## Available Commands
+- xsql query "SQL" -p <profile> -f json  # Execute query
+- xsql schema dump -p <profile> -f json  # Export database schema
+- xsql profile list -f json               # List all profiles
+- xsql profile show <name> -f json        # Show profile details
 
-## 输出格式
-成功: {"ok":true,"schema_version":1,"data":{"columns":[...],"rows":[...]}}
-失败: {"ok":false,"schema_version":1,"error":{"code":"XSQL_...","message":"..."}}
+## Output Format
+Success: {"ok":true,"schema_version":1,"data":{"columns":[...],"rows":[...]}}
+Failure: {"ok":false,"schema_version":1,"error":{"code":"XSQL_...","message":"..."}}
 
-## 重要规则
-1. 默认只读模式，无法执行 INSERT/UPDATE/DELETE
-2. 始终使用 -f json 获取结构化输出
-3. 先用 profile list 查看可用的数据库配置
-4. 检查 ok 字段判断执行是否成功
+## Important Rules
+1. Read-only mode by default — cannot execute INSERT/UPDATE/DELETE
+2. Always use -f json for structured output
+3. Use profile list to see available database configurations
+4. Check the ok field to determine execution success
 
-## 退出码
-0=成功, 2=配置错误, 3=连接错误, 4=只读拦截, 5=SQL执行错误
+## Exit Codes
+0=success, 2=config error, 3=connection error, 4=read-only violation, 5=SQL execution error
 ```
 
 </details>
 
-### 方式三：MCP Server（Claude Desktop 等）
+### Option 3: MCP Server (Claude Desktop, etc.)
 
-在 Claude Desktop 配置中添加 xsql MCP server：
+Add the xsql MCP server to your Claude Desktop configuration:
 
 ```json
 {
@@ -136,47 +139,47 @@ xsql query "<SQL>" -p <profile> -f json
 }
 ```
 
-启动后，Claude 可以直接通过 MCP 协议查询数据库。
+Once started, Claude can query databases directly via the MCP protocol.
 
-### 方式四：AGENTS.md / Rules（Cursor/Windsurf）
+### Option 4: AGENTS.md / Rules (Cursor/Windsurf)
 
-在项目根目录创建 `.cursor/rules` 或编辑 `AGENTS.md`：
+Create `.cursor/rules` or edit `AGENTS.md` in your project root:
 
 ```markdown
-## 数据库查询
+## Database Queries
 
-使用 xsql 工具查询数据库：
-- 查询: `xsql query "SELECT ..." -p <profile> -f json`
-- 导出结构: `xsql schema dump -p <profile> -f json`
-- 列出配置: `xsql profile list -f json`
+Use xsql to query databases:
+- Query: `xsql query "SELECT ..." -p <profile> -f json`
+- Export schema: `xsql schema dump -p <profile> -f json`
+- List profiles: `xsql profile list -f json`
 
-注意: 默认只读模式，写操作需要 --unsafe-allow-write 标志。
+Note: Read-only mode by default. Write operations require the --unsafe-allow-write flag.
 ```
 
 ---
 
-## 📖 功能详情
+## 📖 Features
 
-### 命令一览
+### Command Reference
 
-| 命令 | 说明 |
-|------|------|
-| `xsql query <SQL>` | 执行 SQL 查询（默认只读） |
-| `xsql schema dump` | 导出数据库结构（表、列、索引、外键） |
-| `xsql profile list` | 列出所有 profile |
-| `xsql profile show <name>` | 查看 profile 详情（密码脱敏） |
-| `xsql mcp server` | 启动 MCP Server（AI 助手集成） |
-| `xsql spec` | 导出 AI Tool Spec（支持 `--format yaml`） |
-| `xsql version` | 显示版本信息 |
+| Command | Description |
+|---------|-------------|
+| `xsql query <SQL>` | Execute SQL queries (read-only by default) |
+| `xsql schema dump` | Export database schema (tables, columns, indexes, foreign keys) |
+| `xsql profile list` | List all profiles |
+| `xsql profile show <name>` | Show profile details (passwords are masked) |
+| `xsql mcp server` | Start MCP Server (AI assistant integration) |
+| `xsql spec` | Export AI Tool Spec (supports `--format yaml`) |
+| `xsql version` | Show version information |
 
-### 输出格式
+### Output Formats
 
 ```bash
-# JSON（AI/程序）
+# JSON (for AI/programs)
 xsql query "SELECT id, name FROM users" -p dev -f json
 {"ok":true,"schema_version":1,"data":{"columns":["id","name"],"rows":[{"id":1,"name":"Alice"}]}}
 
-# Table（终端）
+# Table (for terminals)
 xsql query "SELECT id, name FROM users" -p dev -f table
 id  name
 --  -----
@@ -185,16 +188,16 @@ id  name
 (1 rows)
 ```
 
-### Schema 发现（AI 自动理解数据库）
+### Schema Discovery (AI auto-understands your database)
 
 ```bash
-# 导出数据库结构（供 AI 理解表结构）
+# Export database schema (for AI to understand table structures)
 xsql schema dump -p dev -f json
 
-# 过滤特定表
+# Filter specific tables
 xsql schema dump -p dev --table "user*" -f json
 
-# 输出示例
+# Example output
 {
   "ok": true,
   "data": {
@@ -212,7 +215,7 @@ xsql schema dump -p dev --table "user*" -f json
 }
 ```
 
-### SSH 隧道连接
+### SSH Tunnel Connection
 
 ```yaml
 ssh_proxies:
@@ -224,48 +227,48 @@ ssh_proxies:
 profiles:
   prod:
     db: pg
-    host: db.internal  # 内网地址
+    host: db.internal  # Internal network address
     port: 5432
     user: readonly
     password: "keyring:prod/password"
     database: mydb
-    ssh_proxy: bastion  # 引用 SSH 代理
+    ssh_proxy: bastion  # Reference SSH proxy
 ```
 
-### 端口转发代理（xsql proxy）
+### Port Forwarding Proxy (xsql proxy)
 
-当需要传统的 `ssh -L` 行为或希望暴露本地端口给 GUI 客户端时，可以使用 `xsql proxy`：
+When you need traditional `ssh -L` behavior or want to expose a local port for GUI clients, use `xsql proxy`:
 
 ```bash
-# 启动端口转发（自动分配本地端口）
+# Start port forwarding (auto-assign local port)
 xsql proxy -p prod
 
-# 指定本地端口
+# Specify local port
 xsql proxy -p prod --local-port 13306
 ```
 
-> 该命令要求 profile 配置 `ssh_proxy`，并会在本地监听端口，将流量转发到目标数据库。
+> This command requires the profile to have `ssh_proxy` configured. It listens on a local port and forwards traffic to the target database.
 
-### 安全特性
+### Security Features
 
-- **双重只读保护**：SQL 静态分析 + 数据库事务级只读
-- **Keyring 集成**：`password: "keyring:prod/password"`
-- **密码脱敏**：`profile show` 不泄露密码
-- **SSH 安全**：默认验证 known_hosts
+- **Dual-layer Read-only Protection**: SQL static analysis + database transaction-level read-only
+- **Keyring Integration**: `password: "keyring:prod/password"`
+- **Password Masking**: `profile show` never exposes passwords
+- **SSH Security**: known_hosts verification enabled by default
 
 ---
 
-## 📚 文档
+## 📚 Documentation
 
-| 文档 | 说明 |
-|------|------|
-| [CLI 规范](docs/cli-spec.md) | 命令行接口详细说明 |
-| [配置指南](docs/config.md) | 配置文件格式和选项 |
-| [SSH 代理](docs/ssh-proxy.md) | SSH 隧道配置 |
-| [错误处理](docs/error-contract.md) | 错误码和退出码 |
-| [AI 集成](docs/ai.md) | MCP Server 和 AI 助手集成 |
-| [RFC 文档](docs/rfcs/) | 设计变更记录 |
-| [开发指南](docs/dev.md) | 贡献和开发说明 |
+| Document | Description |
+|----------|-------------|
+| [CLI Specification](docs/cli-spec.md) | Detailed CLI interface reference |
+| [Configuration Guide](docs/config.md) | Config file format and options |
+| [SSH Proxy](docs/ssh-proxy.md) | SSH tunnel configuration |
+| [Error Handling](docs/error-contract.md) | Error codes and exit codes |
+| [AI Integration](docs/ai.md) | MCP Server and AI assistant integration |
+| [RFC Documents](docs/rfcs/) | Design change records |
+| [Development Guide](docs/dev.md) | Contributing and development notes |
 
 ---
 

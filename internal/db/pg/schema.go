@@ -9,47 +9,47 @@ import (
 	"github.com/zx06/xsql/internal/errors"
 )
 
-// DumpSchema 导出 PostgreSQL 数据库结构
+// DumpSchema exports the PostgreSQL database schema.
 func (d *Driver) DumpSchema(ctx context.Context, conn *sql.DB, opts db.SchemaOptions) (*db.SchemaInfo, *errors.XError) {
 	info := &db.SchemaInfo{}
 
-	// 获取当前数据库名
+	// Get the current database name
 	var database string
 	if err := conn.QueryRowContext(ctx, "SELECT current_database()").Scan(&database); err != nil {
 		return nil, errors.Wrap(errors.CodeDBExecFailed, "failed to get database name", nil, err)
 	}
 	info.Database = database
 
-	// 获取 schema 列表（排除系统 schema）
+	// Get schema list (excluding system schemas)
 	schemas, xe := d.listSchemas(ctx, conn, opts)
 	if xe != nil {
 		return nil, xe
 	}
 
-	// 获取每个 schema 下的表
+	// Get tables under each schema
 	for _, schema := range schemas {
 		tables, xe := d.listTables(ctx, conn, schema, opts)
 		if xe != nil {
 			return nil, xe
 		}
 
-		// 获取每个表的详细信息
+		// Get detailed information for each table
 		for _, table := range tables {
-			// 获取列信息
+			// Get column information
 			columns, xe := d.getColumns(ctx, conn, schema, table.Name)
 			if xe != nil {
 				return nil, xe
 			}
 			table.Columns = columns
 
-			// 获取索引信息
+			// Get index information
 			indexes, xe := d.getIndexes(ctx, conn, schema, table.Name)
 			if xe != nil {
 				return nil, xe
 			}
 			table.Indexes = indexes
 
-			// 获取外键信息
+			// Get foreign key information
 			fks, xe := d.getForeignKeys(ctx, conn, schema, table.Name)
 			if xe != nil {
 				return nil, xe
@@ -63,7 +63,7 @@ func (d *Driver) DumpSchema(ctx context.Context, conn *sql.DB, opts db.SchemaOpt
 	return info, nil
 }
 
-// listSchemas 获取 schema 列表
+// listSchemas retrieves the list of schemas.
 func (d *Driver) listSchemas(ctx context.Context, conn *sql.DB, opts db.SchemaOptions) ([]string, *errors.XError) {
 	query := `
 		SELECT schema_name
@@ -72,7 +72,7 @@ func (d *Driver) listSchemas(ctx context.Context, conn *sql.DB, opts db.SchemaOp
 	`
 
 	if !opts.IncludeSystem {
-		// 排除更多系统 schema
+		// Exclude additional system schemas
 		query += " AND schema_name NOT LIKE 'pg_%'"
 	}
 
@@ -100,7 +100,7 @@ func (d *Driver) listSchemas(ctx context.Context, conn *sql.DB, opts db.SchemaOp
 	return schemas, nil
 }
 
-// listTables 获取表列表
+// listTables retrieves the list of tables.
 func (d *Driver) listTables(ctx context.Context, conn *sql.DB, schema string, opts db.SchemaOptions) ([]db.Table, *errors.XError) {
 	query := `
 		SELECT
@@ -111,9 +111,9 @@ func (d *Driver) listTables(ctx context.Context, conn *sql.DB, schema string, op
 	`
 	args := []any{schema}
 
-	// 表名过滤
+	// Table name filter
 	if opts.TablePattern != "" {
-		// 将通配符 * 和 ? 转换为 SQL LIKE 模式
+		// Convert wildcards * and ? to SQL LIKE patterns
 		likePattern := strings.ReplaceAll(opts.TablePattern, "*", "%")
 		likePattern = strings.ReplaceAll(likePattern, "?", "_")
 		query += " AND t.table_name LIKE $2"
@@ -149,7 +149,7 @@ func (d *Driver) listTables(ctx context.Context, conn *sql.DB, schema string, op
 	return tables, nil
 }
 
-// getColumns 获取表的列信息
+// getColumns retrieves column information for a table.
 func (d *Driver) getColumns(ctx context.Context, conn *sql.DB, schema, tableName string) ([]db.Column, *errors.XError) {
 	query := `
 		SELECT
@@ -220,7 +220,7 @@ func (d *Driver) getColumns(ctx context.Context, conn *sql.DB, schema, tableName
 	return columns, nil
 }
 
-// getIndexes 获取表的索引信息
+// getIndexes retrieves index information for a table.
 func (d *Driver) getIndexes(ctx context.Context, conn *sql.DB, schema, tableName string) ([]db.Index, *errors.XError) {
 	query := `
 		SELECT
@@ -244,7 +244,7 @@ func (d *Driver) getIndexes(ctx context.Context, conn *sql.DB, schema, tableName
 	}
 	defer rows.Close()
 
-	// 按 index_name 分组
+	// Group by index_name
 	indexMap := make(map[string]*db.Index)
 	for rows.Next() {
 		var indexName, columnName string
@@ -270,7 +270,7 @@ func (d *Driver) getIndexes(ctx context.Context, conn *sql.DB, schema, tableName
 		return nil, errors.Wrap(errors.CodeDBExecFailed, "rows iteration error", nil, err)
 	}
 
-	// 转换为切片
+	// Convert to slice
 	indexes := make([]db.Index, 0, len(indexMap))
 	for _, idx := range indexMap {
 		indexes = append(indexes, *idx)
@@ -279,7 +279,7 @@ func (d *Driver) getIndexes(ctx context.Context, conn *sql.DB, schema, tableName
 	return indexes, nil
 }
 
-// getForeignKeys 获取表的外键信息
+// getForeignKeys retrieves foreign key information for a table.
 func (d *Driver) getForeignKeys(ctx context.Context, conn *sql.DB, schema, tableName string) ([]db.ForeignKey, *errors.XError) {
 	query := `
 		SELECT
@@ -307,7 +307,7 @@ func (d *Driver) getForeignKeys(ctx context.Context, conn *sql.DB, schema, table
 	}
 	defer rows.Close()
 
-	// 按 constraint_name 分组
+	// Group by constraint_name
 	fkMap := make(map[string]*db.ForeignKey)
 	for rows.Next() {
 		var constraintName, columnName, refTable, refColumn string
@@ -333,7 +333,7 @@ func (d *Driver) getForeignKeys(ctx context.Context, conn *sql.DB, schema, table
 		return nil, errors.Wrap(errors.CodeDBExecFailed, "rows iteration error", nil, err)
 	}
 
-	// 转换为切片
+	// Convert to slice
 	fks := make([]db.ForeignKey, 0, len(fkMap))
 	for _, fk := range fkMap {
 		fks = append(fks, *fk)

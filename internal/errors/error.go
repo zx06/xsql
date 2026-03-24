@@ -1,3 +1,4 @@
+// Package errors provides structured error types, error codes, and exit codes for xsql.
 package errors
 
 import (
@@ -5,7 +6,7 @@ import (
 	"fmt"
 )
 
-// XError 是结构化错误，满足 docs/error-contract.md。
+// XError is a structured error that conforms to docs/error-contract.md.
 type XError struct {
 	Code    Code           `json:"code" yaml:"code"`
 	Message string         `json:"message" yaml:"message"`
