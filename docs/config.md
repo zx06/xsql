@@ -76,6 +76,7 @@ profiles:
     user: app_readonly
     password: "keyring:prod/mysql_password"
     database: myapp_prod
+    local_port: 13306  # proxy 本地端口（可选）
     ssh_proxy: bastion  # 引用预定义的 SSH 代理
 
   # 另一个使用同一 SSH 代理的数据库
@@ -130,6 +131,7 @@ profiles:
 | `unsafe_allow_write` | bool | 允许写操作，绕过只读保护（默认 false） |
 | `allow_plaintext` | bool | 允许明文密码（默认 false） |
 | `format` | string | 输出格式：json/yaml/table/csv/auto |
+| `local_port` | int | proxy 本地监听端口（默认 0，自动分配） |
 | `ssh_proxy` | string | SSH 代理名称（引用 `ssh_proxies` 中定义的名称） |
 
 ## Secrets

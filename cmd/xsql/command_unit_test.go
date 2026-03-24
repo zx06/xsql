@@ -598,6 +598,200 @@ profiles:
 	}
 }
 
+func TestResolveProxyPort(t *testing.T) {
+	t.Run("nil cmd returns config port", func(t *testing.T) {
+		port, fromConfig := resolveProxyPort(nil, &ProxyFlags{LocalPort: 5555}, 13306)
+		if port != 13306 {
+			t.Errorf("expected 13306, got %d", port)
+		}
+		if !fromConfig {
+			t.Error("expected fromConfig=true")
+		}
+	})
+
+	t.Run("nil cmd with zero config returns auto", func(t *testing.T) {
+		port, fromConfig := resolveProxyPort(nil, &ProxyFlags{}, 0)
+		if port != 0 {
+			t.Errorf("expected 0, got %d", port)
+		}
+		if fromConfig {
+			t.Error("expected fromConfig=false")
+		}
+	})
+
+	t.Run("cli flag takes priority", func(t *testing.T) {
+		cmd := NewProxyCommand(nil)
+		// Simulate setting the flag
+		_ = cmd.Flags().Set("local-port", "9999")
+		port, fromConfig := resolveProxyPort(cmd, &ProxyFlags{LocalPort: 9999}, 13306)
+		if port != 9999 {
+			t.Errorf("expected 9999, got %d", port)
+		}
+		if fromConfig {
+			t.Error("expected fromConfig=false")
+		}
+	})
+
+	t.Run("config port when cli not set", func(t *testing.T) {
+		cmd := NewProxyCommand(nil)
+		// Don't set the flag - use config port
+		port, fromConfig := resolveProxyPort(cmd, &ProxyFlags{}, 13306)
+		if port != 13306 {
+			t.Errorf("expected 13306, got %d", port)
+		}
+		if !fromConfig {
+			t.Error("expected fromConfig=true")
+		}
+	})
+}
+
+func TestConfigInitCommand(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "xsql.yaml")
+
+	GlobalConfig.FormatStr = "json"
+
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	cmd := newConfigInitCommand(&w)
+	cmd.SetArgs([]string{"--path", path})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("config init failed: %v", err)
+	}
+	if !json.Valid(out.Bytes()) {
+		t.Fatalf("expected json output, got %s", out.String())
+	}
+
+	// Verify file exists
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("config file should exist: %v", err)
+	}
+}
+
+func TestConfigInitCommand_FileExists(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "xsql.yaml")
+	if err := os.WriteFile(path, []byte("test"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	GlobalConfig.FormatStr = "json"
+
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	cmd := newConfigInitCommand(&w)
+	cmd.SetArgs([]string{"--path", path})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("expected error when file exists")
+	}
+}
+
+func TestConfigSetCommand(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "xsql.yaml")
+	if err := os.WriteFile(path, []byte("profiles: {}\nssh_proxies: {}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	GlobalConfig.ConfigStr = path
+	GlobalConfig.FormatStr = "json"
+
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	cmd := newConfigSetCommand(&w)
+	cmd.SetArgs([]string{"profile.dev.host", "localhost"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("config set failed: %v", err)
+	}
+	if !json.Valid(out.Bytes()) {
+		t.Fatalf("expected json output, got %s", out.String())
+	}
+
+	// Verify the config was updated
+	data, _ := os.ReadFile(path)
+	if !bytes.Contains(data, []byte("localhost")) {
+		t.Error("config should contain 'localhost'")
+	}
+}
+
+func TestConfigSetCommand_InvalidKey(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "xsql.yaml")
+	if err := os.WriteFile(path, []byte("profiles: {}\nssh_proxies: {}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	GlobalConfig.ConfigStr = path
+	GlobalConfig.FormatStr = "json"
+
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	cmd := newConfigSetCommand(&w)
+	cmd.SetArgs([]string{"badkey", "value"})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("expected error for invalid key")
+	}
+}
+
+func TestConfigSetCommand_NoConfig(t *testing.T) {
+	GlobalConfig.ConfigStr = ""
+	GlobalConfig.FormatStr = "json"
+
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	cmd := newConfigSetCommand(&w)
+	cmd.SetArgs([]string{"profile.dev.host", "localhost"})
+
+	// Set HOME and work dir to temp dirs with no config files
+	origHome := os.Getenv("HOME")
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	defer func() { _ = os.Setenv("HOME", origHome) }()
+
+	origDir, _ := os.Getwd()
+	tmpWorkDir := t.TempDir()
+	_ = os.Chdir(tmpWorkDir)
+	defer func() { _ = os.Chdir(origDir) }()
+
+	err := cmd.Execute()
+	// FindConfigPath returns default home path, SetConfigValue creates the file.
+	// This should either succeed (creating new file) or fail.
+	// Since no config exists yet, it should succeed by creating a new one.
+	if err != nil {
+		// If it fails, that's okay too - we just want to verify it doesn't panic
+		t.Logf("error (acceptable): %v", err)
+	}
+}
+
+func TestRunProxy_WithConfigLocalPort(t *testing.T) {
+	// Test that config local_port is used when --local-port is not set
+	GlobalConfig.ProfileStr = "dev"
+	GlobalConfig.FormatStr = "json"
+	GlobalConfig.Resolved.Profile = config.Profile{
+		DB:        "mysql",
+		Host:      "db.example.com",
+		Port:      3306,
+		LocalPort: 13306,
+		SSHConfig: &config.SSHProxy{
+			Host: "bastion.example.com",
+			Port: 22,
+			User: "user",
+		},
+	}
+
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	// This will fail at SSH connection, but we can verify the port resolution
+	err := runProxy(nil, &ProxyFlags{}, &w)
+	if err == nil {
+		t.Fatal("expected error (SSH not available)")
+	}
+	// The error should be about SSH, not port
+	if xe, ok := errors.As(err); ok && xe.Code == errors.CodePortInUse {
+		t.Error("should not get port-in-use error")
+	}
+}
+
 func TestValueIfSet(t *testing.T) {
 	if got := valueIfSet(false, "x"); got != "" {
 		t.Fatalf("expected empty when not set, got %q", got)

@@ -39,6 +39,9 @@ type Profile struct {
 	// SSH proxy 引用（引用 ssh_proxies 中定义的名称）
 	SSHProxy string `yaml:"ssh_proxy"`
 
+	// Proxy 本地端口（用于 xsql proxy 命令）
+	LocalPort int `yaml:"local_port"`
+
 	// 解析后的 SSH 配置（由 Resolve 填充，不从 YAML 读取）
 	SSHConfig *SSHProxy `yaml:"-"`
 }

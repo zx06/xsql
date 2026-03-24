@@ -1,14 +1,17 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/zx06/xsql/internal/app"
 	"github.com/zx06/xsql/internal/errors"
@@ -44,6 +47,49 @@ func NewProxyCommand(w *output.Writer) *cobra.Command {
 	return cmd
 }
 
+// resolveProxyPort determines the port to use with the following priority:
+// CLI --local-port > profile.local_port > 0 (auto)
+// Returns the port and whether it came from config (for conflict handling).
+func resolveProxyPort(cmd *cobra.Command, flags *ProxyFlags, profileLocalPort int) (port int, fromConfig bool) {
+	if cmd != nil && cmd.Flags().Changed("local-port") {
+		return flags.LocalPort, false
+	}
+	if profileLocalPort > 0 {
+		return profileLocalPort, true
+	}
+	return 0, false
+}
+
+// handlePortConflict handles a port conflict when the port comes from config.
+// In TTY mode, prompts the user to choose random port or quit.
+// In non-TTY mode, returns an error.
+func handlePortConflict(port int, host string) (int, *errors.XError) {
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return 0, errors.New(errors.CodePortInUse, "configured port is already in use",
+			map[string]any{"port": port, "host": host})
+	}
+
+	fmt.Fprintf(os.Stderr, "⚠ Port %d is already in use.\n", port)
+	fmt.Fprintf(os.Stderr, "  [R] Use a random port\n")
+	fmt.Fprintf(os.Stderr, "  [Q] Quit\n")
+	fmt.Fprintf(os.Stderr, "Choice [R/Q]: ")
+
+	reader := bufio.NewReader(os.Stdin)
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(strings.ToLower(input))
+
+	switch input {
+	case "r", "":
+		return 0, nil // 0 means auto-assign
+	case "q":
+		return 0, errors.New(errors.CodePortInUse, "user chose to quit due to port conflict",
+			map[string]any{"port": port})
+	default:
+		return 0, errors.New(errors.CodePortInUse, "user chose to quit due to port conflict",
+			map[string]any{"port": port})
+	}
+}
+
 // runProxy executes the proxy command
 func runProxy(cmd *cobra.Command, flags *ProxyFlags, w *output.Writer) error {
 	if GlobalConfig.ProfileStr == "" {
@@ -62,6 +108,22 @@ func runProxy(cmd *cobra.Command, flags *ProxyFlags, w *output.Writer) error {
 
 	if p.SSHConfig == nil {
 		return errors.New(errors.CodeCfgInvalid, "profile must have ssh_proxy configured for port forwarding", nil)
+	}
+
+	// Resolve port: CLI > config local_port > 0 (auto)
+	localPort, fromConfig := resolveProxyPort(cmd, flags, p.LocalPort)
+
+	// Check for port conflict if a specific port is configured
+	if localPort > 0 && !proxy.IsPortAvailable(flags.LocalHost, localPort) {
+		if fromConfig {
+			// Port from config: offer interactive choice
+			newPort, xe := handlePortConflict(localPort, flags.LocalHost)
+			if xe != nil {
+				return xe
+			}
+			localPort = newPort
+		}
+		// If port from CLI flag, let proxy.Start handle the error naturally
 	}
 
 	allowPlaintext := flags.AllowPlaintext || p.AllowPlaintext
@@ -83,7 +145,7 @@ func runProxy(cmd *cobra.Command, flags *ProxyFlags, w *output.Writer) error {
 
 	proxyOpts := proxy.Options{
 		LocalHost:  flags.LocalHost,
-		LocalPort:  flags.LocalPort,
+		LocalPort:  localPort,
 		RemoteHost: p.Host,
 		RemotePort: p.Port,
 		Dialer:     sshClient,

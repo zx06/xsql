@@ -20,6 +20,7 @@ func TestExitCodeFor(t *testing.T) {
 		{CodeDBAuthFailed, ExitConnect},
 		{CodeDBDriverUnsupported, ExitConnect},
 		{CodeROBlocked, ExitReadOnly},
+		{CodePortInUse, ExitInternal},
 		{CodeDBExecFailed, ExitDBExec},
 		{CodeInternal, ExitInternal},
 		{Code("UNKNOWN_CODE"), ExitInternal}, // unknown code
@@ -101,8 +102,8 @@ func TestAs(t *testing.T) {
 
 func TestAllCodes(t *testing.T) {
 	codes := AllCodes()
-	if len(codes) != 12 {
-		t.Errorf("AllCodes() should return 12 codes, got %d", len(codes))
+	if len(codes) != 13 {
+		t.Errorf("AllCodes() should return 13 codes, got %d", len(codes))
 	}
 
 	// Check for duplicates

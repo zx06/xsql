@@ -24,6 +24,9 @@ const (
 	// Read-only policy
 	CodeROBlocked Code = "XSQL_RO_BLOCKED"
 
+	// Port
+	CodePortInUse Code = "XSQL_PORT_IN_USE"
+
 	// Internal
 	CodeInternal Code = "XSQL_INTERNAL"
 )
@@ -41,6 +44,7 @@ func AllCodes() []Code {
 		CodeDBAuthFailed,
 		CodeDBExecFailed,
 		CodeROBlocked,
+		CodePortInUse,
 		CodeInternal,
 	}
 }
