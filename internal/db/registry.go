@@ -1,3 +1,4 @@
+// Package db provides the database driver registry and query execution engine.
 package db
 
 import (
@@ -9,27 +10,27 @@ import (
 	"github.com/zx06/xsql/internal/errors"
 )
 
-// Dialer 用于自定义网络连接（如 SSH tunnel）。
+// Dialer is used for custom network connections (e.g. SSH tunnel).
 type Dialer interface {
 	DialContext(ctx context.Context, network, addr string) (net.Conn, error)
 }
 
-// Driver 是数据库驱动的最小抽象。
+// Driver is the minimal abstraction for a database driver.
 type Driver interface {
-	// Open 返回 *sql.DB；由具体 driver 实现连接参数解析。
+	// Open returns a *sql.DB; connection parameter parsing is handled by each driver.
 	Open(ctx context.Context, opts ConnOptions) (*sql.DB, *errors.XError)
 }
 
-// ConnOptions 是通用连接参数（由 config/CLI/ENV 合并而来）。
+// ConnOptions holds common connection parameters (merged from config/CLI/ENV).
 type ConnOptions struct {
-	DSN      string // 原生 DSN（优先级最高）
+	DSN      string // Raw DSN (highest priority)
 	Host     string
 	Port     int
 	User     string
 	Password string
 	Database string
-	Params   map[string]string // 额外参数
-	Dialer   Dialer            // 自定义 dialer（如 SSH tunnel）
+	Params   map[string]string // Extra parameters
+	Dialer   Dialer            // Custom dialer (e.g. SSH tunnel)
 	// RegisterCloseHook allows drivers to register cleanup callbacks that should run
 	// when the owning connection is closed or setup fails.
 	RegisterCloseHook func(fn func())

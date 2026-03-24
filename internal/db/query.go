@@ -7,13 +7,13 @@ import (
 	"github.com/zx06/xsql/internal/errors"
 )
 
-// QueryResult 是通用查询结果。
+// QueryResult represents a generic query result.
 type QueryResult struct {
 	Columns []string         `json:"columns" yaml:"columns"`
 	Rows    []map[string]any `json:"rows" yaml:"rows"`
 }
 
-// ToTableData 实现 output.TableFormatter 接口，支持无 JSON 编解码的表格输出。
+// ToTableData implements the output.TableFormatter interface for table output without JSON encoding/decoding.
 func (r *QueryResult) ToTableData() (columns []string, rows []map[string]any, ok bool) {
 	if r == nil {
 		return nil, nil, false
@@ -21,40 +21,40 @@ func (r *QueryResult) ToTableData() (columns []string, rows []map[string]any, ok
 	return r.Columns, r.Rows, true
 }
 
-// QueryOptions 包含查询执行的选项。
+// QueryOptions contains options for query execution.
 type QueryOptions struct {
-	UnsafeAllowWrite bool   // 允许写操作（绕过只读保护）
-	DBType           string // 数据库类型：mysql 或 pg
+	UnsafeAllowWrite bool   // Allow write operations (bypass read-only protection)
+	DBType           string // Database type: mysql or pg
 }
 
-// Query 执行 SQL 查询并返回结果。
-// 当 opts.UnsafeAllowWrite=false 时，会启用双重只读保护：
-// 1. SQL 语句静态分析（客户端）
-// 2. 数据库事务级只读模式（服务端）
-// 当 opts.UnsafeAllowWrite=true 时，绕过所有只读保护。
+// Query executes a SQL query and returns the result.
+// When opts.UnsafeAllowWrite is false, dual read-only protection is enabled:
+// 1. SQL statement static analysis (client-side)
+// 2. Database transaction-level read-only mode (server-side)
+// When opts.UnsafeAllowWrite is true, all read-only protections are bypassed.
 func Query(ctx context.Context, db *sql.DB, query string, opts QueryOptions) (*QueryResult, *errors.XError) {
-	// UnsafeAllowWrite 绕过所有只读保护
+	// UnsafeAllowWrite bypasses all read-only protections
 	if opts.UnsafeAllowWrite {
 		return executeQuery(ctx, db, query)
 	}
 
-	// 默认启用双重只读保护
-	// 第一层保护：SQL 静态分析
+	// Enable dual read-only protection by default
+	// First layer: SQL static analysis
 	if xe := EnforceReadOnly(query, false); xe != nil {
 		return nil, xe
 	}
-	// 第二层保护：数据库事务级只读
+	// Second layer: database transaction-level read-only
 	return queryWithReadOnlyTx(ctx, db, query, opts.DBType)
 }
 
-// queryWithReadOnlyTx 在只读事务中执行查询。
+// queryWithReadOnlyTx executes a query within a read-only transaction.
 func queryWithReadOnlyTx(ctx context.Context, db *sql.DB, query string, dbType string) (*QueryResult, *errors.XError) {
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, errors.Wrap(errors.CodeDBExecFailed, "failed to begin read-only transaction", nil, err)
 	}
 	defer func() {
-		// 只读事务无需 commit，直接 rollback
+		// Read-only transaction needs no commit; just rollback
 		_ = tx.Rollback()
 	}()
 
@@ -67,7 +67,7 @@ func queryWithReadOnlyTx(ctx context.Context, db *sql.DB, query string, dbType s
 	return scanRows(rows)
 }
 
-// executeQuery 直接执行查询（不使用事务）。
+// executeQuery executes a query directly (without a transaction).
 func executeQuery(ctx context.Context, db *sql.DB, query string) (*QueryResult, *errors.XError) {
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
@@ -78,7 +78,7 @@ func executeQuery(ctx context.Context, db *sql.DB, query string) (*QueryResult, 
 	return scanRows(rows)
 }
 
-// scanRows 扫描查询结果。
+// scanRows scans query result rows.
 func scanRows(rows *sql.Rows) (*QueryResult, *errors.XError) {
 	cols, err := rows.Columns()
 	if err != nil {

@@ -7,7 +7,7 @@ import (
 	"github.com/zx06/xsql/internal/errors"
 )
 
-// Resolve 实现第一阶段 config/profile/format 合并：CLI > ENV > Config。
+// Resolve performs phase-1 config/profile/format merging: CLI > ENV > Config.
 func Resolve(opts Options) (Resolved, *errors.XError) {
 	workDir := opts.WorkDir
 	if workDir == "" {
@@ -20,7 +20,7 @@ func Resolve(opts Options) (Resolved, *errors.XError) {
 		}
 	}
 
-	// 1) 读取配置文件（如有）
+	// 1) Read config file (if any)
 	var cfg File
 	var cfgPath string
 	if opts.ConfigPath != "" {
@@ -49,7 +49,7 @@ func Resolve(opts Options) (Resolved, *errors.XError) {
 		}
 	}
 
-	// 2) 选择 profile：--profile > XSQL_PROFILE > profiles.default > 空
+	// 2) Select profile: --profile > XSQL_PROFILE > profiles.default > empty
 	profile := ""
 	if opts.CLIProfileSet {
 		profile = opts.CLIProfile
@@ -61,7 +61,7 @@ func Resolve(opts Options) (Resolved, *errors.XError) {
 		}
 	}
 
-	// 3) 获取完整 profile
+	// 3) Retrieve full profile
 	var selectedProfile Profile
 	if profile != "" {
 		p, ok := cfg.Profiles[profile]
@@ -70,7 +70,7 @@ func Resolve(opts Options) (Resolved, *errors.XError) {
 				map[string]any{"profile": profile})
 		}
 		selectedProfile = p
-		// 解析 ssh_proxy 引用
+		// Resolve ssh_proxy reference
 		if selectedProfile.SSHProxy != "" {
 			if proxy, ok := cfg.SSHProxies[selectedProfile.SSHProxy]; ok {
 				selectedProfile.SSHConfig = &proxy
@@ -79,7 +79,7 @@ func Resolve(opts Options) (Resolved, *errors.XError) {
 					map[string]any{"profile": profile, "ssh_proxy": selectedProfile.SSHProxy})
 			}
 		}
-		// 设置默认端口
+		// Set default port
 		if selectedProfile.Port == 0 {
 			switch selectedProfile.DB {
 			case "mysql":
@@ -90,7 +90,7 @@ func Resolve(opts Options) (Resolved, *errors.XError) {
 		}
 	}
 
-	// 4) 合并 format：--format > XSQL_FORMAT > profile.format > auto
+	// 4) Merge format: --format > XSQL_FORMAT > profile.format > auto
 	format := "auto"
 	if selectedProfile.Format != "" {
 		format = selectedProfile.Format

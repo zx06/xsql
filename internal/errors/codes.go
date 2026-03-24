@@ -1,7 +1,7 @@
 package errors
 
-// Code 是稳定错误码（字符串），供 AI/agent 与程序判断。
-// 只增不改、不复用旧含义。
+// Code is a stable error code (string) for AI/agent and programmatic consumption.
+// Codes are append-only; existing meanings must not be changed or reused.
 type Code string
 
 const (

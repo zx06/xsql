@@ -41,7 +41,7 @@ func readFile(path string) (File, *errors.XError) {
 	return f, nil
 }
 
-// LoadConfig 加载配置文件，返回完整配置和配置文件路径。
+// LoadConfig loads the configuration file and returns the full config along with its path.
 func LoadConfig(opts Options) (File, string, *errors.XError) {
 	workDir := opts.WorkDir
 	if workDir == "" {

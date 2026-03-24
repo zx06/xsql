@@ -1,19 +1,20 @@
+// Package secret handles credential resolution including OS keyring integration.
 package secret
 
-// KeyringAPI 是对 OS keyring 的最小抽象，便于测试与跨平台。
-// service 对应 keyring 的 service name，account 对应 user/account。
+// KeyringAPI is a minimal abstraction over the OS keyring for testability and cross-platform support.
+// service corresponds to the keyring service name; account corresponds to the user/account.
 type KeyringAPI interface {
 	Get(service, account string) (string, error)
 	Set(service, account, value string) error
 	Delete(service, account string) error
 }
 
-// 默认 keyring 实现（使用 zalando/go-keyring）
-// 本文件仅定义接口；实现见 keyring_*.go（按平台编译）。
+// defaultKeyring returns the default keyring implementation (using zalando/go-keyring).
+// This file only defines the interface; implementations are in keyring_*.go (platform-specific builds).
 func defaultKeyring() KeyringAPI {
 	return &osKeyring{}
 }
 
 type osKeyring struct{}
 
-// Get/Set/Delete 见 keyring_default.go。
+// Get/Set/Delete are implemented in keyring_default.go.

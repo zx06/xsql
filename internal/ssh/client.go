@@ -1,3 +1,4 @@
+// Package ssh provides SSH tunnel connectivity for database drivers.
 package ssh
 
 import (
@@ -14,12 +15,12 @@ import (
 	"github.com/zx06/xsql/internal/errors"
 )
 
-// Client 包装 ssh.Client，提供 DialContext 供 driver 使用。
+// Client wraps ssh.Client and provides DialContext for use by database drivers.
 type Client struct {
 	client *ssh.Client
 }
 
-// Connect 建立 SSH 连接。
+// Connect establishes an SSH connection.
 func Connect(ctx context.Context, opts Options) (*Client, *errors.XError) {
 	if opts.Host == "" {
 		return nil, errors.New(errors.CodeCfgInvalid, "ssh host is required", nil)
@@ -61,12 +62,12 @@ func Connect(ctx context.Context, opts Options) (*Client, *errors.XError) {
 	return &Client{client: client}, nil
 }
 
-// DialContext 通过 SSH 通道建立到 target 的连接。
+// DialContext establishes a connection to the target through the SSH tunnel.
 func (c *Client) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
 	return c.client.Dial(network, addr)
 }
 
-// Close 关闭 SSH 连接。
+// Close closes the SSH connection.
 func (c *Client) Close() error {
 	if c.client != nil {
 		return c.client.Close()
@@ -77,7 +78,7 @@ func (c *Client) Close() error {
 func buildAuthMethods(opts Options) ([]ssh.AuthMethod, *errors.XError) {
 	var methods []ssh.AuthMethod
 
-	// 私钥认证
+	// Private key authentication
 	if opts.IdentityFile != "" {
 		keyPath := expandPath(opts.IdentityFile)
 		keyData, err := os.ReadFile(keyPath)
@@ -96,7 +97,7 @@ func buildAuthMethods(opts Options) ([]ssh.AuthMethod, *errors.XError) {
 		methods = append(methods, ssh.PublicKeys(signer))
 	}
 
-	// 尝试默认私钥路径
+	// Try default private key paths
 	if len(methods) == 0 {
 		for _, name := range []string{"id_ed25519", "id_rsa", "id_ecdsa"} {
 			keyPath := expandPath("~/.ssh/" + name)

@@ -8,13 +8,13 @@ import (
 	"github.com/zx06/xsql/internal/output"
 )
 
-// SchemaInfo 数据库 schema 信息
+// SchemaInfo represents database schema information.
 type SchemaInfo struct {
 	Database string  `json:"database" yaml:"database"`
 	Tables   []Table `json:"tables" yaml:"tables"`
 }
 
-// ToSchemaData 实现 output.SchemaFormatter 接口
+// ToSchemaData implements the output.SchemaFormatter interface.
 func (s *SchemaInfo) ToSchemaData() (string, []output.SchemaTable, bool) {
 	if s == nil || len(s.Tables) == 0 {
 		return "", nil, false
@@ -41,58 +41,58 @@ func (s *SchemaInfo) ToSchemaData() (string, []output.SchemaTable, bool) {
 	return s.Database, tables, true
 }
 
-// Table 表信息
+// Table represents table information.
 type Table struct {
-	Schema      string       `json:"schema" yaml:"schema"` // PostgreSQL schema，MySQL 为数据库名
-	Name        string       `json:"name" yaml:"name"`     // 表名
+	Schema      string       `json:"schema" yaml:"schema"` // PostgreSQL schema; database name for MySQL
+	Name        string       `json:"name" yaml:"name"`     // Table name
 	Comment     string       `json:"comment,omitempty" yaml:"comment,omitempty"`
 	Columns     []Column     `json:"columns" yaml:"columns"`
 	Indexes     []Index      `json:"indexes,omitempty" yaml:"indexes,omitempty"`
 	ForeignKeys []ForeignKey `json:"foreign_keys,omitempty" yaml:"foreign_keys,omitempty"`
 }
 
-// Column 列信息
+// Column represents column information.
 type Column struct {
 	Name       string `json:"name" yaml:"name"`
-	Type       string `json:"type" yaml:"type"`                           // 数据类型，如 varchar(255)、bigint
-	Nullable   bool   `json:"nullable" yaml:"nullable"`                   // 是否允许 NULL
-	Default    string `json:"default,omitempty" yaml:"default,omitempty"` // 默认值
-	Comment    string `json:"comment,omitempty" yaml:"comment,omitempty"` // 列注释
-	PrimaryKey bool   `json:"primary_key" yaml:"primary_key"`             // 是否为主键
+	Type       string `json:"type" yaml:"type"`                           // Data type, e.g. varchar(255), bigint
+	Nullable   bool   `json:"nullable" yaml:"nullable"`                   // Whether NULL is allowed
+	Default    string `json:"default,omitempty" yaml:"default,omitempty"` // Default value
+	Comment    string `json:"comment,omitempty" yaml:"comment,omitempty"` // Column comment
+	PrimaryKey bool   `json:"primary_key" yaml:"primary_key"`             // Whether this is a primary key
 }
 
-// Index 索引信息
+// Index represents index information.
 type Index struct {
-	Name    string   `json:"name" yaml:"name"`       // 索引名
-	Columns []string `json:"columns" yaml:"columns"` // 索引列
-	Unique  bool     `json:"unique" yaml:"unique"`   // 是否唯一索引
-	Primary bool     `json:"primary" yaml:"primary"` // 是否主键索引
+	Name    string   `json:"name" yaml:"name"`       // Index name
+	Columns []string `json:"columns" yaml:"columns"` // Indexed columns
+	Unique  bool     `json:"unique" yaml:"unique"`   // Whether this is a unique index
+	Primary bool     `json:"primary" yaml:"primary"` // Whether this is a primary key index
 }
 
-// ForeignKey 外键信息
+// ForeignKey represents foreign key information.
 type ForeignKey struct {
-	Name              string   `json:"name" yaml:"name"`                             // 外键名
-	Columns           []string `json:"columns" yaml:"columns"`                       // 本表列
-	ReferencedTable   string   `json:"referenced_table" yaml:"referenced_table"`     // 引用表
-	ReferencedColumns []string `json:"referenced_columns" yaml:"referenced_columns"` // 引用列
+	Name              string   `json:"name" yaml:"name"`                             // Foreign key name
+	Columns           []string `json:"columns" yaml:"columns"`                       // Local columns
+	ReferencedTable   string   `json:"referenced_table" yaml:"referenced_table"`     // Referenced table
+	ReferencedColumns []string `json:"referenced_columns" yaml:"referenced_columns"` // Referenced columns
 }
 
-// SchemaOptions schema 导出选项
+// SchemaOptions holds options for schema export.
 type SchemaOptions struct {
-	TablePattern  string // 表名过滤（支持通配符）
-	IncludeSystem bool   // 是否包含系统表
+	TablePattern  string // Table name filter (supports wildcards)
+	IncludeSystem bool   // Whether to include system tables
 }
 
-// SchemaDriver schema 导出接口
-// Driver 可选择实现此接口以支持 schema 导出
+// SchemaDriver is the schema export interface.
+// A Driver may optionally implement this interface to support schema export.
 type SchemaDriver interface {
 	Driver
-	// DumpSchema 导出数据库结构
+	// DumpSchema exports the database schema.
 	DumpSchema(ctx context.Context, db *sql.DB, opts SchemaOptions) (*SchemaInfo, *errors.XError)
 }
 
-// DumpSchema 导出数据库结构
-// 会检查 driver 是否实现了 SchemaDriver 接口
+// DumpSchema exports the database schema.
+// It checks whether the driver implements the SchemaDriver interface.
 func DumpSchema(ctx context.Context, driverName string, db *sql.DB, opts SchemaOptions) (*SchemaInfo, *errors.XError) {
 	d, ok := Get(driverName)
 	if !ok {

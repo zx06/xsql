@@ -1,77 +1,77 @@
 package config
 
-// File 表示 xsql.yaml 的配置结构。
-// 约束：配置优先级为 CLI > ENV > Config。
+// File represents the xsql.yaml configuration structure.
+// Constraint: config priority is CLI > ENV > Config.
 type File struct {
 	SSHProxies map[string]SSHProxy `yaml:"ssh_proxies"`
 	Profiles   map[string]Profile  `yaml:"profiles"`
 	MCP        MCPConfig           `yaml:"mcp"`
 }
 
-// SSHProxy 定义可复用的 SSH 代理配置。
+// SSHProxy defines a reusable SSH proxy configuration.
 type SSHProxy struct {
 	Host           string `yaml:"host"`
 	Port           int    `yaml:"port"`
 	User           string `yaml:"user"`
 	IdentityFile   string `yaml:"identity_file"`
-	Passphrase     string `yaml:"passphrase"` // 支持 keyring:xxx 引用
+	Passphrase     string `yaml:"passphrase"` // supports keyring:xxx reference
 	KnownHostsFile string `yaml:"known_hosts_file"`
-	SkipHostKey    bool   `yaml:"skip_host_key"` // 极不推荐
+	SkipHostKey    bool   `yaml:"skip_host_key"` // strongly discouraged
 }
 
 type Profile struct {
-	Description string `yaml:"description"` // 描述，用于区分不同数据库
+	Description string `yaml:"description"` // description to distinguish databases
 	Format      string `yaml:"format"`
 
-	// DB 连接
+	// DB connection
 	DB       string `yaml:"db"`  // mysql | pg
-	DSN      string `yaml:"dsn"` // 原生 DSN（优先）
+	DSN      string `yaml:"dsn"` // raw DSN (takes precedence)
 	Host     string `yaml:"host"`
 	Port     int    `yaml:"port"`
 	User     string `yaml:"user"`
-	Password string `yaml:"password"` // 支持 keyring:xxx 引用
+	Password string `yaml:"password"` // supports keyring:xxx reference
 	Database string `yaml:"database"`
 
-	// 安全选项
-	AllowPlaintext   bool `yaml:"allow_plaintext"`    // 允许明文密码
-	UnsafeAllowWrite bool `yaml:"unsafe_allow_write"` // 允许写操作（绕过只读保护）
+	// Security options
+	AllowPlaintext   bool `yaml:"allow_plaintext"`    // allow plaintext password
+	UnsafeAllowWrite bool `yaml:"unsafe_allow_write"` // allow write operations (bypass read-only protection)
 
-	// 超时配置（秒）
-	QueryTimeout  int `yaml:"query_timeout"`  // 查询超时，默认 30 秒
-	SchemaTimeout int `yaml:"schema_timeout"` // Schema 导出超时，默认 60 秒
+	// Timeout settings (seconds)
+	QueryTimeout  int `yaml:"query_timeout"`  // query timeout, default 30s
+	SchemaTimeout int `yaml:"schema_timeout"` // schema export timeout, default 60s
 
-	// SSH proxy 引用（引用 ssh_proxies 中定义的名称）
+	// SSH proxy reference (refers to a name defined in ssh_proxies)
 	SSHProxy string `yaml:"ssh_proxy"`
 
-	// Proxy 本地端口（用于 xsql proxy 命令）
+	// Local port for the proxy (used by xsql proxy command)
 	LocalPort int `yaml:"local_port"`
 
-	// 解析后的 SSH 配置（由 Resolve 填充，不从 YAML 读取）
+	// Resolved SSH config (populated by Resolve, not read from YAML)
 	SSHConfig *SSHProxy `yaml:"-"`
 }
 
-// MCPConfig 定义 MCP server 配置。
+// MCPConfig defines the MCP server configuration.
 type MCPConfig struct {
 	Transport string        `yaml:"transport"` // stdio | streamable_http
 	HTTP      MCPHTTPConfig `yaml:"http"`
 }
 
-// MCPHTTPConfig 定义 MCP Streamable HTTP 传输配置。
+// MCPHTTPConfig defines the MCP Streamable HTTP transport configuration.
 type MCPHTTPConfig struct {
 	Addr                string `yaml:"addr"`
-	AuthToken           string `yaml:"auth_token"`            // 支持 keyring:xxx 引用
-	AllowPlaintextToken bool   `yaml:"allow_plaintext_token"` // 允许明文 token
+	AuthToken           string `yaml:"auth_token"`            // supports keyring:xxx reference
+	AllowPlaintextToken bool   `yaml:"allow_plaintext_token"` // allow plaintext token
 }
 
 type Resolved struct {
 	ConfigPath  string
 	ProfileName string
 	Format      string
-	Profile     Profile // 完整 profile 供 query 使用
+	Profile     Profile // full profile for query use
 }
 
 type Options struct {
-	// ConfigPath: 若非空，则只读取该文件（不存在报错）。
+	// ConfigPath: if non-empty, only this file is read (error if not found).
 	ConfigPath string
 
 	// CLI
@@ -80,14 +80,14 @@ type Options struct {
 	CLIFormat     string
 	CLIFormatSet  bool
 
-	// ENV（由调用方注入，便于测试）
+	// ENV (injected by caller for testability)
 	EnvProfile string
 	EnvFormat  string
 
-	// HomeDir 用于默认路径计算（为空则自动探测）。
+	// HomeDir is used for default path resolution (auto-detected if empty).
 	HomeDir string
 
-	// WorkDir 用于默认路径（为空则使用进程当前工作目录）。
+	// WorkDir is used for default paths (falls back to process cwd if empty).
 	WorkDir string
 }
 

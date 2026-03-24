@@ -28,7 +28,7 @@ const (
 	TokenEOF
 )
 
-// 允许的首关键字（allowlist）
+// Allowed leading keywords (allowlist)
 var allowedFirstKeywords = map[string]bool{
 	"SELECT":   true,
 	"SHOW":     true,
@@ -40,7 +40,7 @@ var allowedFirstKeywords = map[string]bool{
 	"VALUES":   true, // PostgreSQL VALUES
 }
 
-// 禁止的关键字（denylist）- 任何位置出现都拒绝
+// Denied keywords (denylist) - rejected if found anywhere
 var forbiddenKeywords = map[string]bool{
 	"INSERT":     true,
 	"UPDATE":     true,
@@ -59,8 +59,8 @@ var forbiddenKeywords = map[string]bool{
 	"EXECUTE":    true,
 	"PREPARE":    true,
 	"DEALLOCATE": true,
-	"SET":        true, // 可能解除只读: SET TRANSACTION READ WRITE
-	"BEGIN":      true, // 用户可能 BEGIN READ WRITE
+	"SET":        true, // may disable read-only: SET TRANSACTION READ WRITE
+	"BEGIN":      true, // user may BEGIN READ WRITE
 	"COMMIT":     true,
 	"ROLLBACK":   true,
 	"SAVEPOINT":  true,
@@ -71,17 +71,19 @@ var forbiddenKeywords = map[string]bool{
 	"REPLACE":    true, // MySQL REPLACE
 }
 
-// IsReadOnlySQL 做保守判定：默认拒绝；仅允许文档明确的只读语句。
-// 使用词法分析而非简单字符串匹配，正确处理字符串、注释。
-// 解析失败/多语句/包含禁止关键字时一律返回 false。
+// IsReadOnlySQL performs a conservative check: deny by default; only allow
+// explicitly documented read-only statements.
+// Uses lexical analysis instead of simple string matching to correctly handle
+// strings and comments. Returns false on parse failure, multiple statements,
+// or presence of forbidden keywords.
 func IsReadOnlySQL(sql string) (bool, string) {
 	sql = strings.TrimSpace(sql)
 	if sql == "" {
 		return false, "empty"
 	}
 
-	// 保守：首字符若不是字母，则视为无法解析（例如 "(select 1)"）
-	// 这是为了防止子查询绕过检测
+	// Conservative: if the first character is not a letter, treat as unparseable
+	// (e.g. "(select 1)") to prevent subquery bypass
 	trimmed := stripLeadingCommentsAndSpace(sql)
 	if trimmed == "" {
 		return false, "empty_after_comment"
@@ -90,18 +92,18 @@ func IsReadOnlySQL(sql string) (bool, string) {
 		return false, "non_letter_start"
 	}
 
-	// 词法分析并检查
+	// Tokenize and validate
 	tokens, err := tokenize(sql)
 	if err != nil {
 		return false, "tokenize_error: " + err.Error()
 	}
 
-	// 检查是否包含多语句（多个分号分隔的有效语句）
+	// Check for multiple statements (multiple valid statements separated by semicolons)
 	if hasMultipleValidStatements(tokens) {
 		return false, "multiple_statements"
 	}
 
-	// 找到第一个有效关键字（跳过注释）
+	// Find the first valid keyword (skipping comments)
 	firstKeyword := ""
 	for _, tok := range tokens {
 		if tok.Type == TokenKeyword {
@@ -114,25 +116,25 @@ func IsReadOnlySQL(sql string) (bool, string) {
 		return false, "no_keyword"
 	}
 
-	// 检查首关键字是否在 allowlist 中
+	// Check if the first keyword is in the allowlist
 	if !allowedFirstKeywords[firstKeyword] {
 		return false, "forbidden_start: " + firstKeyword
 	}
 
-	// 检查是否包含任何禁止的关键字
+	// Check for any forbidden keywords
 	for _, tok := range tokens {
 		if tok.Type == TokenKeyword && forbiddenKeywords[tok.Value] {
-			// WITH 后面跟 INSERT/UPDATE/DELETE 的情况
+			// e.g. WITH ... INSERT/UPDATE/DELETE
 			return false, "forbidden_keyword: " + tok.Value
 		}
 	}
 
-	// 检查是否包含 SELECT ... FOR SHARE / FOR KEY SHARE
+	// Check for SELECT ... FOR SHARE / FOR KEY SHARE
 	if hasSelectShareLock(tokens) {
 		return false, "forbidden_share_lock"
 	}
 
-	// 特殊处理 WITH (CTE) - 检查是否包含写入操作
+	// Special handling for WITH (CTE) - check for write operations
 	if firstKeyword == "WITH" {
 		if hasWriteInCTE(tokens) {
 			return false, "cte_write_operation"
@@ -173,7 +175,7 @@ func hasKeywordSequence(keywords []string, seq []string) bool {
 	return false
 }
 
-// stripLeadingCommentsAndSpace 去除前导注释和空白
+// stripLeadingCommentsAndSpace strips leading comments and whitespace
 func stripLeadingCommentsAndSpace(s string) string {
 	for {
 		s = strings.TrimLeftFunc(s, unicode.IsSpace)
@@ -207,7 +209,7 @@ func EnforceReadOnly(sql string, unsafeAllowWrite bool) *errors.XError {
 	return errors.New(errors.CodeROBlocked, "write blocked by read-only policy", map[string]any{"reason": reason})
 }
 
-// tokenize 执行 SQL 词法分析，正确处理字符串、注释、标识符
+// tokenize performs SQL lexical analysis, correctly handling strings, comments, and identifiers
 func tokenize(sql string) ([]SQLToken, error) {
 	var tokens []SQLToken
 	i := 0
@@ -216,30 +218,30 @@ func tokenize(sql string) ([]SQLToken, error) {
 	for i < sqlLen {
 		r := rune(sql[i])
 
-		// 跳过空白字符
+		// Skip whitespace
 		if unicode.IsSpace(r) {
 			i++
 			continue
 		}
 
-		// BOM 头
+		// BOM header
 		if r == '\ufeff' {
 			i++
 			continue
 		}
 
-		// 行注释 --
+		// Line comment --
 		if r == '-' && i+1 < sqlLen && sql[i+1] == '-' {
-			// 跳过到行尾
+			// Skip to end of line
 			for i < sqlLen && sql[i] != '\n' {
 				i++
 			}
 			continue
 		}
 
-		// 块注释 /* */
+		// Block comment /* */
 		if r == '/' && i+1 < sqlLen && sql[i+1] == '*' {
-			// 跳过到 */
+			// Skip to */
 			i += 2
 			for i < sqlLen-1 {
 				if sql[i] == '*' && sql[i+1] == '/' {
@@ -251,7 +253,7 @@ func tokenize(sql string) ([]SQLToken, error) {
 			continue
 		}
 
-		// 字符串 '...' (MySQL/PostgreSQL/PG 支持 escape)
+		// String literal '...' (MySQL/PostgreSQL with escape support)
 		if r == '\'' {
 			str, newIdx := parseString(sql, i, '\'')
 			tokens = append(tokens, SQLToken{Type: TokenString, Value: str})
@@ -259,7 +261,7 @@ func tokenize(sql string) ([]SQLToken, error) {
 			continue
 		}
 
-		// 字符串 "..." (PostgreSQL/ANSI 标准)
+		// String literal "..." (PostgreSQL/ANSI standard)
 		if r == '"' {
 			str, newIdx := parseString(sql, i, '"')
 			tokens = append(tokens, SQLToken{Type: TokenString, Value: str})
@@ -267,7 +269,7 @@ func tokenize(sql string) ([]SQLToken, error) {
 			continue
 		}
 
-		// 反引号 `...` (MySQL 标识符)
+		// Backtick `...` (MySQL identifier)
 		if r == '`' {
 			str, newIdx := parseString(sql, i, '`')
 			tokens = append(tokens, SQLToken{Type: TokenIdentifier, Value: str})
@@ -275,7 +277,7 @@ func tokenize(sql string) ([]SQLToken, error) {
 			continue
 		}
 
-		// PostgreSQL 美元引号字符串 $tag$...$tag$
+		// PostgreSQL dollar-quoted string $tag$...$tag$
 		if r == '$' {
 			if str, newIdx, ok := parseDollarQuotedString(sql, i); ok {
 				tokens = append(tokens, SQLToken{Type: TokenString, Value: str})
@@ -284,14 +286,14 @@ func tokenize(sql string) ([]SQLToken, error) {
 			}
 		}
 
-		// 分号
+		// Semicolon
 		if r == ';' {
 			tokens = append(tokens, SQLToken{Type: TokenSemicolon, Value: ";"})
 			i++
 			continue
 		}
 
-		// 数字
+		// Number
 		if unicode.IsDigit(r) || (r == '.' && i+1 < sqlLen && unicode.IsDigit(rune(sql[i+1]))) {
 			start := i
 			for i < sqlLen && (unicode.IsDigit(rune(sql[i])) || sql[i] == '.' || sql[i] == 'e' || sql[i] == 'E' || sql[i] == '+' || sql[i] == '-') {
@@ -301,7 +303,7 @@ func tokenize(sql string) ([]SQLToken, error) {
 			continue
 		}
 
-		// 关键字或标识符
+		// Keyword or identifier
 		if unicode.IsLetter(r) || r == '_' {
 			start := i
 			for i < sqlLen && (unicode.IsLetter(rune(sql[i])) || unicode.IsDigit(rune(sql[i])) || sql[i] == '_' || sql[i] == '$') {
@@ -309,7 +311,7 @@ func tokenize(sql string) ([]SQLToken, error) {
 			}
 			originalWord := sql[start:i]
 			upperWord := strings.ToUpper(originalWord)
-			// 检查是否为关键字（关键字存大写，标识符保留原样）
+			// Check if it's a keyword (keywords stored uppercase, identifiers keep original case)
 			if isKeyword(upperWord) {
 				tokens = append(tokens, SQLToken{Type: TokenKeyword, Value: upperWord})
 			} else {
@@ -318,7 +320,7 @@ func tokenize(sql string) ([]SQLToken, error) {
 			continue
 		}
 
-		// 运算符和其他字符
+		// Operators and other characters
 		if isOperatorChar(r) {
 			start := i
 			for i < sqlLen && isOperatorChar(rune(sql[i])) {
@@ -328,7 +330,7 @@ func tokenize(sql string) ([]SQLToken, error) {
 			continue
 		}
 
-		// 其他字符（可能是不支持的字符）
+		// Other characters (possibly unsupported)
 		tokens = append(tokens, SQLToken{Type: TokenUnknown, Value: string(r)})
 		i++
 	}
@@ -337,25 +339,25 @@ func tokenize(sql string) ([]SQLToken, error) {
 	return tokens, nil
 }
 
-// parseString 解析引号包围的字符串，处理转义
+// parseString parses a quoted string, handling escape sequences
 func parseString(sql string, start int, quote rune) (string, int) {
-	i := start + 1 // 跳过开引号
+	i := start + 1 // skip opening quote
 	sqlLen := len(sql)
 	var result strings.Builder
 
 	for i < sqlLen {
 		r := rune(sql[i])
 		if r == quote {
-			// 检查是否是转义（'' 或 "" 在引号字符串中）
+			// Check for escape ('' or "" within quoted strings)
 			if i+1 < sqlLen && rune(sql[i+1]) == quote {
 				result.WriteRune(quote)
 				i += 2
 				continue
 			}
-			// 字符串结束
+			// End of string
 			return result.String(), i + 1
 		}
-		// 处理普通转义 \' 或 ''
+		// Handle standard escape \' or ''
 		if r == '\\' && i+1 < sqlLen && rune(sql[i+1]) == quote {
 			result.WriteRune(quote)
 			i += 2
@@ -365,18 +367,18 @@ func parseString(sql string, start int, quote rune) (string, int) {
 		i++
 	}
 
-	// 未闭合的字符串
+	// Unclosed string
 	return result.String(), i
 }
 
-// parseDollarQuotedString 解析 PostgreSQL 美元引号字符串 $tag$...$tag$
+// parseDollarQuotedString parses PostgreSQL dollar-quoted strings $tag$...$tag$
 func parseDollarQuotedString(sql string, start int) (string, int, bool) {
 	sqlLen := len(sql)
 	if sql[start] != '$' {
 		return "", start, false
 	}
 
-	// 解析标签名
+	// Parse tag name
 	tagStart := start + 1
 	tagEnd := tagStart
 	for tagEnd < sqlLen && (unicode.IsLetter(rune(sql[tagEnd])) || unicode.IsDigit(rune(sql[tagEnd])) || sql[tagEnd] == '_') {
@@ -384,14 +386,14 @@ func parseDollarQuotedString(sql string, start int) (string, int, bool) {
 	}
 
 	if tagEnd >= sqlLen || sql[tagEnd] != '$' {
-		return "", start, false // 不是有效的美元引号
+		return "", start, false // not a valid dollar-quoted string
 	}
 
 	tag := sql[tagStart:tagEnd]
 	closingTag := "$" + tag + "$"
 	contentStart := tagEnd + 1
 
-	// 查找结束标记
+	// Find closing tag
 	for i := contentStart; i < sqlLen; i++ {
 		if i+len(closingTag) <= sqlLen && sql[i:i+len(closingTag)] == closingTag {
 			content := sql[contentStart:i]
@@ -399,17 +401,17 @@ func parseDollarQuotedString(sql string, start int) (string, int, bool) {
 		}
 	}
 
-	return "", start, false // 未找到闭合标记
+	return "", start, false // closing tag not found
 }
 
-// isKeyword 判断是否为 SQL 关键字
+// isKeyword checks whether a word is a SQL keyword
 func isKeyword(word string) bool {
 	upper := strings.ToUpper(word)
-	// 合并允许的和禁止的关键字
+	// Check allowed and forbidden keyword lists
 	if allowedFirstKeywords[upper] || forbiddenKeywords[upper] {
 		return true
 	}
-	// 其他常见关键字
+	// Other common keywords
 	commonKeywords := []string{
 		"FROM", "WHERE", "AND", "OR", "NOT", "NULL", "IS", "IN", "EXISTS",
 		"AS", "ON", "JOIN", "LEFT", "RIGHT", "INNER", "OUTER", "CROSS",
@@ -431,14 +433,14 @@ func isKeyword(word string) bool {
 	return false
 }
 
-// isOperatorChar 判断是否为运算符字符
+// isOperatorChar checks whether a rune is an operator character
 func isOperatorChar(r rune) bool {
 	return r == '+' || r == '-' || r == '*' || r == '/' || r == '=' || r == '<' ||
 		r == '>' || r == '!' || r == '~' || r == '|' || r == '&' || r == '%' ||
 		r == '^' || r == '@' || r == '#' || r == '?' || r == ':'
 }
 
-// hasMultipleValidStatements 检查是否包含多个有效语句
+// hasMultipleValidStatements checks if tokens contain multiple valid statements
 func hasMultipleValidStatements(tokens []SQLToken) bool {
 	stmtCount := 0
 	hasNonTrivialContent := false
@@ -455,7 +457,7 @@ func hasMultipleValidStatements(tokens []SQLToken) bool {
 		}
 	}
 
-	// 最后一段（没有以分号结尾的部分）如果有内容也算一个语句
+	// The trailing segment (not terminated by semicolon) counts as a statement if non-empty
 	if hasNonTrivialContent {
 		stmtCount++
 	}
@@ -463,9 +465,9 @@ func hasMultipleValidStatements(tokens []SQLToken) bool {
 	return stmtCount > 1
 }
 
-// hasWriteInCTE 检查 WITH 语句是否包含写入操作（data-modifying CTE）
+// hasWriteInCTE checks if a WITH statement contains write operations (data-modifying CTE)
 func hasWriteInCTE(tokens []SQLToken) bool {
-	// 简单的启发式检测：在 WITH 之后查找 INSERT/UPDATE/DELETE
+	// Simple heuristic: look for INSERT/UPDATE/DELETE after WITH
 	inCTE := false
 	parenDepth := 0
 	for i, tok := range tokens {
@@ -477,13 +479,13 @@ func hasWriteInCTE(tokens []SQLToken) bool {
 			continue
 		}
 
-		// 跟踪括号深度以识别 CTE 边界
+		// Track parenthesis depth to identify CTE boundaries
 		switch tok.Value {
 		case "(":
 			parenDepth++
 		case ")":
 			parenDepth--
-			// CTE 定义结束后的 SELECT 是正常的
+			// SELECT after CTE definition is allowed
 			if parenDepth == 0 && i+1 < len(tokens) {
 				nextTok := tokens[i+1]
 				switch nextTok.Value {
@@ -494,7 +496,7 @@ func hasWriteInCTE(tokens []SQLToken) bool {
 				}
 			}
 		default:
-			// 在 CTE 体内检查写入关键字
+			// Check for write keywords inside CTE body
 			if parenDepth > 0 {
 				switch tok.Value {
 				case "INSERT", "UPDATE", "DELETE":

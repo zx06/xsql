@@ -13,7 +13,7 @@ func (o *osKeyring) Get(service, account string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// Windows cmdkey 在字符间插入 null 字节（UTF-16 遗留问题）
+	// Windows cmdkey inserts null bytes between characters (UTF-16 legacy issue).
 	val = strings.ReplaceAll(val, "\x00", "")
 	return val, nil
 }
