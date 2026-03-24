@@ -40,9 +40,8 @@ func TestInitConfig(t *testing.T) {
 	t.Run("creates config at default path", func(t *testing.T) {
 		// Create a temp HOME
 		dir := t.TempDir()
-		origHome := os.Getenv("HOME")
 		t.Setenv("HOME", dir)
-		defer func() { _ = os.Setenv("HOME", origHome) }()
+		t.Setenv("USERPROFILE", dir) // Windows compatibility
 
 		cfgPath, xe := InitConfig("")
 		if xe != nil {
