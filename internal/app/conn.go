@@ -61,23 +61,9 @@ func ResolveConnection(ctx context.Context, opts ConnectionOptions) (*Connection
 
 	var sshClient *ssh.Client
 	if opts.Profile.SSHConfig != nil {
-		passphrase := opts.Profile.SSHConfig.Passphrase
-		if passphrase != "" {
-			pp, xe := secret.Resolve(passphrase, secret.Options{AllowPlaintext: allowPlaintext})
-			if xe != nil {
-				return nil, xe
-			}
-			passphrase = pp
-		}
-
-		sshOpts := ssh.Options{
-			Host:                opts.Profile.SSHConfig.Host,
-			Port:                opts.Profile.SSHConfig.Port,
-			User:                opts.Profile.SSHConfig.User,
-			IdentityFile:        opts.Profile.SSHConfig.IdentityFile,
-			Passphrase:          passphrase,
-			KnownHostsFile:      opts.Profile.SSHConfig.KnownHostsFile,
-			SkipKnownHostsCheck: opts.SkipHostKeyCheck || opts.Profile.SSHConfig.SkipHostKey,
+		sshOpts, xe := resolveSSHOptions(opts.Profile, allowPlaintext, opts.SkipHostKeyCheck)
+		if xe != nil {
+			return nil, xe
 		}
 		sc, xe := ssh.Connect(ctx, sshOpts)
 		if xe != nil {
