@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -54,13 +55,32 @@ func Connect(ctx context.Context, opts Options) (*Client, *errors.XError) {
 	}
 
 	addr := fmt.Sprintf("%s:%d", opts.Host, opts.Port)
-	client, err := ssh.Dial("tcp", addr, config)
+
+	// Use net.Dialer with context so that context cancellation/timeout
+	// can interrupt the TCP connection phase (ssh.Dial does not accept context).
+	d := net.Dialer{}
+	netConn, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
+		return nil, errors.Wrap(errors.CodeSSHDialFailed, "failed to connect to ssh server", map[string]any{"host": opts.Host}, err)
+	}
+
+	// Perform SSH handshake over the established TCP connection.
+	// Set a deadline derived from context to prevent hanging during handshake.
+	if deadline, ok := ctx.Deadline(); ok {
+		netConn.SetDeadline(deadline)
+	}
+	sshConn, chans, reqs, err := ssh.NewClientConn(netConn, addr, config)
+	if err != nil {
+		netConn.Close()
 		if strings.Contains(err.Error(), "unable to authenticate") {
 			return nil, errors.Wrap(errors.CodeSSHAuthFailed, "ssh authentication failed", map[string]any{"host": opts.Host}, err)
 		}
 		return nil, errors.Wrap(errors.CodeSSHDialFailed, "failed to connect to ssh server", map[string]any{"host": opts.Host}, err)
 	}
+	// Clear the deadline after successful handshake so it doesn't affect later I/O.
+	netConn.SetDeadline(time.Time{})
+
+	client := ssh.NewClient(sshConn, chans, reqs)
 	c := &Client{client: client}
 	c.alive.Store(true)
 	return c, nil

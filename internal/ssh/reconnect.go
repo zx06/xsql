@@ -45,6 +45,11 @@ type ReconnectDialer struct {
 
 	// connectFunc allows injecting a custom connect function for testing.
 	connectFunc func(ctx context.Context, opts Options) (*Client, error)
+
+	// Reconnect coalescing: when multiple goroutines detect failure simultaneously,
+	// only one performs the actual reconnect; others wait for the result.
+	reconnecting bool
+	reconnectCh  chan struct{}
 }
 
 // ReconnectOption configures a ReconnectDialer.
@@ -97,12 +102,21 @@ func (rd *ReconnectDialer) DialContext(ctx context.Context, network, addr string
 	client := rd.client
 	rd.mu.Unlock()
 
+	if client == nil {
+		// Client was cleared by a concurrent reconnect; wait for it.
+		newClient, reconnErr := rd.reconnect()
+		if reconnErr != nil {
+			return nil, fmt.Errorf("no active connection and reconnect failed: %v", reconnErr)
+		}
+		return newClient.DialContext(ctx, network, addr)
+	}
+
 	conn, err := client.DialContext(ctx, network, addr)
 	if err == nil {
 		return conn, nil
 	}
 
-	// Dial failed — attempt reconnect
+	// Dial failed — attempt reconnect (coalesced with other callers)
 	newClient, reconnErr := rd.reconnect()
 	if reconnErr != nil {
 		return nil, fmt.Errorf("dial failed (%v) and reconnect failed (%v)", err, reconnErr)
@@ -134,14 +148,35 @@ func (rd *ReconnectDialer) Close() error {
 }
 
 // reconnect closes the current client and establishes a new SSH connection.
-// It is called when a dial failure is detected or keepalive detects death.
+// Concurrent callers are coalesced: the first caller performs the reconnect,
+// others wait for its result. The lock is NOT held during the actual retry loop
+// to avoid blocking DialContext callers.
 func (rd *ReconnectDialer) reconnect() (*Client, error) {
 	rd.mu.Lock()
-	defer rd.mu.Unlock()
 
 	if rd.closed {
+		rd.mu.Unlock()
 		return nil, fmt.Errorf("reconnect dialer is closed")
 	}
+
+	// Coalescing: if another goroutine is already reconnecting, wait for it.
+	if rd.reconnecting {
+		ch := rd.reconnectCh
+		rd.mu.Unlock()
+		<-ch
+		// Check the result
+		rd.mu.Lock()
+		client := rd.client
+		rd.mu.Unlock()
+		if client != nil {
+			return client, nil
+		}
+		return nil, fmt.Errorf("reconnection by another goroutine failed")
+	}
+
+	// This goroutine wins: mark as reconnecting.
+	rd.reconnecting = true
+	rd.reconnectCh = make(chan struct{})
 
 	rd.emitStatus(StatusReconnecting, "attempting ssh reconnection", nil)
 
@@ -157,36 +192,68 @@ func (rd *ReconnectDialer) reconnect() (*Client, error) {
 		rd.client = nil
 	}
 
-	// Attempt reconnection with retries
+	// Release lock during retry loop to avoid blocking DialContext callers.
+	rd.mu.Unlock()
+
+	// Attempt reconnection with retries (lock-free)
+	var newClient *Client
 	var lastErr error
 	maxRetries := rd.opts.keepaliveCountMax()
 	for i := range maxRetries {
 		select {
 		case <-rd.ctx.Done():
+			rd.finishReconnect(nil)
 			return nil, rd.ctx.Err()
 		default:
 		}
 
 		client, err := rd.connect(rd.ctx, rd.opts)
 		if err == nil {
-			rd.client = client
-			rd.emitStatus(StatusReconnected, "ssh reconnected successfully", nil)
-			rd.startKeepaliveLocked()
-			return client, nil
+			newClient = client
+			break
 		}
 		lastErr = err
 		rd.emitStatus(StatusReconnectFailed,
 			fmt.Sprintf("reconnect attempt %d/%d failed", i+1, maxRetries), err)
 
-		// Brief backoff between retries
+		// Brief exponential backoff between retries
 		select {
 		case <-rd.ctx.Done():
+			rd.finishReconnect(nil)
 			return nil, rd.ctx.Err()
 		case <-time.After(time.Duration(i+1) * time.Second):
 		}
 	}
 
-	return nil, fmt.Errorf("reconnection failed after %d attempts: %w", maxRetries, lastErr)
+	// Re-acquire lock to update state
+	rd.finishReconnect(newClient)
+
+	if newClient == nil {
+		return nil, fmt.Errorf("reconnection failed after %d attempts: %w", maxRetries, lastErr)
+	}
+	return newClient, nil
+}
+
+// finishReconnect updates state after a reconnect attempt completes.
+// It sets the new client, restarts keepalive, and unblocks waiting goroutines.
+func (rd *ReconnectDialer) finishReconnect(newClient *Client) {
+	rd.mu.Lock()
+	defer rd.mu.Unlock()
+
+	if newClient != nil {
+		rd.client = newClient
+		rd.emitStatus(StatusReconnected, "ssh reconnected successfully", nil)
+	}
+
+	// Always restart keepalive so health monitoring continues even after failure.
+	// On success, it monitors the new connection; on failure, it will detect
+	// the nil/dead client and trigger another reconnect attempt.
+	if !rd.closed {
+		rd.startKeepaliveLocked()
+	}
+
+	rd.reconnecting = false
+	close(rd.reconnectCh)
 }
 
 // startKeepalive starts the keepalive monitor (caller must NOT hold mu).
@@ -203,6 +270,11 @@ func (rd *ReconnectDialer) startKeepaliveLocked() {
 
 	if interval <= 0 {
 		return
+	}
+
+	// Stop any existing keepalive before starting a new one.
+	if rd.keepaliveCancel != nil {
+		rd.keepaliveCancel()
 	}
 
 	kaCtx, kaCancel := context.WithCancel(rd.ctx)
@@ -236,7 +308,7 @@ func (rd *ReconnectDialer) keepaliveLoop(ctx context.Context, interval time.Dura
 				if missed >= maxMissed {
 					rd.emitStatus(StatusDisconnected,
 						fmt.Sprintf("keepalive failed %d consecutive times", missed), err)
-					// Trigger reconnection in background
+					// Trigger reconnection (coalesced with any concurrent callers)
 					go func() {
 						if _, reconnErr := rd.reconnect(); reconnErr != nil {
 							log.Printf("[ssh] keepalive-triggered reconnect failed: %v", reconnErr)
@@ -269,3 +341,4 @@ func (rd *ReconnectDialer) emitStatus(t StatusType, msg string, err error) {
 		rd.onStatus(StatusEvent{Type: t, Message: msg, Error: err})
 	}
 }
+
