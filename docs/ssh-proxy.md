@@ -12,6 +12,33 @@
   - 由 driver 回调触发时，通过 `sshClient.Dial("tcp", target)` 建立到 DB 的连接。
   - 支持连接池：dial 可并发、安全复用 SSH client。
 
+## SSH Keepalive 与自动重连
+
+### 问题
+长生命周期的 SSH 连接（如 `xsql proxy`）可能因网络中断而变为"死连接"。此时通过 proxy 的新连接请求会超时失败，且用户无法感知 proxy 已不可用。
+
+### 解决方案
+xsql 内置了 SSH 连接健康检测和自动重连机制：
+
+1. **SSH Keepalive**：周期性发送 `keepalive@openssh.com` 请求探测连接存活状态
+   - 默认间隔：30 秒
+   - 默认最大失败次数：3（连续 3 次失败判定为死连接）
+
+2. **自动重连（ReconnectDialer）**：
+   - 当 keepalive 检测到连接死亡时，自动触发重连
+   - 当 dial 操作失败时，自动尝试重连并重试
+   - 带指数退避的重试策略
+   - 重连过程中输出状态日志：
+     ```
+     [proxy] SSH connection lost: <error>
+     [proxy] reconnecting to SSH server...
+     [proxy] SSH reconnected successfully
+     ```
+
+### 适用范围
+- **`xsql proxy`**：使用 ReconnectDialer，支持自动重连（长生命周期连接）
+- **`xsql query` / `xsql schema dump`**：每次命令创建新连接，不需要重连
+
 ## 配置方式
 
 ### SSH Proxy 复用（推荐）
@@ -68,3 +95,4 @@ profiles:
 - 监听 `127.0.0.1:0`（或指定端口）分配端口
 - 将 DB 连接指向本地端口
 - 输出支持 JSON/YAML 或终端表格（详见 `docs/cli-spec.md`）
+- 内置 SSH 自动重连：网络中断后自动恢复代理服务

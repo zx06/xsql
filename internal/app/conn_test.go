@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/zx06/xsql/internal/config"
 	"github.com/zx06/xsql/internal/db"
 	"github.com/zx06/xsql/internal/errors"
+	"github.com/zx06/xsql/internal/ssh"
 )
 
 func TestResolveConnection_UnsupportedDriver(t *testing.T) {
@@ -118,20 +120,24 @@ func TestResolveSSH_PassphraseNotAllowed(t *testing.T) {
 func TestResolveSSH_PassphraseAllowed(t *testing.T) {
 	profile := config.Profile{
 		SSHConfig: &config.SSHProxy{
-			Host:       "example.com",
+			Host:       "127.0.0.1",
 			Port:       22,
 			User:       "user",
 			Passphrase: "phrase-value",
 		},
 	}
 
-	client, err := ResolveSSH(nil, profile, true, false)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	client, err := ResolveSSH(ctx, profile, true, false)
 
 	if err == nil {
 		if client != nil {
 			client.Close()
 		}
 	}
+	// Error is acceptable (no SSH server running), just verifying passphrase resolves
 }
 
 func TestConnectionOptions_Fields(t *testing.T) {
@@ -318,5 +324,115 @@ func TestResolveConnection_SSHAuthFailed(t *testing.T) {
 	}
 	if xe.Code != errors.CodeSSHAuthFailed && xe.Code != errors.CodeSSHDialFailed {
 		t.Fatalf("expected ssh auth/dial failure, got %s", xe.Code)
+	}
+}
+
+func TestResolveReconnectableSSH_NoSSHConfig(t *testing.T) {
+	profile := config.Profile{}
+
+	rd, xe := ResolveReconnectableSSH(context.Background(), profile, false, false, nil)
+	if rd != nil {
+		t.Fatal("expected nil dialer")
+	}
+	if xe == nil {
+		t.Fatal("expected error when SSHConfig is nil")
+	}
+	if xe.Code != errors.CodeCfgInvalid {
+		t.Errorf("expected CodeCfgInvalid, got %s", xe.Code)
+	}
+}
+
+func TestResolveReconnectableSSH_PassphraseNotAllowed(t *testing.T) {
+	profile := config.Profile{
+		SSHConfig: &config.SSHProxy{
+			Host:       "127.0.0.1",
+			Port:       22,
+			User:       "user",
+			Passphrase: "plain-phrase",
+		},
+	}
+
+	rd, xe := ResolveReconnectableSSH(context.Background(), profile, false, false, nil)
+	if rd != nil {
+		t.Fatal("expected nil dialer")
+	}
+	if xe == nil {
+		t.Fatal("expected error for plaintext passphrase")
+	}
+	if xe.Code != errors.CodeCfgInvalid {
+		t.Errorf("expected CodeCfgInvalid, got %s", xe.Code)
+	}
+}
+
+func TestResolveReconnectableSSH_ConnectFails(t *testing.T) {
+	profile := config.Profile{
+		SSHConfig: &config.SSHProxy{
+			Host:       "127.0.0.1",
+			Port:       1, // unlikely to have SSH on port 1
+			User:       "user",
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	var statusCalled bool
+	rd, xe := ResolveReconnectableSSH(ctx, profile, true, true, func(e ssh.StatusEvent) {
+		statusCalled = true
+	})
+	if rd != nil {
+		rd.Close()
+		t.Fatal("expected nil dialer")
+	}
+	if xe == nil {
+		t.Fatal("expected connection error")
+	}
+	// The error may be wrapped as XError or as a generic error
+	_ = statusCalled
+}
+
+func TestResolveReconnectableSSH_NilCallback(t *testing.T) {
+	profile := config.Profile{
+		SSHConfig: &config.SSHProxy{
+			Host: "127.0.0.1",
+			Port: 1,
+			User: "user",
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// nil callback should not cause panic
+	rd, xe := ResolveReconnectableSSH(ctx, profile, true, true, nil)
+	if rd != nil {
+		rd.Close()
+	}
+	// Just verify no panic
+	_ = xe
+}
+
+func TestResolveSSHOptions_Success(t *testing.T) {
+	profile := config.Profile{
+		SSHConfig: &config.SSHProxy{
+			Host:         "bastion.example.com",
+			Port:         2222,
+			User:         "admin",
+			IdentityFile: "~/.ssh/id_ed25519",
+		},
+	}
+
+	opts, xe := resolveSSHOptions(profile, true, true)
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+	if opts.Host != "bastion.example.com" {
+		t.Errorf("expected host bastion.example.com, got %s", opts.Host)
+	}
+	if opts.Port != 2222 {
+		t.Errorf("expected port 2222, got %d", opts.Port)
+	}
+	if !opts.SkipKnownHostsCheck {
+		t.Error("expected SkipKnownHostsCheck=true")
 	}
 }
