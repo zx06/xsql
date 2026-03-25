@@ -96,16 +96,18 @@ func TestConnect_MissingHost(t *testing.T) {
 }
 
 func TestConnect_DefaultPort(t *testing.T) {
-	// This test verifies the default port logic without actually connecting
-	// We can't test the full connection without a real SSH server
+	// This test verifies the default port logic without actually connecting.
+	// We use a short timeout to avoid hanging on external connections.
 	opts := Options{
-		Host: "example.com",
-		// Port not set, should default to 22
+		Host: "127.0.0.1",
+		Port: 0, // Should default to 22
 	}
 
-	// Note: This will fail due to missing auth, but that's expected
-	// We just want to verify the port is handled correctly
-	_, xe := Connect(context.TODO(), opts)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// Note: This will fail due to missing auth or connection refused, not due to port
+	_, xe := Connect(ctx, opts)
 	// Should fail due to no auth methods, not due to port
 	if xe != nil && xe.Code == errors.CodeCfgInvalid {
 		t.Errorf("unexpected validation error: %v", xe)
@@ -125,10 +127,13 @@ func TestConnect_DefaultUser(t *testing.T) {
 	_ = os.Setenv("USERNAME", "")
 
 	opts := Options{
-		Host: "example.com",
+		Host: "127.0.0.1",
 	}
 
-	_, xe := Connect(context.TODO(), opts)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	_, xe := Connect(ctx, opts)
 	// Should fail due to no auth methods, not due to user
 	if xe != nil && xe.Code == errors.CodeCfgInvalid {
 		t.Errorf("unexpected validation error: %v", xe)
@@ -331,6 +336,40 @@ func TestClientClose_NoClient(t *testing.T) {
 	client := &Client{}
 	if err := client.Close(); err != nil {
 		t.Fatalf("expected nil error, got %v", err)
+	}
+}
+
+func TestClient_SendKeepalive_NilClient(t *testing.T) {
+	client := &Client{}
+	err := client.SendKeepalive()
+	if err == nil {
+		t.Fatal("expected error for nil ssh client")
+	}
+}
+
+func TestClient_Alive(t *testing.T) {
+	client := &Client{}
+	// Default should be false (zero value of atomic.Bool)
+	if client.Alive() {
+		t.Error("new client should not be alive by default")
+	}
+
+	client.alive.Store(true)
+	if !client.Alive() {
+		t.Error("client should be alive after setting alive=true")
+	}
+
+	_ = client.Close()
+	if client.Alive() {
+		t.Error("client should not be alive after close")
+	}
+}
+
+func TestClient_DialContext_NilClient(t *testing.T) {
+	client := &Client{}
+	_, err := client.DialContext(context.Background(), "tcp", "127.0.0.1:1234")
+	if err == nil {
+		t.Fatal("expected error for nil ssh client")
 	}
 }
 

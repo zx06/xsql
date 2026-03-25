@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -18,6 +19,7 @@ import (
 // Client wraps ssh.Client and provides DialContext for use by database drivers.
 type Client struct {
 	client *ssh.Client
+	alive  atomic.Bool
 }
 
 // Connect establishes an SSH connection.
@@ -59,20 +61,41 @@ func Connect(ctx context.Context, opts Options) (*Client, *errors.XError) {
 		}
 		return nil, errors.Wrap(errors.CodeSSHDialFailed, "failed to connect to ssh server", map[string]any{"host": opts.Host}, err)
 	}
-	return &Client{client: client}, nil
+	c := &Client{client: client}
+	c.alive.Store(true)
+	return c, nil
 }
 
 // DialContext establishes a connection to the target through the SSH tunnel.
 func (c *Client) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	if c.client == nil {
+		return nil, fmt.Errorf("ssh client is not connected")
+	}
 	return c.client.Dial(network, addr)
 }
 
 // Close closes the SSH connection.
 func (c *Client) Close() error {
+	c.alive.Store(false)
 	if c.client != nil {
 		return c.client.Close()
 	}
 	return nil
+}
+
+// SendKeepalive sends a single SSH keepalive request and returns any error.
+// A nil error means the connection is alive.
+func (c *Client) SendKeepalive() error {
+	if c.client == nil {
+		return fmt.Errorf("ssh client is nil")
+	}
+	_, _, err := c.client.SendRequest("keepalive@openssh.com", true, nil)
+	return err
+}
+
+// Alive reports whether the SSH connection is believed to be alive.
+func (c *Client) Alive() bool {
+	return c.alive.Load()
 }
 
 func buildAuthMethods(opts Options) ([]ssh.AuthMethod, *errors.XError) {

@@ -138,23 +138,9 @@ func ResolveSSH(ctx context.Context, profile config.Profile, allowPlaintext, ski
 		return nil, nil
 	}
 
-	passphrase := profile.SSHConfig.Passphrase
-	if passphrase != "" {
-		pp, xe := secret.Resolve(passphrase, secret.Options{AllowPlaintext: allowPlaintext})
-		if xe != nil {
-			return nil, xe
-		}
-		passphrase = pp
-	}
-
-	sshOpts := ssh.Options{
-		Host:                profile.SSHConfig.Host,
-		Port:                profile.SSHConfig.Port,
-		User:                profile.SSHConfig.User,
-		IdentityFile:        profile.SSHConfig.IdentityFile,
-		Passphrase:          passphrase,
-		KnownHostsFile:      profile.SSHConfig.KnownHostsFile,
-		SkipKnownHostsCheck: skipHostKeyCheck || profile.SSHConfig.SkipHostKey,
+	sshOpts, xe := resolveSSHOptions(profile, allowPlaintext, skipHostKeyCheck)
+	if xe != nil {
+		return nil, xe
 	}
 
 	sc, xe := ssh.Connect(ctx, sshOpts)
@@ -163,4 +149,55 @@ func ResolveSSH(ctx context.Context, profile config.Profile, allowPlaintext, ski
 	}
 
 	return sc, nil
+}
+
+// ResolveReconnectableSSH creates an SSH ReconnectDialer for long-lived connections
+// (e.g. the proxy command). It wraps the SSH connection with automatic keepalive
+// monitoring and reconnection on failure.
+func ResolveReconnectableSSH(ctx context.Context, profile config.Profile, allowPlaintext, skipHostKeyCheck bool, onStatus func(ssh.StatusEvent)) (*ssh.ReconnectDialer, *errors.XError) {
+	if profile.SSHConfig == nil {
+		return nil, errors.New(errors.CodeCfgInvalid, "profile must have ssh_proxy configured", nil)
+	}
+
+	sshOpts, xe := resolveSSHOptions(profile, allowPlaintext, skipHostKeyCheck)
+	if xe != nil {
+		return nil, xe
+	}
+
+	var ropts []ssh.ReconnectOption
+	if onStatus != nil {
+		ropts = append(ropts, ssh.WithStatusCallback(onStatus))
+	}
+
+	rd, err := ssh.NewReconnectDialer(ctx, sshOpts, ropts...)
+	if err != nil {
+		if xe, ok := err.(*errors.XError); ok {
+			return nil, xe
+		}
+		return nil, errors.Wrap(errors.CodeSSHDialFailed, "failed to establish reconnectable ssh connection", map[string]any{"host": profile.SSHConfig.Host}, err)
+	}
+
+	return rd, nil
+}
+
+// resolveSSHOptions builds SSH options from a profile, resolving secrets.
+func resolveSSHOptions(profile config.Profile, allowPlaintext, skipHostKeyCheck bool) (ssh.Options, *errors.XError) {
+	passphrase := profile.SSHConfig.Passphrase
+	if passphrase != "" {
+		pp, xe := secret.Resolve(passphrase, secret.Options{AllowPlaintext: allowPlaintext})
+		if xe != nil {
+			return ssh.Options{}, xe
+		}
+		passphrase = pp
+	}
+
+	return ssh.Options{
+		Host:                profile.SSHConfig.Host,
+		Port:                profile.SSHConfig.Port,
+		User:                profile.SSHConfig.User,
+		IdentityFile:        profile.SSHConfig.IdentityFile,
+		Passphrase:          passphrase,
+		KnownHostsFile:      profile.SSHConfig.KnownHostsFile,
+		SkipKnownHostsCheck: skipHostKeyCheck || profile.SSHConfig.SkipHostKey,
+	}, nil
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/zx06/xsql/internal/errors"
 	"github.com/zx06/xsql/internal/output"
 	"github.com/zx06/xsql/internal/proxy"
+	"github.com/zx06/xsql/internal/ssh"
 )
 
 // ProxyFlags holds the flags for the proxy command
@@ -131,24 +132,36 @@ func runProxy(cmd *cobra.Command, flags *ProxyFlags, w *output.Writer) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	sshClient, xe := app.ResolveSSH(ctx, p, allowPlaintext, flags.SSHSkipHostKey)
+	// Use ReconnectDialer for automatic SSH reconnection
+	onStatus := func(event ssh.StatusEvent) {
+		switch event.Type {
+		case ssh.StatusDisconnected:
+			log.Printf("[proxy] SSH connection lost: %v", event.Error)
+		case ssh.StatusReconnecting:
+			log.Printf("[proxy] reconnecting to SSH server...")
+		case ssh.StatusReconnected:
+			log.Printf("[proxy] SSH reconnected successfully")
+		case ssh.StatusReconnectFailed:
+			log.Printf("[proxy] SSH reconnection failed: %v", event.Error)
+		}
+	}
+
+	reconnDialer, xe := app.ResolveReconnectableSSH(ctx, p, allowPlaintext, flags.SSHSkipHostKey, onStatus)
 	if xe != nil {
 		return xe
 	}
-	if sshClient != nil {
-		defer func() {
-			if err := sshClient.Close(); err != nil {
-				log.Printf("[proxy] failed to close ssh client: %v", err)
-			}
-		}()
-	}
+	defer func() {
+		if err := reconnDialer.Close(); err != nil {
+			log.Printf("[proxy] failed to close ssh dialer: %v", err)
+		}
+	}()
 
 	proxyOpts := proxy.Options{
 		LocalHost:  flags.LocalHost,
 		LocalPort:  localPort,
 		RemoteHost: p.Host,
 		RemotePort: p.Port,
-		Dialer:     sshClient,
+		Dialer:     reconnDialer,
 	}
 
 	px, result, xe := proxy.Start(ctx, proxyOpts)
