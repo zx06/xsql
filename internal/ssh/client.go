@@ -67,18 +67,18 @@ func Connect(ctx context.Context, opts Options) (*Client, *errors.XError) {
 	// Perform SSH handshake over the established TCP connection.
 	// Set a deadline derived from context to prevent hanging during handshake.
 	if deadline, ok := ctx.Deadline(); ok {
-		netConn.SetDeadline(deadline)
+		_ = netConn.SetDeadline(deadline)
 	}
 	sshConn, chans, reqs, err := ssh.NewClientConn(netConn, addr, config)
 	if err != nil {
-		netConn.Close()
+		_ = netConn.Close()
 		if strings.Contains(err.Error(), "unable to authenticate") {
 			return nil, errors.Wrap(errors.CodeSSHAuthFailed, "ssh authentication failed", map[string]any{"host": opts.Host}, err)
 		}
 		return nil, errors.Wrap(errors.CodeSSHDialFailed, "failed to connect to ssh server", map[string]any{"host": opts.Host}, err)
 	}
 	// Clear the deadline after successful handshake so it doesn't affect later I/O.
-	netConn.SetDeadline(time.Time{})
+	_ = netConn.SetDeadline(time.Time{})
 
 	client := ssh.NewClient(sshConn, chans, reqs)
 	c := &Client{client: client}

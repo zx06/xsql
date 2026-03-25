@@ -3,9 +3,12 @@ package ssh
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"sync"
 	"testing"
 
@@ -15,10 +18,11 @@ import (
 // testSSHServer is a minimal in-process SSH server for testing.
 // It supports keepalive requests and direct-tcpip channel forwarding.
 type testSSHServer struct {
-	listener net.Listener
-	config   *gossh.ServerConfig
-	hostKey  gossh.Signer
-	wg       sync.WaitGroup
+	listener   net.Listener
+	config     *gossh.ServerConfig
+	hostKey    gossh.Signer
+	tempKeyFile string // path to a temporary client private key for auth
+	wg         sync.WaitGroup
 
 	mu     sync.Mutex
 	closed bool
@@ -52,10 +56,14 @@ func newTestSSHServer(t *testing.T) *testSSHServer {
 		t.Fatalf("failed to listen: %v", err)
 	}
 
+	// Generate a temporary client key file so Connect() has an auth method.
+	keyFile := writeTempKey(t)
+
 	s := &testSSHServer{
-		listener: ln,
-		config:   config,
-		hostKey:  hostSigner,
+		listener:    ln,
+		config:      config,
+		hostKey:     hostSigner,
+		tempKeyFile: keyFile,
 	}
 
 	s.wg.Add(1)
@@ -222,11 +230,14 @@ func startEchoServer(t *testing.T) net.Listener {
 }
 
 // connectToTestServer creates client Options for connecting to a testSSHServer.
+// It generates a temporary ed25519 private key file so that Connect() has an
+// auth method available even in CI environments without ~/.ssh keys.
 func connectToTestServer(s *testSSHServer) Options {
 	host, port := s.HostPort()
 	return Options{
 		Host:                host,
 		Port:                port,
+		IdentityFile:        s.tempKeyFile,
 		SkipKnownHostsCheck: true,
 		KeepaliveInterval:   -1, // disabled by default, tests enable as needed
 	}
@@ -238,4 +249,30 @@ func parseHostPort(addr string) (string, int) {
 	port := 0
 	fmt.Sscanf(portStr, "%d", &port)
 	return host, port
+}
+
+// writeTempKey generates an ed25519 private key, writes it to a temp file in
+// PEM format, and registers cleanup via t.Cleanup. Returns the file path.
+func writeTempKey(t *testing.T) string {
+	t.Helper()
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(priv)
+	if err != nil {
+		t.Fatalf("marshal key: %v", err)
+	}
+	block := &pem.Block{Type: "PRIVATE KEY", Bytes: der}
+
+	f, err := os.CreateTemp(t.TempDir(), "id_ed25519_test_*")
+	if err != nil {
+		t.Fatalf("create temp key file: %v", err)
+	}
+	if err := pem.Encode(f, block); err != nil {
+		f.Close()
+		t.Fatalf("write key: %v", err)
+	}
+	f.Close()
+	return f.Name()
 }

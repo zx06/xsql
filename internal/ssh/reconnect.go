@@ -341,4 +341,3 @@ func (rd *ReconnectDialer) emitStatus(t StatusType, msg string, err error) {
 		rd.onStatus(StatusEvent{Type: t, Message: msg, Error: err})
 	}
 }
-
