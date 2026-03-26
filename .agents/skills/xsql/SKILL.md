@@ -1,24 +1,11 @@
 ---
 name: xsql
-description: Use when Codex needs to inspect MySQL or PostgreSQL with the xsql CLI, especially for safe read-only querying, schema discovery, profile inspection, machine-readable JSON output, stable error-code handling, SSH-backed connections, or MCP server setup in this repository.
+description: Use when inspecting MySQL or PostgreSQL with the xsql CLI, especially for safe read-only querying, schema discovery, profile inspection, machine-readable JSON output, stable error-code handling, SSH-backed connections, or MCP server setup in this repository.
 ---
 
 # xsql
 
 Use `xsql` as an AI-first database CLI. Prefer it when the task requires stable JSON output, explicit error codes, schema discovery, or profile-aware access to MySQL/PostgreSQL.
-
-## Read The Contract First
-
-Read only the docs needed for the task:
-
-- `docs/cli-spec.md`: command behavior, output formats, exit codes
-- `docs/error-contract.md`: JSON/YAML success and failure shapes, stable error codes
-- `docs/ai.md`: AI-oriented workflow, `schema dump`, MCP usage
-- `docs/config.md`: profile layout, config path resolution, CLI/ENV/config precedence
-- `docs/db.md`: read-only policy and query safety model
-- `docs/ssh-proxy.md`: SSH behavior, host-key validation, proxy fallback
-
-If the user asks for code changes to xsql itself, align with these docs before editing code. If implementation and docs diverge, update docs first.
 
 ## Default Operating Rules
 
@@ -119,5 +106,4 @@ Table and CSV output are for humans; they do not include `ok` or `schema_version
 - Keep CLI-layer logic in `cmd/xsql` thin.
 - Keep core behavior in `internal/*`, not coupled to Cobra types.
 - Preserve output contracts and stable error codes.
-- Update docs before implementing any external behavior change.
 - Add or update tests for JSON output, exit codes, and read-only behavior.
