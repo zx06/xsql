@@ -1,5 +1,4 @@
 {
-  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "xsql",
   "description": "AI-first cross-database CLI tools for read-only SQL inspection",
   "owner": {
@@ -10,11 +9,7 @@
     {
       "name": "xsql",
       "description": "Use when you need to safely inspect MySQL/PostgreSQL data or schema via the xsql CLI.",
-      "source": "./",
-      "skills": [
-        "./.agents/skills/xsql"
-      ],
-      "strict": true
+      "source": "./.agents"
     }
   ]
 }
