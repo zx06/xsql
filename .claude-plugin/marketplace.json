@@ -10,30 +10,10 @@
     {
       "name": "xsql",
       "description": "Use when you need to safely inspect MySQL/PostgreSQL data or schema via the xsql CLI.",
-      "version": "1.0.0",
-      "author": {
-        "name": "zx06"
-      },
-      "homepage": "https://github.com/zx06/xsql",
-      "repository": "https://github.com/zx06/xsql",
-      "license": "MIT",
-      "keywords": [
-        "xsql",
-        "sql",
-        "mysql",
-        "postgresql",
-        "database",
-        "cli",
-        "ssh",
-        "query"
+      "source": "./",
+      "skills": [
+        "./.agents/skills/xsql"
       ],
-      "category": "database",
-      "tags": [
-        "read-only",
-        "schema",
-        "mcp"
-      ],
-      "source": "./.claude-plugin",
       "strict": true
     }
   ]
