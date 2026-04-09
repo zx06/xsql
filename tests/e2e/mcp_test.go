@@ -8,7 +8,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -231,6 +235,51 @@ func TestMCPServer_EmptyConfig(t *testing.T) {
 
 	if !toolNames["query"] {
 		t.Error("query tool should exist even with empty config")
+	}
+}
+
+func TestMCPServer_SIGINTCleanExit(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires POSIX signals")
+	}
+
+	config := createTempConfig(t, `profiles: {}`)
+
+	cmd := exec.Command(testBinary, "mcp", "server", "--config", config)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to start MCP server: %v", err)
+	}
+
+	time.Sleep(200 * time.Millisecond)
+
+	if err := cmd.Process.Signal(syscall.SIGINT); err != nil {
+		t.Fatalf("failed to send SIGINT: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				t.Fatalf("expected clean exit, got exit code %d, stderr: %s", exitErr.ExitCode(), stderr.String())
+			}
+			t.Fatalf("expected clean exit, got %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		_ = cmd.Process.Kill()
+		t.Fatal("mcp server did not exit after SIGINT")
+	}
+
+	if strings.Contains(stderr.String(), "context canceled") {
+		t.Fatalf("stderr should not contain context canceled, got: %s", stderr.String())
 	}
 }
 

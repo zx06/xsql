@@ -406,6 +406,28 @@ func TestRunMCPServer_StdioTreatsContextCanceledAsCleanExit(t *testing.T) {
 	}
 }
 
+func TestRunMCPServer_StdioPropagatesNonCanceledError(t *testing.T) {
+	prevRun := runMCPStdioServer
+	wantErr := context.DeadlineExceeded
+	runMCPStdioServer = func(ctx context.Context, _ *mcp.Server) error {
+		return wantErr
+	}
+	defer func() {
+		runMCPStdioServer = prevRun
+	}()
+
+	configPath := filepath.Join(t.TempDir(), "xsql.yaml")
+	if err := os.WriteFile(configPath, []byte("profiles: {}\nssh_proxies: {}\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	GlobalConfig.ConfigStr = configPath
+	err := runMCPServer(&mcpServerOptions{})
+	if err != wantErr {
+		t.Fatalf("expected %v, got %v", wantErr, err)
+	}
+}
+
 func TestResolveMCPServerOptions_Defaults(t *testing.T) {
 	cfg := config.File{
 		Profiles:   map[string]config.Profile{},
