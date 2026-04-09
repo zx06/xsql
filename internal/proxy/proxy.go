@@ -151,16 +151,22 @@ func (p *Proxy) handleConnection(localConn net.Conn, remoteAddr string) {
 
 	// Bidirectional copy
 	var wg sync.WaitGroup
-	wg.Add(2)
+	errChan := make(chan error, 2)
 
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		_, _ = io.Copy(localConn, remoteConn)
+		if _, err := io.Copy(localConn, remoteConn); err != nil {
+			errChan <- fmt.Errorf("copy remote->local failed: %w", err)
+		}
 	}()
 
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		_, _ = io.Copy(remoteConn, localConn)
+		if _, err := io.Copy(remoteConn, localConn); err != nil {
+			errChan <- fmt.Errorf("copy local->remote failed: %w", err)
+		}
 	}()
 
 	// Wait for both copies to finish or context cancellation
@@ -172,7 +178,24 @@ func (p *Proxy) handleConnection(localConn net.Conn, remoteAddr string) {
 
 	select {
 	case <-done:
+		// Check if there were any copy errors
+		select {
+		case err := <-errChan:
+			log.Printf("[proxy] connection copy error: %v", err)
+		default:
+		}
 	case <-p.ctx.Done():
+		// Context cancelled: close connections to unblock io.Copy goroutines
+		_ = localConn.Close()
+		_ = remoteConn.Close()
+		// Wait for goroutines to finish
+		<-done
+		// Check for any final errors
+		select {
+		case err := <-errChan:
+			log.Printf("[proxy] connection copy error on shutdown: %v", err)
+		default:
+		}
 	}
 }
 

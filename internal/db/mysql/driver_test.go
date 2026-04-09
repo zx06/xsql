@@ -197,7 +197,6 @@ func TestDriver_Open_ContextCancelled(t *testing.T) {
 
 func TestDriver_Open_WithDialer_CleanupOnFailure(t *testing.T) {
 	resetSyncMap(&dialers)
-	resetSyncMap(&registeredDials)
 
 	drv, _ := db.Get("mysql")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

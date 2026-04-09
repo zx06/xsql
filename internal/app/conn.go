@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"sync"
 
 	"github.com/zx06/xsql/internal/config"
 	"github.com/zx06/xsql/internal/db"
@@ -15,6 +16,7 @@ type Connection struct {
 	DB         *sql.DB
 	SSHClient  *ssh.Client
 	Profile    config.Profile
+	closeMu    sync.Mutex
 	closeHooks []func()
 }
 
@@ -30,7 +32,11 @@ func (c *Connection) Close() error {
 			errs = append(errs, err)
 		}
 	}
-	for _, fn := range c.closeHooks {
+	c.closeMu.Lock()
+	hooks := c.closeHooks
+	c.closeHooks = nil
+	c.closeMu.Unlock()
+	for _, fn := range hooks {
 		if fn != nil {
 			fn()
 		}
@@ -81,6 +87,7 @@ func ResolveConnection(ctx context.Context, opts ConnectionOptions) (*Connection
 	}
 
 	closeHooks := make([]func(), 0, 1)
+	var hooksMu sync.Mutex
 	connOpts := db.ConnOptions{
 		DSN:      opts.Profile.DSN,
 		Host:     opts.Profile.Host,
@@ -90,7 +97,9 @@ func ResolveConnection(ctx context.Context, opts ConnectionOptions) (*Connection
 		Database: opts.Profile.Database,
 		RegisterCloseHook: func(fn func()) {
 			if fn != nil {
+				hooksMu.Lock()
 				closeHooks = append(closeHooks, fn)
+				hooksMu.Unlock()
 			}
 		},
 	}

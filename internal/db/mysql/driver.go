@@ -17,9 +17,8 @@ import (
 )
 
 var (
-	dialerCounter   uint64
-	dialers         sync.Map
-	registeredDials sync.Map
+	dialerCounter uint64
+	dialers       sync.Map
 )
 
 func init() {
@@ -30,19 +29,17 @@ func registerDialContext(dialer func(context.Context, string, string) (net.Conn,
 	dialerNum := atomic.AddUint64(&dialerCounter, 1)
 	dialName := fmt.Sprintf("xsql_ssh_tunnel_%d", dialerNum)
 
-	if _, loaded := registeredDials.LoadOrStore(dialName, true); !loaded {
-		mysql.RegisterDialContext(dialName, func(ctx context.Context, addr string) (net.Conn, error) {
-			d, ok := dialers.Load(dialName)
-			if !ok {
-				return nil, fmt.Errorf("dialer not found: %s", dialName)
-			}
-			fn, ok := d.(func(context.Context, string, string) (net.Conn, error))
-			if !ok || fn == nil {
-				return nil, fmt.Errorf("invalid dialer for: %s", dialName)
-			}
-			return fn(ctx, "tcp", addr)
-		})
-	}
+	mysql.RegisterDialContext(dialName, func(ctx context.Context, addr string) (net.Conn, error) {
+		d, ok := dialers.Load(dialName)
+		if !ok {
+			return nil, fmt.Errorf("dialer not found: %s", dialName)
+		}
+		fn, ok := d.(func(context.Context, string, string) (net.Conn, error))
+		if !ok || fn == nil {
+			return nil, fmt.Errorf("invalid dialer for: %s", dialName)
+		}
+		return fn(ctx, "tcp", addr)
+	})
 
 	dialers.Store(dialName, dialer)
 	return dialName
@@ -81,6 +78,7 @@ func (d *Driver) Open(ctx context.Context, opts db.ConnOptions) (*sql.DB, *error
 		if opts.RegisterCloseHook != nil {
 			opts.RegisterCloseHook(func() {
 				dialers.Delete(dialName)
+				mysql.DeregisterDialContext(dialName)
 			})
 		}
 	}
