@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	stderrors "errors"
 	"log"
 	"net/http"
 	"os"
@@ -17,6 +18,10 @@ import (
 	mcp_pkg "github.com/zx06/xsql/internal/mcp"
 	"github.com/zx06/xsql/internal/secret"
 )
+
+var runMCPStdioServer = func(ctx context.Context, server *mcp.Server) error {
+	return server.Run(ctx, &mcp.StdioTransport{})
+}
 
 // NewMCPCommand creates the MCP command group
 func NewMCPCommand() *cobra.Command {
@@ -88,7 +93,10 @@ func runMCPServer(opts *mcpServerOptions) error {
 			cancel()
 		}()
 
-		return server.Run(ctx, &mcp.StdioTransport{})
+		if err := runMCPStdioServer(ctx, server); err != nil && !stderrors.Is(err, context.Canceled) {
+			return err
+		}
+		return nil
 	case mcp_pkg.TransportStreamableHTTP:
 		handler, err := mcp_pkg.NewStreamableHTTPHandler(server, resolved.httpAuthToken)
 		if err != nil {

@@ -17,8 +17,10 @@ import (
 )
 
 var (
-	dialerCounter uint64
-	dialers       sync.Map
+	dialerCounter           uint64
+	dialers                 sync.Map
+	registerDialContextFn   = mysql.RegisterDialContext
+	deregisterDialContextFn = mysql.DeregisterDialContext
 )
 
 func init() {
@@ -29,7 +31,7 @@ func registerDialContext(dialer func(context.Context, string, string) (net.Conn,
 	dialerNum := atomic.AddUint64(&dialerCounter, 1)
 	dialName := fmt.Sprintf("xsql_ssh_tunnel_%d", dialerNum)
 
-	mysql.RegisterDialContext(dialName, func(ctx context.Context, addr string) (net.Conn, error) {
+	registerDialContextFn(dialName, func(ctx context.Context, addr string) (net.Conn, error) {
 		d, ok := dialers.Load(dialName)
 		if !ok {
 			return nil, fmt.Errorf("dialer not found: %s", dialName)
@@ -43,6 +45,14 @@ func registerDialContext(dialer func(context.Context, string, string) (net.Conn,
 
 	dialers.Store(dialName, dialer)
 	return dialName
+}
+
+func cleanupDialContext(dialName string) {
+	if dialName == "" {
+		return
+	}
+	dialers.Delete(dialName)
+	deregisterDialContextFn(dialName)
 }
 
 type Driver struct{}
@@ -77,8 +87,7 @@ func (d *Driver) Open(ctx context.Context, opts db.ConnOptions) (*sql.DB, *error
 		cfg.Net = dialName
 		if opts.RegisterCloseHook != nil {
 			opts.RegisterCloseHook(func() {
-				dialers.Delete(dialName)
-				mysql.DeregisterDialContext(dialName)
+				cleanupDialContext(dialName)
 			})
 		}
 	}
@@ -92,9 +101,7 @@ func (d *Driver) Open(ctx context.Context, opts db.ConnOptions) (*sql.DB, *error
 		if closeErr := conn.Close(); closeErr != nil {
 			log.Printf("failed to close mysql connection: %v", closeErr)
 		}
-		if dialName != "" {
-			dialers.Delete(dialName)
-		}
+		cleanupDialContext(dialName)
 		return nil, errors.Wrap(errors.CodeDBConnectFailed, "failed to ping mysql", nil, err)
 	}
 	return conn, nil

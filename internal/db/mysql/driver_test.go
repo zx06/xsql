@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -197,6 +198,15 @@ func TestDriver_Open_ContextCancelled(t *testing.T) {
 
 func TestDriver_Open_WithDialer_CleanupOnFailure(t *testing.T) {
 	resetSyncMap(&dialers)
+	var deregisterCalls int32
+	prevDeregister := deregisterDialContextFn
+	deregisterDialContextFn = func(net string) {
+		atomic.AddInt32(&deregisterCalls, 1)
+		prevDeregister(net)
+	}
+	defer func() {
+		deregisterDialContextFn = prevDeregister
+	}()
 
 	drv, _ := db.Get("mysql")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -226,10 +236,16 @@ func TestDriver_Open_WithDialer_CleanupOnFailure(t *testing.T) {
 	if countSyncMap(&dialers) != 0 {
 		t.Fatal("expected dialers map to be cleaned on open failure")
 	}
+	if got := atomic.LoadInt32(&deregisterCalls); got != 1 {
+		t.Fatalf("expected one deregister call on open failure, got %d", got)
+	}
 
 	hooks[0]()
 	if countSyncMap(&dialers) != 0 {
 		t.Fatal("expected hook cleanup to be idempotent")
+	}
+	if got := atomic.LoadInt32(&deregisterCalls); got != 2 {
+		t.Fatalf("expected close hook cleanup to remain safe, got %d deregister calls", got)
 	}
 }
 
