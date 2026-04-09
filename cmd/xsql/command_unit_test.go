@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/zx06/xsql/internal/app"
 	"github.com/zx06/xsql/internal/config"
 	"github.com/zx06/xsql/internal/errors"
@@ -378,6 +380,51 @@ func TestRunMCPServer_ConfigMissing(t *testing.T) {
 	err := runMCPServer(&mcpServerOptions{})
 	if err == nil {
 		t.Fatal("expected error for missing config")
+	}
+}
+
+func TestRunMCPServer_StdioTreatsContextCanceledAsCleanExit(t *testing.T) {
+	prevRun := runMCPStdioServer
+	runMCPStdioServer = func(ctx context.Context, _ *mcp.Server) error {
+		cancelCtx, cancel := context.WithCancel(ctx)
+		cancel()
+		return cancelCtx.Err()
+	}
+	defer func() {
+		runMCPStdioServer = prevRun
+	}()
+
+	configPath := filepath.Join(t.TempDir(), "xsql.yaml")
+	if err := os.WriteFile(configPath, []byte("profiles: {}\nssh_proxies: {}\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	GlobalConfig.ConfigStr = configPath
+	err := runMCPServer(&mcpServerOptions{})
+	if err != nil {
+		t.Fatalf("expected nil error for canceled stdio server, got %v", err)
+	}
+}
+
+func TestRunMCPServer_StdioPropagatesNonCanceledError(t *testing.T) {
+	prevRun := runMCPStdioServer
+	wantErr := context.DeadlineExceeded
+	runMCPStdioServer = func(ctx context.Context, _ *mcp.Server) error {
+		return wantErr
+	}
+	defer func() {
+		runMCPStdioServer = prevRun
+	}()
+
+	configPath := filepath.Join(t.TempDir(), "xsql.yaml")
+	if err := os.WriteFile(configPath, []byte("profiles: {}\nssh_proxies: {}\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	GlobalConfig.ConfigStr = configPath
+	err := runMCPServer(&mcpServerOptions{})
+	if err != wantErr {
+		t.Fatalf("expected %v, got %v", wantErr, err)
 	}
 }
 

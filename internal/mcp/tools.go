@@ -34,6 +34,12 @@ type ToolHandler struct {
 
 // NewToolHandler creates a new tool handler
 func NewToolHandler(cfg *config.File) *ToolHandler {
+	if cfg == nil {
+		cfg = &config.File{
+			Profiles:   map[string]config.Profile{},
+			SSHProxies: map[string]config.SSHProxy{},
+		}
+	}
 	return &ToolHandler{
 		config: cfg,
 	}

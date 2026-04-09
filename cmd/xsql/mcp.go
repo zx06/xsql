@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	stderrors "errors"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,6 +18,10 @@ import (
 	mcp_pkg "github.com/zx06/xsql/internal/mcp"
 	"github.com/zx06/xsql/internal/secret"
 )
+
+var runMCPStdioServer = func(ctx context.Context, server *mcp.Server) error {
+	return server.Run(ctx, &mcp.StdioTransport{})
+}
 
 // NewMCPCommand creates the MCP command group
 func NewMCPCommand() *cobra.Command {
@@ -75,8 +81,22 @@ func runMCPServer(opts *mcpServerOptions) error {
 
 	switch resolved.transport {
 	case mcp_pkg.TransportStdio:
-		ctx := context.Background()
-		return server.Run(ctx, &mcp.StdioTransport{})
+		// Install signal handler for graceful shutdown in stdio mode
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			<-sigChan
+			signal.Stop(sigChan)
+			cancel()
+		}()
+
+		if err := runMCPStdioServer(ctx, server); err != nil && !stderrors.Is(err, context.Canceled) {
+			return err
+		}
+		return nil
 	case mcp_pkg.TransportStreamableHTTP:
 		handler, err := mcp_pkg.NewStreamableHTTPHandler(server, resolved.httpAuthToken)
 		if err != nil {
@@ -86,8 +106,11 @@ func runMCPServer(opts *mcpServerOptions) error {
 			return errors.Wrap(errors.CodeInternal, "failed to create streamable http handler", nil, err)
 		}
 		httpServer := &http.Server{
-			Addr:    resolved.httpAddr,
-			Handler: handler,
+			Addr:         resolved.httpAddr,
+			Handler:      handler,
+			ReadTimeout:  30 * time.Second,
+			WriteTimeout: 30 * time.Second,
+			IdleTimeout:  120 * time.Second,
 		}
 
 		sigChan := make(chan os.Signal, 1)
@@ -95,12 +118,18 @@ func runMCPServer(opts *mcpServerOptions) error {
 
 		go func() {
 			<-sigChan
+			signal.Stop(sigChan)
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			_ = httpServer.Shutdown(ctx)
+			if shutdownErr := httpServer.Shutdown(ctx); shutdownErr != nil {
+				log.Printf("[mcp] http server shutdown error: %v", shutdownErr)
+			}
 		}()
 
-		return httpServer.ListenAndServe()
+		if listenErr := httpServer.ListenAndServe(); listenErr != nil && listenErr != http.ErrServerClosed {
+			return listenErr
+		}
+		return nil
 	default:
 		return errors.New(errors.CodeCfgInvalid, "unsupported mcp transport", map[string]any{"transport": resolved.transport})
 	}
