@@ -4,3 +4,6 @@
 npm/*/bin/xsql
 npm/*/bin/xsql.exe
 coverage.txt
+webui/node_modules/
+webui/dist/*
+!webui/dist/.keep

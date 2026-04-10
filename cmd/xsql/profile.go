@@ -3,8 +3,8 @@ package main
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/zx06/xsql/internal/app"
 	"github.com/zx06/xsql/internal/config"
-	"github.com/zx06/xsql/internal/errors"
 	"github.com/zx06/xsql/internal/output"
 )
 
@@ -32,21 +32,11 @@ func newProfileListCommand(w *output.Writer) *cobra.Command {
 				return err
 			}
 
-			cfg, cfgPath, xe := config.LoadConfig(config.Options{
+			result, xe := app.LoadProfiles(config.Options{
 				ConfigPath: GlobalConfig.ConfigStr,
 			})
 			if xe != nil {
 				return xe
-			}
-
-			profiles := make([]config.ProfileInfo, 0, len(cfg.Profiles))
-			for name, p := range cfg.Profiles {
-				profiles = append(profiles, config.ProfileToInfo(name, p))
-			}
-
-			result := map[string]any{
-				"config_path": cfgPath,
-				"profiles":    profiles,
 			}
 
 			return w.WriteOK(format, result)
@@ -67,48 +57,11 @@ func newProfileShowCommand(w *output.Writer) *cobra.Command {
 				return err
 			}
 
-			cfg, cfgPath, xe := config.LoadConfig(config.Options{
+			result, xe := app.LoadProfileDetail(config.Options{
 				ConfigPath: GlobalConfig.ConfigStr,
-			})
+			}, name)
 			if xe != nil {
 				return xe
-			}
-
-			profile, ok := cfg.Profiles[name]
-			if !ok {
-				return errors.New(errors.CodeCfgInvalid, "profile not found", map[string]any{"name": name})
-			}
-
-			// Redact sensitive information: hide password
-			result := map[string]any{
-				"config_path":        cfgPath,
-				"name":               name,
-				"description":        profile.Description,
-				"db":                 profile.DB,
-				"host":               profile.Host,
-				"port":               profile.Port,
-				"user":               profile.User,
-				"database":           profile.Database,
-				"unsafe_allow_write": profile.UnsafeAllowWrite,
-				"allow_plaintext":    profile.AllowPlaintext,
-			}
-
-			if profile.DSN != "" {
-				result["dsn"] = "***"
-			}
-			if profile.Password != "" {
-				result["password"] = "***"
-			}
-			if profile.SSHProxy != "" {
-				result["ssh_proxy"] = profile.SSHProxy
-				if proxy, ok := cfg.SSHProxies[profile.SSHProxy]; ok {
-					result["ssh_host"] = proxy.Host
-					result["ssh_port"] = proxy.Port
-					result["ssh_user"] = proxy.User
-					if proxy.IdentityFile != "" {
-						result["ssh_identity_file"] = proxy.IdentityFile
-					}
-				}
 			}
 
 			return w.WriteOK(format, result)

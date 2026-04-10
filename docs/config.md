@@ -39,6 +39,12 @@ mcp:
     auth_token: "keyring:mcp/http_token"
     allow_plaintext_token: false
 
+web:
+  http:
+    addr: 127.0.0.1:8788
+    auth_token: "keyring:web/http_token"
+    allow_plaintext_token: false
+
 ssh_proxies:
   bastion:
     host: bastion.example.com
@@ -103,6 +109,14 @@ profiles:
 | `mcp.http.addr` | string | Streamable HTTP 监听地址 |
 | `mcp.http.auth_token` | string | Streamable HTTP 鉴权 token（支持 `keyring:` 引用） |
 | `mcp.http.allow_plaintext_token` | bool | 允许在配置中使用明文 token |
+
+## Web 配置项
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `web.http.addr` | string | Web 服务监听地址 |
+| `web.http.auth_token` | string | Web 鉴权 token（支持 `keyring:` 引用） |
+| `web.http.allow_plaintext_token` | bool | 允许在配置中使用明文 token |
 
 ## SSH Proxy 配置项
 

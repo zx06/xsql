@@ -31,6 +31,8 @@ func run() int {
 	root.AddCommand(NewMCPCommand())
 	root.AddCommand(NewProxyCommand(&w))
 	root.AddCommand(NewConfigCommand(&w))
+	root.AddCommand(NewServeCommand(&w))
+	root.AddCommand(NewWebCommand(&w))
 
 	// Execute and handle errors
 	if err := root.Execute(); err != nil {

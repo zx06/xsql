@@ -8,6 +8,8 @@
 - `XSQL_MCP_TRANSPORT`：MCP 传输（`stdio` 或 `streamable_http`）
 - `XSQL_MCP_HTTP_ADDR`：Streamable HTTP 监听地址
 - `XSQL_MCP_HTTP_AUTH_TOKEN`：Streamable HTTP 鉴权 token
+- `XSQL_WEB_HTTP_ADDR`：Web 服务监听地址
+- `XSQL_WEB_HTTP_AUTH_TOKEN`：Web 鉴权 token
 
 ## 2. 连接参数（计划中，当前未实现）
 > 当前版本连接参数通过 config 文件的 profile 配置，ENV 支持计划在后续版本实现。

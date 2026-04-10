@@ -179,6 +179,69 @@ Table: public.users (用户表)
 
 > **注意**：schema dump 是只读操作，遵循 profile 的只读策略。
 
+### `xsql serve`
+
+启动本地 Web 管理服务，提供 profile 浏览、schema 浏览和只读 SQL 查询能力。
+
+```bash
+# 启动服务
+xsql serve
+
+# 监听自定义地址
+xsql serve --addr 127.0.0.1:9000
+
+# 远程监听（必须提供 token）
+xsql serve --addr 0.0.0.0:8788 --auth-token "your-token"
+```
+
+**Flags:**
+| Flag | 默认值 | 说明 |
+|------|--------|------|
+| `--addr` | `127.0.0.1:8788` | Web 服务监听地址 |
+| `--auth-token` | - | Bearer token；非 loopback 地址必填 |
+| `--allow-plaintext` | false | 允许配置中使用明文 secrets |
+| `--ssh-skip-known-hosts-check` | false | 跳过 SSH 主机密钥验证（危险） |
+
+**输出示例（JSON）：**
+```json
+{
+  "ok": true,
+  "schema_version": 1,
+  "data": {
+    "addr": "127.0.0.1:8788",
+    "url": "http://127.0.0.1:8788/",
+    "auth_required": false,
+    "mode": "serve"
+  }
+}
+```
+
+### `xsql web`
+
+启动 Web 管理服务，并在服务就绪后尝试打开默认浏览器。
+
+```bash
+xsql web
+xsql web --addr 127.0.0.1:9000
+```
+
+> **注意**：浏览器打开为 best-effort；若打开失败，服务仍继续运行。
+
+### Web API
+
+Web UI 使用以下 HTTP API，统一返回 JSON Envelope：
+
+| Method | Path | 说明 |
+|--------|------|------|
+| `GET` | `/api/v1/health` | 服务健康检查 |
+| `GET` | `/api/v1/profiles` | 列出 profiles |
+| `GET` | `/api/v1/profiles/{name}` | 查看 profile 详情（脱敏） |
+| `GET` | `/api/v1/schema/tables` | 列出表（支持 `profile`/`table`/`include_system`） |
+| `GET` | `/api/v1/schema/tables/{schema}/{table}` | 查看单表结构（支持 `profile`） |
+| `POST` | `/api/v1/query` | 执行只读 SQL 查询 |
+
+Web 查询强制只读，即使 profile 配置了 `unsafe_allow_write: true`，也不会在 Web 接口中生效。
+
 ### `xsql spec`
 
 导出 tool spec（供 AI/agent 自动发现）。

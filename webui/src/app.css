@@ -1,0 +1,234 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  overflow: hidden;
+}
+
+@layer base {
+  body {
+    margin: 0;
+    background: var(--app-bg);
+    color: var(--text);
+    font-family: Georgia, "Times New Roman", serif;
+    overflow: hidden;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
+
+.theme-white {
+  --app-bg: #ede8df;
+  --text: #1d2529;
+  --muted: #66737a;
+  --panel-bg: rgba(255, 255, 255, 0.82);
+  --panel-border: rgba(29, 37, 41, 0.1);
+  --panel-shadow: rgba(29, 37, 41, 0.05);
+  --panel-inner: rgba(255, 255, 255, 0.58);
+  --input-bg: #fcfbf8;
+  --input-border: rgba(29, 37, 41, 0.14);
+  --table-bg: #fcfbf8;
+  --table-head-bg: #f7f2eb;
+  --table-border: rgba(29, 37, 41, 0.08);
+  --accent: #214f7b;
+  --accent-soft: #fff5eb;
+  --accent-border: #b36a41;
+  --tag-bg: #e7ddd0;
+  --tag-text: #7b5137;
+  --pill-bg: #e6edf6;
+  --pill-text: #2d5679;
+  --error-bg: rgba(255, 237, 232, 0.92);
+  --error-text: #8f281d;
+  --editor-bg: #f6f1ea;
+  --editor-border: rgba(29, 37, 41, 0.12);
+}
+
+.theme-black {
+  --app-bg: #121518;
+  --text: #e8ecef;
+  --muted: #a4b0b7;
+  --panel-bg: rgba(24, 28, 32, 0.92);
+  --panel-border: rgba(232, 236, 239, 0.08);
+  --panel-shadow: rgba(0, 0, 0, 0.28);
+  --panel-inner: rgba(38, 44, 50, 0.72);
+  --input-bg: #181d22;
+  --input-border: rgba(232, 236, 239, 0.1);
+  --table-bg: #171c20;
+  --table-head-bg: #20262c;
+  --table-border: rgba(232, 236, 239, 0.08);
+  --accent: #5f95c8;
+  --accent-soft: rgba(95, 149, 200, 0.14);
+  --accent-border: #5f95c8;
+  --tag-bg: #2b3138;
+  --tag-text: #d4dde3;
+  --pill-bg: #243340;
+  --pill-text: #9bc0e5;
+  --error-bg: rgba(95, 31, 25, 0.55);
+  --error-text: #ffd8d1;
+  --editor-bg: #14191d;
+  --editor-border: rgba(232, 236, 239, 0.08);
+}
+
+@layer components {
+  .xsql-panel {
+    @apply rounded-xl border border-[var(--panel-border)] bg-[var(--panel-bg)] shadow-[0_10px_24px_var(--panel-shadow)];
+  }
+
+  .xsql-input {
+    @apply w-full rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--text)] outline-none transition placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[color:var(--accent-soft)];
+  }
+
+  .xsql-button {
+    @apply inline-flex items-center justify-center rounded-lg border px-3 py-2 text-sm font-medium transition disabled:opacity-60;
+  }
+
+  .xsql-button-primary {
+    @apply border-[var(--accent-border)] bg-[var(--accent)] text-white hover:brightness-105;
+  }
+
+  .xsql-tab {
+    @apply rounded-md px-3 py-1.5 text-xs font-medium text-[var(--muted)] transition hover:bg-[var(--accent-soft)] hover:text-[var(--text)];
+  }
+
+  .xsql-tab-active {
+    @apply bg-[var(--accent-soft)] text-[var(--text)] ring-1 ring-[var(--panel-border)];
+  }
+
+  .xsql-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--muted) 55%, transparent) transparent;
+  }
+
+  .xsql-scroll::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .xsql-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .xsql-scroll::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--muted) 50%, transparent);
+    background-clip: padding-box;
+  }
+
+  .xsql-scroll::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--muted) 70%, transparent);
+    background-clip: padding-box;
+  }
+}
+
+.xsql-table {
+  width: 100%;
+  min-width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  background: var(--table-bg);
+}
+
+.xsql-table th,
+.xsql-table td {
+  border-bottom: 1px solid var(--table-border);
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.xsql-table th {
+  position: sticky;
+  top: 0;
+  background: var(--table-head-bg);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.xsql-table td {
+  font-size: 0.84rem;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.xsql-table-compact th {
+  padding: 0.45rem 0.65rem;
+}
+
+.xsql-table-compact td {
+  padding: 0.15rem 0.25rem;
+  vertical-align: middle;
+}
+
+.xsql-cm {
+  min-height: 0;
+}
+
+.xsql-cm .cm-editor {
+  height: 100%;
+}
+
+.xsql-cm .cm-scroller,
+.xsql-cm .cm-tooltip-autocomplete > ul {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted) 55%, transparent) transparent;
+}
+
+.xsql-cm .cm-scroller::-webkit-scrollbar,
+.xsql-cm .cm-tooltip-autocomplete > ul::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.xsql-cm .cm-scroller::-webkit-scrollbar-track,
+.xsql-cm .cm-tooltip-autocomplete > ul::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.xsql-cm .cm-scroller::-webkit-scrollbar-thumb,
+.xsql-cm .cm-tooltip-autocomplete > ul::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 50%, transparent);
+  background-clip: padding-box;
+}
+
+.xsql-cm .cm-scroller::-webkit-scrollbar-thumb:hover,
+.xsql-cm .cm-tooltip-autocomplete > ul::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--muted) 70%, transparent);
+  background-clip: padding-box;
+}
+
+.xsql-cm .cm-tooltip-autocomplete ul {
+  padding: 0.25rem;
+}
+
+.xsql-cm .cm-tooltip-autocomplete ul li .cm-completionLabel {
+  font-size: 0.82rem;
+}
+
+.xsql-cm .cm-tooltip-autocomplete ul li .cm-completionDetail {
+  color: var(--muted);
+}

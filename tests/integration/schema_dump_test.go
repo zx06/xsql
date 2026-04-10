@@ -163,6 +163,27 @@ func TestSchemaDump_MySQL_RealDB(t *testing.T) {
 	if !hasCompositeForeignKeyTo(orders, usersTable) {
 		t.Fatalf("orders table missing composite FK to %s", usersTable)
 	}
+
+	tableList, xe := db.ListTables(ctx, "mysql", conn, db.SchemaOptions{
+		TablePattern: prefix + "*",
+	})
+	if xe != nil {
+		t.Fatalf("ListTables error: %v", xe)
+	}
+	if tableList.Database == "" || len(tableList.Tables) != 2 {
+		t.Fatalf("unexpected table list: %#v", tableList)
+	}
+
+	describeUsers, xe := db.DescribeTable(ctx, "mysql", conn, db.TableDescribeOptions{
+		Schema: tableList.Database,
+		Name:   usersTable,
+	})
+	if xe != nil {
+		t.Fatalf("DescribeTable users error: %v", xe)
+	}
+	if describeUsers.Name != usersTable || len(describeUsers.Columns) == 0 {
+		t.Fatalf("unexpected describe users result: %#v", describeUsers)
+	}
 }
 
 func TestSchemaDump_Pg_RealDB(t *testing.T) {
@@ -346,6 +367,27 @@ func TestSchemaDump_Pg_RealDB(t *testing.T) {
 	}
 	if !hasCompositeForeignKeyTo(orders, prefix+usersTable) {
 		t.Fatalf("orders table missing composite FK to %s", prefix+usersTable)
+	}
+
+	tableList, xe := db.ListTables(ctx, "pg", conn, db.SchemaOptions{
+		TablePattern: prefix + "*",
+	})
+	if xe != nil {
+		t.Fatalf("ListTables error: %v", xe)
+	}
+	if tableList.Database == "" || len(tableList.Tables) != 2 {
+		t.Fatalf("unexpected table list: %#v", tableList)
+	}
+
+	describeUsers, xe := db.DescribeTable(ctx, "pg", conn, db.TableDescribeOptions{
+		Schema: schema,
+		Name:   prefix + usersTable,
+	})
+	if xe != nil {
+		t.Fatalf("DescribeTable users error: %v", xe)
+	}
+	if describeUsers.Name != prefix+usersTable || len(describeUsers.Columns) == 0 {
+		t.Fatalf("unexpected describe users result: %#v", describeUsers)
 	}
 }
 

@@ -102,8 +102,8 @@ func TestAs(t *testing.T) {
 
 func TestAllCodes(t *testing.T) {
 	codes := AllCodes()
-	if len(codes) != 13 {
-		t.Errorf("AllCodes() should return 13 codes, got %d", len(codes))
+	if len(codes) != 15 {
+		t.Errorf("AllCodes() should return 15 codes, got %d", len(codes))
 	}
 
 	// Check for duplicates

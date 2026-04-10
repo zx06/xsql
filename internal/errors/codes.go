@@ -27,6 +27,10 @@ const (
 	// Port
 	CodePortInUse Code = "XSQL_PORT_IN_USE"
 
+	// Auth
+	CodeAuthRequired Code = "XSQL_AUTH_REQUIRED"
+	CodeAuthInvalid  Code = "XSQL_AUTH_INVALID"
+
 	// Internal
 	CodeInternal Code = "XSQL_INTERNAL"
 )
@@ -45,6 +49,8 @@ func AllCodes() []Code {
 		CodeDBExecFailed,
 		CodeROBlocked,
 		CodePortInUse,
+		CodeAuthRequired,
+		CodeAuthInvalid,
 		CodeInternal,
 	}
 }

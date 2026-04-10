@@ -7,8 +7,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/zx06/xsql/internal/app"
-	"github.com/zx06/xsql/internal/db"
-	"github.com/zx06/xsql/internal/errors"
 	"github.com/zx06/xsql/internal/output"
 )
 
@@ -67,35 +65,17 @@ func runSchemaDump(cmd *cobra.Command, args []string, flags *SchemaFlags, w *out
 	}
 
 	p := GlobalConfig.Resolved.Profile
-	if p.DB == "" {
-		return errors.New(errors.CodeCfgInvalid, "db type is required (mysql|pg)", nil)
-	}
-
-	timeout := DefaultSchemaTimeout
-	if flags.SchemaTimeoutSet && flags.SchemaTimeout > 0 {
-		timeout = time.Duration(flags.SchemaTimeout) * time.Second
-	} else if p.SchemaTimeout > 0 {
-		timeout = time.Duration(p.SchemaTimeout) * time.Second
-	}
+	timeout := app.SchemaTimeout(p, flags.SchemaTimeout, flags.SchemaTimeoutSet, DefaultSchemaTimeout)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	conn, xe := app.ResolveConnection(ctx, app.ConnectionOptions{
+	result, xe := app.DumpSchema(ctx, app.SchemaDumpRequest{
 		Profile:          p,
+		TablePattern:     flags.TablePattern,
+		IncludeSystem:    flags.IncludeSystem,
 		AllowPlaintext:   flags.AllowPlaintext,
 		SkipHostKeyCheck: flags.SSHSkipHostKey,
 	})
-	if xe != nil {
-		return xe
-	}
-	defer func() { _ = conn.Close() }()
-
-	schemaOpts := db.SchemaOptions{
-		TablePattern:  flags.TablePattern,
-		IncludeSystem: flags.IncludeSystem,
-	}
-
-	result, xe := db.DumpSchema(ctx, p.DB, conn.DB, schemaOpts)
 	if xe != nil {
 		return xe
 	}

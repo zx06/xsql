@@ -49,6 +49,55 @@ func TestNormalizeErr(t *testing.T) {
 	}
 }
 
+func TestResolveWebOptions_DefaultLoopback(t *testing.T) {
+	resolved, xe := resolveWebOptions(&webCommandOptions{}, config.File{})
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+	if resolved.addr != "127.0.0.1:8788" {
+		t.Fatalf("addr=%q", resolved.addr)
+	}
+	if resolved.authRequired {
+		t.Fatal("loopback address should not require auth")
+	}
+}
+
+func TestResolveWebOptions_RemoteRequiresToken(t *testing.T) {
+	_, xe := resolveWebOptions(&webCommandOptions{
+		addr:    "0.0.0.0:8788",
+		addrSet: true,
+	}, config.File{})
+	if xe == nil {
+		t.Fatal("expected error")
+	}
+	if xe.Code != errors.CodeCfgInvalid {
+		t.Fatalf("code=%s", xe.Code)
+	}
+}
+
+func TestResolveWebOptions_ConfigToken(t *testing.T) {
+	resolved, xe := resolveWebOptions(&webCommandOptions{
+		addr:    "0.0.0.0:8788",
+		addrSet: true,
+	}, config.File{
+		Web: config.WebConfig{
+			HTTP: config.WebHTTPConfig{
+				AuthToken:           "token",
+				AllowPlaintextToken: true,
+			},
+		},
+	})
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+	if !resolved.authRequired {
+		t.Fatal("expected authRequired=true")
+	}
+	if resolved.authToken != "token" {
+		t.Fatalf("authToken=%q", resolved.authToken)
+	}
+}
+
 func TestRun_SpecCommandSuccess(t *testing.T) {
 	prev := GlobalConfig
 	GlobalConfig = &Config{}

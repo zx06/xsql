@@ -3,79 +3,103 @@ package pg
 import (
 	"context"
 	"database/sql"
+	"sort"
 	"strings"
 
 	"github.com/zx06/xsql/internal/db"
 	"github.com/zx06/xsql/internal/errors"
+	"golang.org/x/sync/errgroup"
 )
 
-// DumpSchema exports the PostgreSQL database schema.
-func (d *Driver) DumpSchema(ctx context.Context, conn *sql.DB, opts db.SchemaOptions) (*db.SchemaInfo, *errors.XError) {
-	info := &db.SchemaInfo{}
-
-	// Get the current database name
-	var database string
-	if err := conn.QueryRowContext(ctx, "SELECT current_database()").Scan(&database); err != nil {
-		return nil, errors.Wrap(errors.CodeDBExecFailed, "failed to get database name", nil, err)
-	}
-	info.Database = database
-
-	// Get schema list (excluding system schemas)
-	schemas, xe := d.listSchemas(ctx, conn, opts)
+// ListTables returns the lightweight PostgreSQL table list.
+func (d *Driver) ListTables(ctx context.Context, conn *sql.DB, opts db.SchemaOptions) (*db.TableList, *errors.XError) {
+	database, xe := currentDatabase(ctx, conn)
 	if xe != nil {
 		return nil, xe
 	}
 
-	// Get tables under each schema
-	for _, schema := range schemas {
-		tables, xe := d.listTables(ctx, conn, schema, opts)
-		if xe != nil {
-			return nil, xe
-		}
-
-		// Get detailed information for each table
-		for _, table := range tables {
-			// Get column information
-			columns, xe := d.getColumns(ctx, conn, schema, table.Name)
-			if xe != nil {
-				return nil, xe
-			}
-			table.Columns = columns
-
-			// Get index information
-			indexes, xe := d.getIndexes(ctx, conn, schema, table.Name)
-			if xe != nil {
-				return nil, xe
-			}
-			table.Indexes = indexes
-
-			// Get foreign key information
-			fks, xe := d.getForeignKeys(ctx, conn, schema, table.Name)
-			if xe != nil {
-				return nil, xe
-			}
-			table.ForeignKeys = fks
-
-			info.Tables = append(info.Tables, table)
-		}
+	schemas, xe := d.listSchemas(ctx, conn, opts.IncludeSystem)
+	if xe != nil {
+		return nil, xe
 	}
 
-	return info, nil
+	tablePattern := toLikePattern(opts.TablePattern)
+	tables, xe := d.listTables(ctx, conn, schemas, tablePattern)
+	if xe != nil {
+		return nil, xe
+	}
+
+	return &db.TableList{
+		Database: database,
+		Tables:   tables,
+	}, nil
 }
 
-// listSchemas retrieves the list of schemas.
-func (d *Driver) listSchemas(ctx context.Context, conn *sql.DB, opts db.SchemaOptions) ([]string, *errors.XError) {
+// DescribeTable returns the schema details for a single PostgreSQL table.
+func (d *Driver) DescribeTable(ctx context.Context, conn *sql.DB, opts db.TableDescribeOptions) (*db.Table, *errors.XError) {
+	table, xe := d.loadTableSummary(ctx, conn, opts.Schema, opts.Name)
+	if xe != nil {
+		return nil, xe
+	}
+
+	var (
+		columns []db.Column
+		indexes []db.Index
+		fks     []db.ForeignKey
+	)
+
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		result, xe := d.getColumns(gctx, conn, opts.Schema, opts.Name)
+		if xe != nil {
+			return xe
+		}
+		columns = result
+		return nil
+	})
+	g.Go(func() error {
+		result, xe := d.getIndexes(gctx, conn, opts.Schema, opts.Name)
+		if xe != nil {
+			return xe
+		}
+		indexes = result
+		return nil
+	})
+	g.Go(func() error {
+		result, xe := d.getForeignKeys(gctx, conn, opts.Schema, opts.Name)
+		if xe != nil {
+			return xe
+		}
+		fks = result
+		return nil
+	})
+	if err := g.Wait(); err != nil {
+		return nil, errors.AsOrWrap(err)
+	}
+
+	table.Columns = columns
+	table.Indexes = indexes
+	table.ForeignKeys = fks
+	return table, nil
+}
+
+func currentDatabase(ctx context.Context, conn *sql.DB) (string, *errors.XError) {
+	var database string
+	if err := conn.QueryRowContext(ctx, "SELECT current_database()").Scan(&database); err != nil {
+		return "", errors.Wrap(errors.CodeDBExecFailed, "failed to get database name", nil, err)
+	}
+	return database, nil
+}
+
+func (d *Driver) listSchemas(ctx context.Context, conn *sql.DB, includeSystem bool) ([]string, *errors.XError) {
 	query := `
 		SELECT schema_name
 		FROM information_schema.schemata
 		WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
 	`
-
-	if !opts.IncludeSystem {
-		// Exclude additional system schemas
+	if !includeSystem {
 		query += " AND schema_name NOT LIKE 'pg_%'"
 	}
-
 	query += " ORDER BY schema_name"
 
 	rows, err := conn.QueryContext(ctx, query)
@@ -92,35 +116,27 @@ func (d *Driver) listSchemas(ctx context.Context, conn *sql.DB, opts db.SchemaOp
 		}
 		schemas = append(schemas, schema)
 	}
-
 	if err := rows.Err(); err != nil {
 		return nil, errors.Wrap(errors.CodeDBExecFailed, "rows iteration error", nil, err)
 	}
-
 	return schemas, nil
 }
 
-// listTables retrieves the list of tables.
-func (d *Driver) listTables(ctx context.Context, conn *sql.DB, schema string, opts db.SchemaOptions) ([]db.Table, *errors.XError) {
+func (d *Driver) listTables(ctx context.Context, conn *sql.DB, schemas []string, tablePattern string) ([]db.TableSummary, *errors.XError) {
 	query := `
 		SELECT
+			t.table_schema,
 			t.table_name,
-			obj_description((quote_ident($1) || '.' || quote_ident(t.table_name))::regclass, 'pg_class') as table_comment
+			obj_description((quote_ident(t.table_schema) || '.' || quote_ident(t.table_name))::regclass, 'pg_class') AS table_comment
 		FROM information_schema.tables t
-		WHERE t.table_schema = $1 AND t.table_type = 'BASE TABLE'
+		WHERE t.table_schema = ANY($1) AND t.table_type = 'BASE TABLE'
 	`
-	args := []any{schema}
-
-	// Table name filter
-	if opts.TablePattern != "" {
-		// Convert wildcards * and ? to SQL LIKE patterns
-		likePattern := strings.ReplaceAll(opts.TablePattern, "*", "%")
-		likePattern = strings.ReplaceAll(likePattern, "?", "_")
+	args := []any{schemas}
+	if tablePattern != "" {
 		query += " AND t.table_name LIKE $2"
-		args = append(args, likePattern)
+		args = append(args, tablePattern)
 	}
-
-	query += " ORDER BY t.table_name"
+	query += " ORDER BY t.table_schema, t.table_name"
 
 	rows, err := conn.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -128,30 +144,57 @@ func (d *Driver) listTables(ctx context.Context, conn *sql.DB, schema string, op
 	}
 	defer rows.Close()
 
-	var tables []db.Table
+	var tables []db.TableSummary
 	for rows.Next() {
-		var name string
+		var schema, name string
 		var comment sql.NullString
-		if err := rows.Scan(&name, &comment); err != nil {
+		if err := rows.Scan(&schema, &name, &comment); err != nil {
 			return nil, errors.Wrap(errors.CodeDBExecFailed, "failed to scan table row", nil, err)
 		}
-		tables = append(tables, db.Table{
+		tables = append(tables, db.TableSummary{
 			Schema:  schema,
 			Name:    name,
 			Comment: comment.String,
 		})
 	}
-
 	if err := rows.Err(); err != nil {
 		return nil, errors.Wrap(errors.CodeDBExecFailed, "rows iteration error", nil, err)
 	}
-
 	return tables, nil
 }
 
-// getColumns retrieves column information for a table.
-func (d *Driver) getColumns(ctx context.Context, conn *sql.DB, schema, tableName string) ([]db.Column, *errors.XError) {
-	query := `
+func (d *Driver) loadTableSummary(ctx context.Context, conn *sql.DB, schemaName, tableName string) (*db.Table, *errors.XError) {
+	const query = `
+		SELECT
+			t.table_schema,
+			t.table_name,
+			obj_description((quote_ident(t.table_schema) || '.' || quote_ident(t.table_name))::regclass, 'pg_class') AS table_comment
+		FROM information_schema.tables t
+		WHERE t.table_schema = $1 AND t.table_type = 'BASE TABLE' AND t.table_name = $2
+	`
+
+	var schema, name string
+	var comment sql.NullString
+	if err := conn.QueryRowContext(ctx, query, schemaName, tableName).Scan(&schema, &name, &comment); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, errors.New(errors.CodeCfgInvalid, "table not found", map[string]any{
+				"schema": schemaName,
+				"name":   tableName,
+				"reason": "table_not_found",
+			})
+		}
+		return nil, errors.Wrap(errors.CodeDBExecFailed, "failed to load table", map[string]any{"schema": schemaName, "name": tableName}, err)
+	}
+
+	return &db.Table{
+		Schema:  schema,
+		Name:    name,
+		Comment: comment.String,
+	}, nil
+}
+
+func (d *Driver) getColumns(ctx context.Context, conn *sql.DB, schemaName, tableName string) ([]db.Column, *errors.XError) {
+	const query = `
 		SELECT
 			c.column_name,
 			CASE
@@ -163,10 +206,10 @@ func (d *Driver) getColumns(ctx context.Context, conn *sql.DB, schema, tableName
 				WHEN c.numeric_precision IS NOT NULL THEN
 					c.data_type || '(' || c.numeric_precision || ')'
 				ELSE c.data_type
-			END as column_type,
+			END AS column_type,
 			c.is_nullable,
 			c.column_default,
-			col_description((quote_ident(c.table_schema) || '.' || quote_ident(c.table_name))::regclass, c.ordinal_position) as column_comment,
+			col_description((quote_ident(c.table_schema) || '.' || quote_ident(c.table_name))::regclass, c.ordinal_position) AS column_comment,
 			CASE WHEN pk.column_name IS NOT NULL THEN true ELSE false END AS is_primary
 		FROM information_schema.columns c
 		LEFT JOIN (
@@ -183,7 +226,7 @@ func (d *Driver) getColumns(ctx context.Context, conn *sql.DB, schema, tableName
 		ORDER BY c.ordinal_position
 	`
 
-	rows, err := conn.QueryContext(ctx, query, schema, tableName)
+	rows, err := conn.QueryContext(ctx, query, schemaName, tableName)
 	if err != nil {
 		return nil, errors.Wrap(errors.CodeDBExecFailed, "failed to get columns", nil, err)
 	}
@@ -212,23 +255,20 @@ func (d *Driver) getColumns(ctx context.Context, conn *sql.DB, schema, tableName
 		}
 		columns = append(columns, col)
 	}
-
 	if err := rows.Err(); err != nil {
 		return nil, errors.Wrap(errors.CodeDBExecFailed, "rows iteration error", nil, err)
 	}
-
 	return columns, nil
 }
 
-// getIndexes retrieves index information for a table.
-func (d *Driver) getIndexes(ctx context.Context, conn *sql.DB, schema, tableName string) ([]db.Index, *errors.XError) {
-	query := `
+func (d *Driver) getIndexes(ctx context.Context, conn *sql.DB, schemaName, tableName string) ([]db.Index, *errors.XError) {
+	const query = `
 		SELECT
-			i.relname as index_name,
-			a.attname as column_name,
-			NOT ix.indisunique as is_non_unique,
-			ix.indisprimary as is_primary,
-			array_position(ix.indkey, a.attnum) as column_position
+			i.relname AS index_name,
+			a.attname AS column_name,
+			NOT ix.indisunique AS is_non_unique,
+			ix.indisprimary AS is_primary,
+			array_position(ix.indkey, a.attnum) AS column_position
 		FROM pg_class t
 		JOIN pg_index ix ON t.oid = ix.indrelid
 		JOIN pg_class i ON i.oid = ix.indexrelid
@@ -238,13 +278,12 @@ func (d *Driver) getIndexes(ctx context.Context, conn *sql.DB, schema, tableName
 		ORDER BY i.relname, array_position(ix.indkey, a.attnum)
 	`
 
-	rows, err := conn.QueryContext(ctx, query, schema, tableName)
+	rows, err := conn.QueryContext(ctx, query, schemaName, tableName)
 	if err != nil {
 		return nil, errors.Wrap(errors.CodeDBExecFailed, "failed to get indexes", nil, err)
 	}
 	defer rows.Close()
 
-	// Group by index_name
 	indexMap := make(map[string]*db.Index)
 	for rows.Next() {
 		var indexName, columnName string
@@ -265,23 +304,25 @@ func (d *Driver) getIndexes(ctx context.Context, conn *sql.DB, schema, tableName
 			}
 		}
 	}
-
 	if err := rows.Err(); err != nil {
 		return nil, errors.Wrap(errors.CodeDBExecFailed, "rows iteration error", nil, err)
 	}
 
-	// Convert to slice
-	indexes := make([]db.Index, 0, len(indexMap))
-	for _, idx := range indexMap {
-		indexes = append(indexes, *idx)
+	names := make([]string, 0, len(indexMap))
+	for name := range indexMap {
+		names = append(names, name)
 	}
+	sort.Strings(names)
 
+	indexes := make([]db.Index, 0, len(names))
+	for _, name := range names {
+		indexes = append(indexes, *indexMap[name])
+	}
 	return indexes, nil
 }
 
-// getForeignKeys retrieves foreign key information for a table.
-func (d *Driver) getForeignKeys(ctx context.Context, conn *sql.DB, schema, tableName string) ([]db.ForeignKey, *errors.XError) {
-	query := `
+func (d *Driver) getForeignKeys(ctx context.Context, conn *sql.DB, schemaName, tableName string) ([]db.ForeignKey, *errors.XError) {
+	const query = `
 		SELECT
 			tc.constraint_name,
 			kcu.column_name,
@@ -301,13 +342,12 @@ func (d *Driver) getForeignKeys(ctx context.Context, conn *sql.DB, schema, table
 		ORDER BY tc.constraint_name, kcu.ordinal_position
 	`
 
-	rows, err := conn.QueryContext(ctx, query, schema, tableName)
+	rows, err := conn.QueryContext(ctx, query, schemaName, tableName)
 	if err != nil {
 		return nil, errors.Wrap(errors.CodeDBExecFailed, "failed to get foreign keys", nil, err)
 	}
 	defer rows.Close()
 
-	// Group by constraint_name
 	fkMap := make(map[string]*db.ForeignKey)
 	for rows.Next() {
 		var constraintName, columnName, refTable, refColumn string
@@ -328,16 +368,24 @@ func (d *Driver) getForeignKeys(ctx context.Context, conn *sql.DB, schema, table
 			}
 		}
 	}
-
 	if err := rows.Err(); err != nil {
 		return nil, errors.Wrap(errors.CodeDBExecFailed, "rows iteration error", nil, err)
 	}
 
-	// Convert to slice
-	fks := make([]db.ForeignKey, 0, len(fkMap))
-	for _, fk := range fkMap {
-		fks = append(fks, *fk)
+	names := make([]string, 0, len(fkMap))
+	for name := range fkMap {
+		names = append(names, name)
 	}
+	sort.Strings(names)
 
+	fks := make([]db.ForeignKey, 0, len(names))
+	for _, name := range names {
+		fks = append(fks, *fkMap[name])
+	}
 	return fks, nil
+}
+
+func toLikePattern(pattern string) string {
+	pattern = strings.ReplaceAll(pattern, "*", "%")
+	return strings.ReplaceAll(pattern, "?", "_")
 }

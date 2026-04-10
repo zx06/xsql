@@ -95,3 +95,13 @@ MCP Server 提供以下 tools：
 
 ### 详细规范
 详见 `docs/cli-spec.md` 中的 `xsql mcp server` 命令说明。
+
+## Web UI
+xsql 还提供本地 Web UI 模式，用于人工交互式查询和 schema 浏览：
+
+```bash
+xsql serve
+xsql web
+```
+
+Web UI 复用 xsql 的 profile、SSH、只读策略和结构化错误契约，但其 HTTP API 面向浏览器，不等同于 MCP 协议。
