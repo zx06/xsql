@@ -1,11 +1,11 @@
 module github.com/zx06/xsql
 
-go 1.24.0
+go 1.25.0
 
 require (
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/google/jsonschema-go v0.4.2
-	github.com/jackc/pgx/v5 v5.7.2
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/modelcontextprotocol/go-sdk v1.3.1
 	github.com/spf13/cobra v1.8.1
 	github.com/zalando/go-keyring v0.2.6
