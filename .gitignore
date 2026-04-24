@@ -7,3 +7,5 @@ coverage.txt
 webui/node_modules/
 webui/dist/*
 !webui/dist/.keep
+coverage*.txt
+coverage*.html
