@@ -9,3 +9,4 @@ webui/dist/*
 !webui/dist/.keep
 coverage*.txt
 coverage*.html
+coverage.out
