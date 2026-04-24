@@ -205,6 +205,9 @@ func modeForWebCommand(open bool) string {
 	return "serve"
 }
 
+// openBrowserDefault opens the URL in the default browser for the OS.
+// The URL is always generated internally (http://localhost:port format)
+// and is not derived from user input, so there is no command injection risk.
 func openBrowserDefault(url string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {

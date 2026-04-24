@@ -274,10 +274,13 @@ func (h *handler) handleConfigJS(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) handleFrontend(w http.ResponseWriter, r *http.Request) {
+	// Clean path to prevent directory traversal attacks; path.Clean removes ".." and "."
 	name := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
 	if name == "." {
 		name = ""
 	}
+	// Only serve files from the embedded asset filesystem, not real filesystem
+	// This is inherently safe because http.FileSystem is restricted to embedded assets
 	if name != "" {
 		if file, err := h.assets.Open(name); err == nil {
 			defer func() {
