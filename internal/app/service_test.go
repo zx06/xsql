@@ -849,3 +849,116 @@ if xe.Code != errors.CodeCfgInvalid {
 t.Errorf("expected CodeCfgInvalid, got %s", xe.Code)
 }
 }
+
+// TestLoadProfiles_Success_Real tests LoadProfiles with real configuration file
+func TestLoadProfiles_Success_Real(t *testing.T) {
+tmpDir := t.TempDir()
+tmpFile := filepath.Join(tmpDir, "config.yaml")
+
+cfg := config.File{
+Profiles: map[string]config.Profile{
+"prod": {
+DB:       "mysql",
+Host:     "prod.example.com",
+Port:     3306,
+User:     "admin",
+Password: "secret",
+Database: "main_db",
+},
+"dev": {
+DB:       "pg",
+Host:     "localhost",
+Port:     5432,
+User:     "dev",
+Database: "dev_db",
+},
+},
+}
+
+b, err := yaml.Marshal(cfg)
+if err != nil {
+t.Fatal(err)
+}
+if err := os.WriteFile(tmpFile, b, 0o600); err != nil {
+t.Fatal(err)
+}
+
+result, xe := LoadProfiles(config.Options{ConfigPath: tmpFile})
+
+if xe != nil {
+t.Fatalf("expected success, got error: %v", xe)
+}
+
+if result == nil {
+t.Fatal("expected non-nil result")
+}
+
+if result.ConfigPath != tmpFile {
+t.Errorf("expected ConfigPath=%s, got %s", tmpFile, result.ConfigPath)
+}
+
+if len(result.Profiles) != 2 {
+t.Errorf("expected 2 profiles, got %d", len(result.Profiles))
+}
+
+// Profiles should be sorted alphabetically
+if len(result.Profiles) > 0 && result.Profiles[0].Name != "dev" {
+t.Errorf("expected first profile to be 'dev' (sorted), got %s", result.Profiles[0].Name)
+}
+}
+
+// TestLoadProfileDetail_WithSSHProxy tests LoadProfileDetail with SSH proxy setting
+func TestLoadProfileDetail_WithSSHProxy(t *testing.T) {
+tmpDir := t.TempDir()
+tmpFile := filepath.Join(tmpDir, "config.yaml")
+
+cfg := config.File{
+SSHProxies: map[string]config.SSHProxy{
+"remote-proxy": {
+Host:         "ssh.example.com",
+Port:         22,
+User:         "sshuser",
+IdentityFile: "/home/user/.ssh/id_rsa",
+},
+},
+Profiles: map[string]config.Profile{
+"remote": {
+DB:       "mysql",
+Host:     "10.0.0.1",
+Port:     3306,
+User:     "admin",
+Password: "secret",
+Database: "mydb",
+SSHProxy: "remote-proxy",
+},
+},
+}
+
+b, err := yaml.Marshal(cfg)
+if err != nil {
+t.Fatal(err)
+}
+if err := os.WriteFile(tmpFile, b, 0o600); err != nil {
+t.Fatal(err)
+}
+
+result, xe := LoadProfileDetail(config.Options{ConfigPath: tmpFile}, "remote")
+
+if xe != nil {
+t.Fatalf("expected success, got error: %v", xe)
+}
+
+if result == nil {
+t.Fatal("expected non-nil result")
+}
+
+// Verify SSH proxy is included
+if sshProxy, ok := result["ssh_proxy"].(string); !ok || sshProxy != "remote-proxy" {
+t.Errorf("expected ssh_proxy=remote-proxy, got %v", result["ssh_proxy"])
+}
+
+// Verify password is redacted
+if pwd, ok := result["password"].(string); !ok || pwd != "***" {
+t.Errorf("expected password=***, got %v", result["password"])
+}
+}
