@@ -1,0 +1,47 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 0 * * 0'
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['go', 'javascript-typescript']
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@8f596b4ae3cb3c588971e37fbb52433d7191ba93 # v3.27.0
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-and-quality
+
+      - name: Set up Go
+        if: matrix.language == 'go'
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@8f596b4ae3cb3c588971e37fbb52433d7191ba93 # v3.27.0
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@8f596b4ae3cb3c588971e37fbb52433d7191ba93 # v3.27.0
+        with:
+          category: "/language:${{ matrix.language }}"

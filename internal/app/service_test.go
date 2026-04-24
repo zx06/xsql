@@ -2,8 +2,12 @@ package app
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/zx06/xsql/internal/config"
 	"github.com/zx06/xsql/internal/errors"
@@ -764,4 +768,84 @@ func TestResolveConnection_CalledWithMissingDriver(t *testing.T) {
 	if xe.Code != errors.CodeDBDriverUnsupported {
 		t.Errorf("expected CodeDBDriverUnsupported, got %s", xe.Code)
 	}
+}
+
+// TestLoadProfileDetail_ReallyCallsTheFunction verifies LoadProfileDetail is actually covered
+func TestLoadProfileDetail_ActualCall(t *testing.T) {
+cfg := config.File{
+Profiles: map[string]config.Profile{
+"test": {
+DB:       "mysql",
+Host:     "localhost",
+Port:     3306,
+User:     "root",
+Database: "testdb",
+Password: "secret",
+},
+},
+}
+
+// Create a temporary config file to test with
+tmpDir := t.TempDir()
+tmpFile := filepath.Join(tmpDir, "config.yaml")
+
+// Write config to file
+b, err := yaml.Marshal(cfg)
+if err != nil {
+t.Fatal(err)
+}
+if err := os.WriteFile(tmpFile, b, 0o600); err != nil {
+t.Fatal(err)
+}
+
+result, xe := LoadProfileDetail(config.Options{ConfigPath: tmpFile}, "test")
+
+if xe != nil {
+t.Fatalf("expected success, got error: %v", xe)
+}
+
+if result == nil {
+t.Fatal("expected non-nil result")
+}
+
+// Verify password is redacted
+if pwd, ok := result["password"].(string); ok && pwd != "***" && pwd != "" {
+t.Errorf("password should be redacted, got: %s", pwd)
+}
+
+if result["db"] != "mysql" {
+t.Errorf("expected db=mysql, got %v", result["db"])
+}
+}
+
+// TestLoadProfileDetail_ProfileMissing verifies LoadProfileDetail error handling
+func TestLoadProfileDetail_ProfileMissing(t *testing.T) {
+tmpDir := t.TempDir()
+tmpFile := filepath.Join(tmpDir, "config.yaml")
+
+cfg := config.File{
+Profiles: map[string]config.Profile{},
+}
+
+b, err := yaml.Marshal(cfg)
+if err != nil {
+t.Fatal(err)
+}
+if err := os.WriteFile(tmpFile, b, 0o600); err != nil {
+t.Fatal(err)
+}
+
+result, xe := LoadProfileDetail(config.Options{ConfigPath: tmpFile}, "nonexistent")
+
+if xe == nil {
+t.Fatal("expected error for missing profile")
+}
+
+if result != nil {
+t.Errorf("expected nil result, got %v", result)
+}
+
+if xe.Code != errors.CodeCfgInvalid {
+t.Errorf("expected CodeCfgInvalid, got %s", xe.Code)
+}
 }
