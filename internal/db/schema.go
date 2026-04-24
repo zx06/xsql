@@ -4,9 +4,10 @@ import (
 	"context"
 	"database/sql"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/zx06/xsql/internal/errors"
 	"github.com/zx06/xsql/internal/output"
-	"golang.org/x/sync/errgroup"
 )
 
 // SchemaInfo represents database schema information.

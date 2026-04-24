@@ -280,7 +280,9 @@ func (h *handler) handleFrontend(w http.ResponseWriter, r *http.Request) {
 	}
 	if name != "" {
 		if file, err := h.assets.Open(name); err == nil {
-			defer file.Close()
+			defer func() {
+				_ = file.Close()
+			}()
 			if info, statErr := file.Stat(); statErr == nil && !info.IsDir() {
 				if contentType := mime.TypeByExtension(path.Ext(name)); contentType != "" {
 					w.Header().Set("Content-Type", contentType)
@@ -298,7 +300,9 @@ func (h *handler) handleFrontend(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, "<!doctype html><html><body><h1>xsql web assets are not built</h1><p>Run the frontend build before serving the UI.</p></body></html>")
 		return
 	}
-	defer index.Close()
+	defer func() {
+		_ = index.Close()
+	}()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	http.ServeContent(w, r, "index.html", time.Time{}, index.(io.ReadSeeker))
 }

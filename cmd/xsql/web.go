@@ -88,7 +88,9 @@ func runWebCommand(opts *webCommandOptions, w *output.Writer) error {
 		}
 		return errors.Wrap(errors.CodeInternal, "failed to listen on web address", map[string]any{"addr": resolved.addr}, err)
 	}
-	defer listener.Close()
+	defer func() {
+		_ = listener.Close()
+	}()
 
 	handler := webpkg.NewHandler(webpkg.HandlerOptions{
 		ConfigPath:       GlobalConfig.ConfigStr,

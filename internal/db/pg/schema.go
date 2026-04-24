@@ -6,9 +6,10 @@ import (
 	"sort"
 	"strings"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/zx06/xsql/internal/db"
 	"github.com/zx06/xsql/internal/errors"
-	"golang.org/x/sync/errgroup"
 )
 
 // ListTables returns the lightweight PostgreSQL table list.
