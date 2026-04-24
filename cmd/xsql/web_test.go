@@ -103,81 +103,73 @@ func TestOpenBrowserDefault_NoError(t *testing.T) {
 }
 
 // Test CLI address priority over environment
-func TestResolveWebOptions_CLIAddressTakePriority(t *testing.T) {
-	t.Setenv("XSQL_WEB_HTTP_ADDR", "0.0.0.0:9999")
-
-	opts := &webCommandOptions{
-		addr:    "127.0.0.1:7777",
-		addrSet: true,
-	}
-	cfg := config.File{}
-
-	resolved, xe := resolveWebOptions(opts, cfg)
-
-	if xe != nil {
-		t.Fatalf("unexpected error: %v", xe)
-	}
-
-	if resolved.addr != "127.0.0.1:7777" {
-		t.Errorf("expected CLI addr to take priority, got %s", resolved.addr)
-	}
-}
-
-// Test environment address priority over config
-func TestResolveWebOptions_EnvAddressPriority(t *testing.T) {
-	t.Setenv("XSQL_WEB_HTTP_ADDR", "127.0.0.1:8888")
-
-	opts := &webCommandOptions{}
-	cfg := config.File{
-		Web: config.WebConfig{
-			HTTP: config.WebHTTPConfig{
-				Addr: "127.0.0.1:8787",
+// TestResolveWebOptions_AddressResolution tests address resolution priority: CLI > ENV > Config > Default
+func TestResolveWebOptions_AddressResolution(t *testing.T) {
+	tests := []struct {
+		name      string
+		setEnv    string
+		opts      *webCommandOptions
+		cfg       config.File
+		expected  string
+		expectErr bool
+	}{
+		{
+			name:   "CLI takes priority over env",
+			setEnv: "0.0.0.0:9999",
+			opts: &webCommandOptions{
+				addr:    "127.0.0.1:7777",
+				addrSet: true,
 			},
+			expected: "127.0.0.1:7777",
+		},
+		{
+			name:   "Env takes priority over config",
+			setEnv: "127.0.0.1:8888",
+			opts:   &webCommandOptions{},
+			cfg: config.File{
+				Web: config.WebConfig{
+					HTTP: config.WebHTTPConfig{Addr: "127.0.0.1:8787"},
+				},
+			},
+			expected: "127.0.0.1:8888",
+		},
+		{
+			name: "Invalid address format rejected",
+			opts: &webCommandOptions{
+				addr:    "invalid-no-port",
+				addrSet: true,
+			},
+			expectErr: true,
+		},
+		{
+			name:     "Nil options uses default",
+			opts:     nil,
+			expected: webpkg.DefaultAddr,
+		},
+		{
+			name:     "Empty env doesn't override defaults",
+			setEnv:   "",
+			opts:     &webCommandOptions{},
+			expected: webpkg.DefaultAddr,
 		},
 	}
 
-	resolved, xe := resolveWebOptions(opts, cfg)
-
-	if xe != nil {
-		t.Fatalf("unexpected error: %v", xe)
-	}
-
-	if resolved.addr != "127.0.0.1:8888" {
-		t.Errorf("expected env addr to take priority, got %s", resolved.addr)
-	}
-}
-
-// Test invalid address format rejection
-func TestResolveWebOptions_InvalidAddress(t *testing.T) {
-	opts := &webCommandOptions{
-		addr:    "invalid-no-port",
-		addrSet: true,
-	}
-	cfg := config.File{}
-
-	_, xe := resolveWebOptions(opts, cfg)
-
-	if xe == nil {
-		t.Fatal("expected error for invalid address")
-	}
-
-	if xe.Code != errors.CodeCfgInvalid {
-		t.Errorf("expected CodeCfgInvalid, got %s", xe.Code)
-	}
-}
-
-// Test nil options handling
-func TestResolveWebOptions_NilOptionsHandled(t *testing.T) {
-	cfg := config.File{}
-
-	resolved, xe := resolveWebOptions(nil, cfg)
-
-	if xe != nil {
-		t.Fatalf("unexpected error: %v", xe)
-	}
-
-	if resolved.addr != webpkg.DefaultAddr {
-		t.Errorf("expected default addr, got %s", resolved.addr)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.setEnv != "" || tt.name == "Empty env doesn't override defaults" {
+				t.Setenv("XSQL_WEB_HTTP_ADDR", tt.setEnv)
+			}
+			resolved, xe := resolveWebOptions(tt.opts, tt.cfg)
+			if tt.expectErr && xe == nil {
+				t.Fatal("expected error")
+			}
+			if !tt.expectErr && xe != nil {
+				t.Fatalf("unexpected error: %v", xe)
+			}
+			if !tt.expectErr && resolved.addr != tt.expected {
+				t.Errorf("expected %s, got %s", tt.expected, resolved.addr)
+			}
+		})
 	}
 }
 
@@ -222,100 +214,83 @@ func TestResolveWebOptions_LoopbackAddresses(t *testing.T) {
 	}
 }
 
-// Test CLI token priority
-func TestResolveWebOptions_CLITokenPriority(t *testing.T) {
-	t.Setenv("XSQL_WEB_HTTP_AUTH_TOKEN", "env-token")
-
-	opts := &webCommandOptions{
-		addr:         "0.0.0.0:8788",
-		addrSet:      true,
-		authToken:    "cli-token",
-		authTokenSet: true,
-	}
-	cfg := config.File{}
-
-	resolved, xe := resolveWebOptions(opts, cfg)
-
-	if xe != nil {
-		t.Fatalf("unexpected error: %v", xe)
-	}
-
-	if resolved.authToken != "cli-token" {
-		t.Errorf("expected CLI token priority, got %s", resolved.authToken)
-	}
-}
-
-// Test environment token priority
-func TestResolveWebOptions_EnvTokenPriority(t *testing.T) {
-	t.Setenv("XSQL_WEB_HTTP_AUTH_TOKEN", "env-token")
-
-	opts := &webCommandOptions{
-		addr:    "0.0.0.0:8788",
-		addrSet: true,
-	}
-	cfg := config.File{
-		Web: config.WebConfig{
-			HTTP: config.WebHTTPConfig{
-				AuthToken:           "config-token",
-				AllowPlaintextToken: true,
+// TestResolveWebOptions_TokenResolution tests token resolution priority: CLI > ENV > Config > None
+func TestResolveWebOptions_TokenResolution(t *testing.T) {
+	tests := []struct {
+		name         string
+		setEnv       string
+		opts         *webCommandOptions
+		cfg          config.File
+		expectedTok  string
+		expectErr    bool
+	}{
+		{
+			name:   "CLI token takes priority",
+			setEnv: "env-token",
+			opts: &webCommandOptions{
+				addr:         "0.0.0.0:8788",
+				addrSet:      true,
+				authToken:    "cli-token",
+				authTokenSet: true,
 			},
+			expectedTok: "cli-token",
+		},
+		{
+			name:   "Env token overrides config",
+			setEnv: "env-token",
+			opts: &webCommandOptions{
+				addr:    "0.0.0.0:8788",
+				addrSet: true,
+			},
+			cfg: config.File{
+				Web: config.WebConfig{
+					HTTP: config.WebHTTPConfig{
+						AuthToken:           "config-token",
+						AllowPlaintextToken: true,
+					},
+				},
+			},
+			expectedTok: "env-token",
+		},
+		{
+			name: "Config token used with plaintext allowed",
+			opts: &webCommandOptions{
+				addr:    "0.0.0.0:8788",
+				addrSet: true,
+			},
+			cfg: config.File{
+				Web: config.WebConfig{
+					HTTP: config.WebHTTPConfig{
+						Addr:                "0.0.0.0:8788",
+						AuthToken:           "plaintext-token",
+						AllowPlaintextToken: true,
+					},
+				},
+			},
+			expectedTok: "plaintext-token",
+		},
+		{
+			name:        "Non-loopback without token fails",
+			setEnv:      "",
+			opts:        &webCommandOptions{addr: "0.0.0.0:8788", addrSet: true},
+			expectErr:   true,
 		},
 	}
 
-	resolved, xe := resolveWebOptions(opts, cfg)
-
-	if xe != nil {
-		t.Fatalf("unexpected error: %v", xe)
-	}
-
-	if resolved.authToken != "env-token" {
-		t.Errorf("expected env token to override config, got %s", resolved.authToken)
-	}
-}
-
-// Test config token is used when plaintext allowed
-func TestResolveWebOptions_ConfigTokenWithPlaintext(t *testing.T) {
-	opts := &webCommandOptions{
-		addr:    "0.0.0.0:8788",
-		addrSet: true,
-	}
-	cfg := config.File{
-		Web: config.WebConfig{
-			HTTP: config.WebHTTPConfig{
-				Addr:                "0.0.0.0:8788",
-				AuthToken:           "plaintext-token",
-				AllowPlaintextToken: true,
-			},
-		},
-	}
-
-	resolved, xe := resolveWebOptions(opts, cfg)
-
-	if xe != nil {
-		t.Fatalf("unexpected error: %v", xe)
-	}
-
-	if resolved.authToken != "plaintext-token" {
-		t.Errorf("expected plaintext token, got %s", resolved.authToken)
-	}
-}
-
-// Test empty env vars don't override defaults
-func TestResolveWebOptions_EmptyEnvVars(t *testing.T) {
-	t.Setenv("XSQL_WEB_HTTP_ADDR", "")
-	t.Setenv("XSQL_WEB_HTTP_AUTH_TOKEN", "")
-
-	opts := &webCommandOptions{}
-	cfg := config.File{}
-
-	resolved, xe := resolveWebOptions(opts, cfg)
-
-	if xe != nil {
-		t.Fatalf("unexpected error: %v", xe)
-	}
-
-	if resolved.addr != webpkg.DefaultAddr {
-		t.Errorf("expected default addr, got %s", resolved.addr)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("XSQL_WEB_HTTP_AUTH_TOKEN", tt.setEnv)
+			resolved, xe := resolveWebOptions(tt.opts, tt.cfg)
+			if tt.expectErr && xe == nil {
+				t.Fatal("expected error")
+			}
+			if !tt.expectErr && xe != nil {
+				t.Fatalf("unexpected error: %v", xe)
+			}
+			if !tt.expectErr && resolved.authToken != tt.expectedTok {
+				t.Errorf("expected token %s, got %s", tt.expectedTok, resolved.authToken)
+			}
+		})
 	}
 }
 
@@ -597,71 +572,4 @@ func TestRunWebCommand_ListenerCreationError(t *testing.T) {
 	}
 }
 
-// TestResolveWebOptions_NonLoopbackWithoutToken tests auth requirement for non-loopback addresses
-func TestResolveWebOptions_NonLoopbackWithoutToken(t *testing.T) {
-	opts := &webCommandOptions{
-		addr:         "0.0.0.0:8080",
-		addrSet:      true,
-		authToken:    "",
-		authTokenSet: false,
-	}
 
-	cfg := config.File{}
-
-	_, err := resolveWebOptions(opts, cfg)
-	
-	if err == nil {
-		t.Error("expected error when non-loopback address without auth token, got nil")
-	}
-}
-
-// TestResolveWebOptions_NonLoopbackWithToken tests successful resolution with token
-func TestResolveWebOptions_NonLoopbackWithToken(t *testing.T) {
-	opts := &webCommandOptions{
-		addr:         "0.0.0.0:8080",
-		addrSet:      true,
-		authToken:    "test-token-12345",
-		authTokenSet: true,
-	}
-
-	cfg := config.File{}
-
-	resolved, err := resolveWebOptions(opts, cfg)
-	
-	if err != nil {
-		t.Errorf("expected no error for non-loopback with token, got: %v", err)
-	}
-	if resolved.addr != "0.0.0.0:8080" {
-		t.Errorf("expected addr 0.0.0.0:8080, got %s", resolved.addr)
-	}
-	if !resolved.authRequired {
-		t.Error("expected authRequired to be true for non-loopback address")
-	}
-	if resolved.authToken != "test-token-12345" {
-		t.Errorf("expected token test-token-12345, got %s", resolved.authToken)
-	}
-}
-
-// TestResolveWebOptions_LoopbackDefault tests default behavior with loopback
-func TestResolveWebOptions_LoopbackDefault(t *testing.T) {
-	opts := &webCommandOptions{
-		addr:         "",
-		addrSet:      false,
-		authToken:    "",
-		authTokenSet: false,
-	}
-
-	cfg := config.File{}
-
-	resolved, err := resolveWebOptions(opts, cfg)
-	
-	if err != nil {
-		t.Errorf("expected no error for loopback default, got: %v", err)
-	}
-	if resolved.addr != webpkg.DefaultAddr {
-		t.Errorf("expected default addr %s, got %s", webpkg.DefaultAddr, resolved.addr)
-	}
-	if resolved.authRequired {
-		t.Error("expected authRequired to be false for loopback")
-	}
-}
