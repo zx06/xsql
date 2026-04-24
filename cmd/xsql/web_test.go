@@ -2,8 +2,11 @@ package main
 
 import (
 	"bytes"
+	"fmt"
+	"net"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/zx06/xsql/internal/config"
 	"github.com/zx06/xsql/internal/errors"
@@ -553,8 +556,17 @@ func TestRunWebCommand_ListenerCreationError(t *testing.T) {
 		t.Fatalf("failed to create temp config: %v", err)
 	}
 
+	// Create a listener and keep it open to occupy the port
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to create listener for testing: %v", err)
+	}
+	defer listener.Close()
+
+	portInUse := listener.Addr().(*net.TCPAddr).Port
+
 	opts := &webCommandOptions{
-		addr:         "127.0.0.1:1",  // Port 1 is unlikely to be available
+		addr:         fmt.Sprintf("127.0.0.1:%d", portInUse),
 		addrSet:      true,
 		authToken:    "",
 		authTokenSet: false,
@@ -568,11 +580,20 @@ func TestRunWebCommand_ListenerCreationError(t *testing.T) {
 	var buf bytes.Buffer
 	w := output.New(&buf, &bytes.Buffer{})
 
-	err := runWebCommand(opts, &w)
-	
-	// Should return an error (permission denied or port in use)
-	if err == nil {
-		t.Error("expected error from listener creation, got nil")
+	// Use a goroutine with timeout to prevent hanging on Windows
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- runWebCommand(opts, &w)
+	}()
+
+	select {
+	case err := <-errCh:
+		// Should return an error (port in use)
+		if err == nil {
+			t.Error("expected error from listener creation, got nil")
+		}
+	case <-time.After(5 * time.Second):
+		t.Error("test timed out - runWebCommand likely blocked waiting for signals")
 	}
 }
 
