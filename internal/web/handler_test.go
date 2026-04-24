@@ -258,3 +258,67 @@ func decodeEnvelope(t *testing.T, body []byte) envelope {
 	}
 	return resp
 }
+
+// TestHandler_Authentication tests the auth middleware
+func TestHandler_Authentication(t *testing.T) {
+	handler := NewHandler(HandlerOptions{
+		AuthRequired: true,
+		AuthToken:    "secret-token",
+		Assets:       fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
+	})
+
+	// Without auth header, should get 401
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", rec.Code)
+	}
+}
+
+// TestHandler_ConfigJS tests the config.js endpoint
+func TestHandler_ConfigJS(t *testing.T) {
+	handler := NewHandler(HandlerOptions{
+		InitialProfile: "dev",
+		AuthRequired:   false,
+		Assets:         fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/config.js", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 for config.js, got %d", rec.Code)
+	}
+
+	// Should contain JavaScript config variable
+	body := rec.Body.String()
+	if !strings.Contains(body, "window.__XSQL_WEB_CONFIG__") {
+		t.Errorf("expected window.__XSQL_WEB_CONFIG__ in response")
+	}
+}
+
+// TestHandler_FrontendAssets tests the static asset serving
+func TestHandler_FrontendAssets(t *testing.T) {
+	assets := fstest.MapFS{
+		"index.html": &fstest.MapFile{Data: []byte("<html>frontend</html>")},
+	}
+
+	handler := NewHandler(HandlerOptions{
+		Assets: assets,
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+
+	if !strings.Contains(rec.Body.String(), "frontend") {
+		t.Errorf("expected frontend HTML in response")
+	}
+}
