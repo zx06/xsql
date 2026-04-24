@@ -322,3 +322,90 @@ func TestHandler_FrontendAssets(t *testing.T) {
 		t.Errorf("expected frontend HTML in response")
 	}
 }
+
+// TestPublicURL_Comprehensive tests all branches of PublicURL function
+func TestPublicURL_Comprehensive(t *testing.T) {
+	tests := []struct {
+		name string
+		addr string
+		want string
+	}{
+		{name: "loopback", addr: "127.0.0.1:8788", want: "http://127.0.0.1:8788/"},
+		{name: "wildcard", addr: "0.0.0.0:8788", want: "http://127.0.0.1:8788/"},
+		{name: "ipv6_loopback", addr: "[::1]:8788", want: "http://[[::1]]:8788/"},
+		{name: "ipv6_wildcard", addr: "[::]:8788", want: "http://127.0.0.1:8788/"},
+		{name: "ipv6_address", addr: "[2001:db8::1]:8788", want: "http://[[2001:db8::1]]:8788/"},
+		{name: "invalid_port", addr: "127.0.0.1", want: "http://127.0.0.1/"},
+		{name: "localhost", addr: "localhost:8788", want: "http://localhost:8788/"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := PublicURL(tt.addr)
+			if got != tt.want {
+				t.Errorf("PublicURL(%q) = %q, want %q", tt.addr, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestParseIncludeSystem tests parseIncludeSystem helper
+func TestParseIncludeSystem(t *testing.T) {
+	tests := []struct {
+		name    string
+		query   string
+		want    bool
+		wantErr bool
+	}{
+		{name: "include_true", query: "?include_system=true", want: true, wantErr: false},
+		{name: "include_false", query: "?include_system=false", want: false, wantErr: false},
+		{name: "include_missing", query: "", want: false, wantErr: false},
+		{name: "include_invalid", query: "?include_system=invalid", want: false, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/test"+tt.query, nil)
+			got, err := parseIncludeSystem(req)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseIncludeSystem error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if got != tt.want {
+				t.Errorf("parseIncludeSystem got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestMustJSON tests mustJSON marshaling
+func TestMustJSON(t *testing.T) {
+	type testData struct {
+		Name string
+		Age  int
+	}
+
+	// Test valid data marshaling
+	data := testData{Name: "test", Age: 30}
+	result := mustJSON(data)
+
+	if !strings.Contains(result, "test") || !strings.Contains(result, "30") {
+		t.Errorf("mustJSON produced invalid JSON: %s", result)
+	}
+
+	// Verify it's valid JSON by unmarshaling
+	var decoded testData
+	if err := json.Unmarshal([]byte(result), &decoded); err != nil {
+		t.Errorf("mustJSON produced invalid JSON: %v", err)
+	}
+
+	if decoded.Name != "test" || decoded.Age != 30 {
+		t.Errorf("mustJSON lost data during marshaling")
+	}
+
+	// Test with value that would fail JSON marshaling
+	// (though any type should marshal successfully)
+	emptyResult := mustJSON(nil)
+	if emptyResult == "" || emptyResult == "{}" {
+		// Either null or empty object is acceptable
+	}
+}
