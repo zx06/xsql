@@ -81,7 +81,7 @@ type SchemaTable struct {
 
 // ProfileListFormatter is the interface for data structures that support profile list output.
 type ProfileListFormatter interface {
-	ToProfileListData() (configPath string, profiles []profileListItem, ok bool)
+	ToProfileListData() (configPath string, profiles []ProfileListItem, ok bool)
 }
 
 func writeTable(out io.Writer, env Envelope) error {
@@ -164,7 +164,7 @@ func writeTable(out io.Writer, env Envelope) error {
 }
 
 // writeProfileListTable writes the profile list as a table.
-func writeProfileListTable(out io.Writer, cfgPath string, profiles []profileListItem) error {
+func writeProfileListTable(out io.Writer, cfgPath string, profiles []ProfileListItem) error {
 	tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
 	// Output config_path first
 	if cfgPath != "" {
@@ -231,24 +231,24 @@ func extractMapSlice(v any) ([]map[string]any, bool) {
 	return nil, false
 }
 
-type profileListItem struct {
+type ProfileListItem struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	DB          string `json:"db"`
 	Mode        string `json:"mode"`
 }
 
-func tryAsProfileList(data any) ([]profileListItem, bool) {
-	// Handle []profileListItem
-	if arr, ok := data.([]profileListItem); ok {
+func tryAsProfileList(data any) ([]ProfileListItem, bool) {
+	// Handle []ProfileListItem
+	if arr, ok := data.([]ProfileListItem); ok {
 		return arr, len(arr) > 0
 	}
 
 	// Handle []map[string]any
 	if arr, ok := data.([]map[string]any); ok {
-		result := make([]profileListItem, 0, len(arr))
+		result := make([]ProfileListItem, 0, len(arr))
 		for _, m := range arr {
-			p := profileListItem{}
+			p := ProfileListItem{}
 			if v, ok := m["name"].(string); ok {
 				p.Name = v
 			}
@@ -272,7 +272,7 @@ func tryAsProfileList(data any) ([]profileListItem, bool) {
 	// Use reflection to handle arbitrary struct slices (e.g., []profileInfo in cmd/xsql/profile.go)
 	v := reflect.ValueOf(data)
 	if v.IsValid() && v.Kind() == reflect.Slice {
-		result := make([]profileListItem, 0, v.Len())
+		result := make([]ProfileListItem, 0, v.Len())
 		for i := 0; i < v.Len(); i++ {
 			elem := v.Index(i)
 			// Dereference pointer
@@ -283,7 +283,7 @@ func tryAsProfileList(data any) ([]profileListItem, bool) {
 			if elem.Kind() != reflect.Struct {
 				return nil, false
 			}
-			p := profileListItem{}
+			p := ProfileListItem{}
 			// Read fields
 			if f := elem.FieldByName("Name"); f.IsValid() && f.Kind() == reflect.String {
 				p.Name = f.String()
@@ -311,13 +311,13 @@ func tryAsProfileList(data any) ([]profileListItem, bool) {
 		return nil, false
 	}
 
-	result := make([]profileListItem, 0, len(arr))
+	result := make([]ProfileListItem, 0, len(arr))
 	for _, item := range arr {
 		m, ok := item.(map[string]any)
 		if !ok {
 			return nil, false
 		}
-		p := profileListItem{}
+		p := ProfileListItem{}
 		if v, ok := m["name"].(string); ok {
 			p.Name = v
 		}

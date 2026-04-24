@@ -7,8 +7,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/zx06/xsql/internal/app"
-	"github.com/zx06/xsql/internal/db"
-	"github.com/zx06/xsql/internal/errors"
 	"github.com/zx06/xsql/internal/output"
 )
 
@@ -54,33 +52,16 @@ func runQuery(cmd *cobra.Command, args []string, flags *QueryFlags, w *output.Wr
 	}
 
 	p := GlobalConfig.Resolved.Profile
-	if p.DB == "" {
-		return errors.New(errors.CodeCfgInvalid, "db type is required (mysql|pg)", nil)
-	}
-
-	timeout := DefaultQueryTimeout
-	if flags.QueryTimeoutSet && flags.QueryTimeout > 0 {
-		timeout = time.Duration(flags.QueryTimeout) * time.Second
-	} else if p.QueryTimeout > 0 {
-		timeout = time.Duration(p.QueryTimeout) * time.Second
-	}
+	timeout := app.QueryTimeout(p, flags.QueryTimeout, flags.QueryTimeoutSet, DefaultQueryTimeout)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	conn, xe := app.ResolveConnection(ctx, app.ConnectionOptions{
+	result, xe := app.Query(ctx, app.QueryRequest{
 		Profile:          p,
+		SQL:              sql,
 		AllowPlaintext:   flags.AllowPlaintext,
 		SkipHostKeyCheck: flags.SSHSkipHostKey,
-	})
-	if xe != nil {
-		return xe
-	}
-	defer func() { _ = conn.Close() }()
-
-	unsafeAllowWrite := flags.UnsafeAllowWrite || p.UnsafeAllowWrite
-	result, xe := db.Query(ctx, conn.DB, sql, db.QueryOptions{
-		UnsafeAllowWrite: unsafeAllowWrite,
-		DBType:           p.DB,
+		UnsafeAllowWrite: flags.UnsafeAllowWrite || p.UnsafeAllowWrite,
 	})
 	if xe != nil {
 		return xe

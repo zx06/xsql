@@ -16,6 +16,14 @@
 ## 快速开始
 
 ```bash
+# 构建 web UI
+npm --prefix webui install
+npm --prefix webui run build
+
+# 前端联调（默认代理到 http://127.0.0.1:8788）
+xsql serve --addr 127.0.0.1:8788
+npm --prefix webui run dev
+
 # 构建
 go build -o xsql ./cmd/xsql
 
@@ -104,6 +112,7 @@ internal/
   secret/          # keyring + 明文策略
   spec/            # tool spec 导出
   ssh/             # SSH client + dial
+webui/             # Svelte 前端源码 + 嵌入资源
 tests/
   e2e/             # E2E 测试
   integration/     # 集成测试（需要数据库）

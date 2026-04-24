@@ -58,6 +58,10 @@ DB 类：
 端口：
 - `XSQL_PORT_IN_USE` - 代理端口被占用
 
+鉴权：
+- `XSQL_AUTH_REQUIRED` - 请求缺少鉴权 token
+- `XSQL_AUTH_INVALID` - 请求提供的鉴权 token 无效
+
 内部：
 - `XSQL_INTERNAL` - 内部错误
 

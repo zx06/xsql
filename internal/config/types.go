@@ -6,6 +6,7 @@ type File struct {
 	SSHProxies map[string]SSHProxy `yaml:"ssh_proxies"`
 	Profiles   map[string]Profile  `yaml:"profiles"`
 	MCP        MCPConfig           `yaml:"mcp"`
+	Web        WebConfig           `yaml:"web"`
 }
 
 // SSHProxy defines a reusable SSH proxy configuration.
@@ -58,6 +59,18 @@ type MCPConfig struct {
 
 // MCPHTTPConfig defines the MCP Streamable HTTP transport configuration.
 type MCPHTTPConfig struct {
+	Addr                string `yaml:"addr"`
+	AuthToken           string `yaml:"auth_token"`            // supports keyring:xxx reference
+	AllowPlaintextToken bool   `yaml:"allow_plaintext_token"` // allow plaintext token
+}
+
+// WebConfig defines the local web server configuration.
+type WebConfig struct {
+	HTTP WebHTTPConfig `yaml:"http"`
+}
+
+// WebHTTPConfig defines the web HTTP transport configuration.
+type WebHTTPConfig struct {
 	Addr                string `yaml:"addr"`
 	AuthToken           string `yaml:"auth_token"`            // supports keyring:xxx reference
 	AllowPlaintextToken bool   `yaml:"allow_plaintext_token"` // allow plaintext token

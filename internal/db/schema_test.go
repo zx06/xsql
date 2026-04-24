@@ -1,7 +1,12 @@
 package db
 
 import (
+	"context"
+	"database/sql"
+	"fmt"
 	"testing"
+
+	"github.com/zx06/xsql/internal/errors"
 )
 
 func TestSchemaInfo_ToSchemaData(t *testing.T) {
@@ -300,10 +305,75 @@ func TestDumpSchema_UnsupportedDriver(t *testing.T) {
 	}
 }
 
-// Mock driver that doesn't implement SchemaDriver
+func TestListTables_UnsupportedDriver(t *testing.T) {
+	_, xe := ListTables(nil, "nonexistent", nil, SchemaOptions{})
+	if xe == nil {
+		t.Fatal("expected error for unsupported driver")
+	}
+	if xe.Code != "XSQL_DB_DRIVER_UNSUPPORTED" {
+		t.Fatalf("error code = %v, want XSQL_DB_DRIVER_UNSUPPORTED", xe.Code)
+	}
+}
+
+func TestDescribeTable_UnsupportedDriver(t *testing.T) {
+	_, xe := DescribeTable(nil, "nonexistent", nil, TableDescribeOptions{})
+	if xe == nil {
+		t.Fatal("expected error for unsupported driver")
+	}
+	if xe.Code != "XSQL_DB_DRIVER_UNSUPPORTED" {
+		t.Fatalf("error code = %v, want XSQL_DB_DRIVER_UNSUPPORTED", xe.Code)
+	}
+}
+
+func TestDumpSchema_ComposesListAndDescribe(t *testing.T) {
+	driverName := fmt.Sprintf("schema-mock-%s", t.Name())
+	Register(driverName, &mockSchemaExplorerDriver{
+		tableList: &TableList{
+			Database: "app",
+			Tables: []TableSummary{
+				{Schema: "public", Name: "users", Comment: "Users"},
+				{Schema: "public", Name: "orders", Comment: "Orders"},
+			},
+		},
+		tables: map[string]Table{
+			"public.users": {
+				Schema:  "public",
+				Name:    "users",
+				Comment: "Users",
+				Columns: []Column{{Name: "id", Type: "bigint", PrimaryKey: true}},
+			},
+			"public.orders": {
+				Schema:      "public",
+				Name:        "orders",
+				Comment:     "Orders",
+				Columns:     []Column{{Name: "id", Type: "bigint", PrimaryKey: true}},
+				ForeignKeys: []ForeignKey{{Name: "fk_user", Columns: []string{"user_id"}, ReferencedTable: "users", ReferencedColumns: []string{"id"}}},
+			},
+		},
+	})
+
+	info, xe := DumpSchema(context.Background(), driverName, &sql.DB{}, SchemaOptions{})
+	if xe != nil {
+		t.Fatalf("DumpSchema error: %v", xe)
+	}
+	if info.Database != "app" {
+		t.Fatalf("database = %q want app", info.Database)
+	}
+	if len(info.Tables) != 2 {
+		t.Fatalf("len(tables)=%d want 2", len(info.Tables))
+	}
+	if info.Tables[0].Name != "users" || len(info.Tables[0].Columns) != 1 {
+		t.Fatalf("unexpected first table: %#v", info.Tables[0])
+	}
+	if info.Tables[1].Name != "orders" || len(info.Tables[1].ForeignKeys) != 1 {
+		t.Fatalf("unexpected second table: %#v", info.Tables[1])
+	}
+}
+
+// mockNonSchemaDriver is a placeholder for drivers without schema support.
 type mockNonSchemaDriver struct{}
 
-func (d *mockNonSchemaDriver) Open(ctx interface{}, opts ConnOptions) (interface{}, error) {
+func (d *mockNonSchemaDriver) Open(ctx context.Context, opts ConnOptions) (*sql.DB, *errors.XError) {
 	return nil, nil
 }
 
@@ -311,4 +381,23 @@ func TestDumpSchema_DriverNotImplementSchema(t *testing.T) {
 	// Register a mock driver that doesn't implement SchemaDriver
 	// Note: This test would need to register/unregister which could affect other tests
 	// Skipping for now as the interface check is straightforward
+}
+
+type mockSchemaExplorerDriver struct {
+	tableList *TableList
+	tables    map[string]Table
+}
+
+func (d *mockSchemaExplorerDriver) Open(ctx context.Context, opts ConnOptions) (*sql.DB, *errors.XError) {
+	return nil, nil
+}
+
+func (d *mockSchemaExplorerDriver) ListTables(ctx context.Context, db *sql.DB, opts SchemaOptions) (*TableList, *errors.XError) {
+	return d.tableList, nil
+}
+
+func (d *mockSchemaExplorerDriver) DescribeTable(ctx context.Context, db *sql.DB, opts TableDescribeOptions) (*Table, *errors.XError) {
+	key := opts.Schema + "." + opts.Name
+	table := d.tables[key]
+	return &table, nil
 }

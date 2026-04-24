@@ -561,13 +561,13 @@ func TestExtractMapSlice(t *testing.T) {
 }
 
 func TestTryAsProfileList(t *testing.T) {
-	t.Run("profileListItem slice", func(t *testing.T) {
-		input := []profileListItem{
+	t.Run("ProfileListItem slice", func(t *testing.T) {
+		input := []ProfileListItem{
 			{Name: "dev", Description: "Dev", DB: "mysql", Mode: "read-only"},
 		}
 		got, ok := tryAsProfileList(input)
 		if !ok {
-			t.Error("expected ok=true for []profileListItem")
+			t.Error("expected ok=true for []ProfileListItem")
 		}
 		if len(got) != 1 || got[0].Name != "dev" {
 			t.Errorf("got %+v, want [{dev Dev mysql read-only}]", got)

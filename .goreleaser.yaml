@@ -4,6 +4,8 @@ project_name: xsql
 
 before:
   hooks:
+    - npm --prefix webui ci
+    - npm --prefix webui run build
     - go mod tidy
 
 builds:

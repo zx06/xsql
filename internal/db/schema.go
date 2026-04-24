@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/zx06/xsql/internal/errors"
 	"github.com/zx06/xsql/internal/output"
 )
@@ -12,6 +14,19 @@ import (
 type SchemaInfo struct {
 	Database string  `json:"database" yaml:"database"`
 	Tables   []Table `json:"tables" yaml:"tables"`
+}
+
+// TableList contains the lightweight table listing for a database.
+type TableList struct {
+	Database string         `json:"database" yaml:"database"`
+	Tables   []TableSummary `json:"tables" yaml:"tables"`
+}
+
+// TableSummary represents a lightweight table entry for object navigation.
+type TableSummary struct {
+	Schema  string `json:"schema" yaml:"schema"`
+	Name    string `json:"name" yaml:"name"`
+	Comment string `json:"comment,omitempty" yaml:"comment,omitempty"`
 }
 
 // ToSchemaData implements the output.SchemaFormatter interface.
@@ -83,26 +98,85 @@ type SchemaOptions struct {
 	IncludeSystem bool   // Whether to include system tables
 }
 
-// SchemaDriver is the schema export interface.
-// A Driver may optionally implement this interface to support schema export.
-type SchemaDriver interface {
-	Driver
-	// DumpSchema exports the database schema.
-	DumpSchema(ctx context.Context, db *sql.DB, opts SchemaOptions) (*SchemaInfo, *errors.XError)
+// TableDescribeOptions identifies a single table to describe.
+type TableDescribeOptions struct {
+	Schema string
+	Name   string
 }
 
-// DumpSchema exports the database schema.
-// It checks whether the driver implements the SchemaDriver interface.
-func DumpSchema(ctx context.Context, driverName string, db *sql.DB, opts SchemaOptions) (*SchemaInfo, *errors.XError) {
+// SchemaExplorerDriver is the schema browsing interface.
+// A Driver may optionally implement this interface to support table listing and description.
+type SchemaExplorerDriver interface {
+	Driver
+	// ListTables returns the lightweight table list for the target database.
+	ListTables(ctx context.Context, db *sql.DB, opts SchemaOptions) (*TableList, *errors.XError)
+	// DescribeTable returns the schema details for a single table.
+	DescribeTable(ctx context.Context, db *sql.DB, opts TableDescribeOptions) (*Table, *errors.XError)
+}
+
+// ListTables returns the lightweight table list for the target database.
+func ListTables(ctx context.Context, driverName string, db *sql.DB, opts SchemaOptions) (*TableList, *errors.XError) {
 	d, ok := Get(driverName)
 	if !ok {
 		return nil, errors.New(errors.CodeDBDriverUnsupported, "unsupported driver: "+driverName, nil)
 	}
 
-	sd, ok := d.(SchemaDriver)
+	sd, ok := d.(SchemaExplorerDriver)
 	if !ok {
-		return nil, errors.New(errors.CodeDBDriverUnsupported, "driver does not support schema dump: "+driverName, nil)
+		return nil, errors.New(errors.CodeDBDriverUnsupported, "driver does not support schema browsing: "+driverName, nil)
 	}
 
-	return sd.DumpSchema(ctx, db, opts)
+	return sd.ListTables(ctx, db, opts)
+}
+
+// DescribeTable returns the schema details for a single table.
+func DescribeTable(ctx context.Context, driverName string, db *sql.DB, opts TableDescribeOptions) (*Table, *errors.XError) {
+	d, ok := Get(driverName)
+	if !ok {
+		return nil, errors.New(errors.CodeDBDriverUnsupported, "unsupported driver: "+driverName, nil)
+	}
+
+	sd, ok := d.(SchemaExplorerDriver)
+	if !ok {
+		return nil, errors.New(errors.CodeDBDriverUnsupported, "driver does not support schema browsing: "+driverName, nil)
+	}
+
+	return sd.DescribeTable(ctx, db, opts)
+}
+
+// DumpSchema exports the database schema.
+// It composes the full schema dump from table listing and per-table descriptions.
+func DumpSchema(ctx context.Context, driverName string, db *sql.DB, opts SchemaOptions) (*SchemaInfo, *errors.XError) {
+	tableList, xe := ListTables(ctx, driverName, db, opts)
+	if xe != nil {
+		return nil, xe
+	}
+
+	info := &SchemaInfo{
+		Database: tableList.Database,
+		Tables:   make([]Table, len(tableList.Tables)),
+	}
+
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(4)
+	for i, table := range tableList.Tables {
+		i := i
+		table := table
+		g.Go(func() error {
+			detail, xe := DescribeTable(gctx, driverName, db, TableDescribeOptions{
+				Schema: table.Schema,
+				Name:   table.Name,
+			})
+			if xe != nil {
+				return xe
+			}
+			info.Tables[i] = *detail
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, errors.AsOrWrap(err)
+	}
+
+	return info, nil
 }
