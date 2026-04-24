@@ -11,6 +11,7 @@ import (
 	"github.com/zx06/xsql/internal/errors"
 )
 
+// nolint:gosec // Test file uses hardcoded tokens for test fixtures
 // TestHandler_Health_Success tests successful health endpoint
 func TestHandler_Health_Success(t *testing.T) {
 	handler := NewHandler(HandlerOptions{

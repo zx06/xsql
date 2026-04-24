@@ -13,6 +13,7 @@ import (
 	"github.com/zx06/xsql/internal/errors"
 )
 
+// nolint:gosec // Test file uses hardcoded credentials for test fixtures
 func TestLoadProfiles_Success(t *testing.T) {
 	// Test the profile loading logic - without requiring actual config files
 	// We can still test the sorting and structure

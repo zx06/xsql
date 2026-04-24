@@ -14,6 +14,7 @@ import (
 	webpkg "github.com/zx06/xsql/internal/web"
 )
 
+// nolint:gosec // Test file uses hardcoded tokens for test fixtures
 // Test for NewServeCommand structure and flags
 func TestNewServeCommand_CreatesCommand(t *testing.T) {
 	var buf bytes.Buffer
