@@ -273,6 +273,7 @@ func (h *handler) handleConfigJS(w http.ResponseWriter, r *http.Request) {
 	}))
 }
 
+// nolint:gosec // G304 - Path is from embedded filesystem only, not user filesystem
 func (h *handler) handleFrontend(w http.ResponseWriter, r *http.Request) {
 	// Clean path to prevent directory traversal attacks; path.Clean removes ".." and "."
 	name := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
