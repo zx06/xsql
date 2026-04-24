@@ -403,3 +403,117 @@ func TestStatusCodeFor_AllCases(t *testing.T) {
 		}
 	}
 }
+
+// TestHandler_ProfileShow_WithAuth tests ProfileShow with authentication
+func TestHandler_ProfileShow_WithAuth(t *testing.T) {
+configPath := createConfigFile(t, `
+profiles:
+  prod:
+    driver: mysql
+    host: prod.example.com
+    port: 3306
+    user: admin
+    password: secret
+`)
+
+handler := NewHandler(HandlerOptions{
+ConfigPath:   configPath,
+AuthRequired: true,
+AuthToken:    "test-token-123",
+Assets:       fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
+})
+
+req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles/prod", nil)
+req.Header.Set("Authorization", "Bearer test-token-123")
+rec := httptest.NewRecorder()
+handler.ServeHTTP(rec, req)
+
+if rec.Code != http.StatusOK {
+t.Errorf("expected 200, got %d", rec.Code)
+}
+}
+
+// TestHandler_ConfigJS_WithoutAuth tests config endpoint when auth not required
+func TestHandler_ConfigJS_WithoutAuth(t *testing.T) {
+handler := NewHandler(HandlerOptions{
+InitialProfile: "default",
+AuthRequired:   false,
+Assets:         fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
+})
+
+req := httptest.NewRequest(http.MethodGet, "/config.js", nil)
+rec := httptest.NewRecorder()
+handler.ServeHTTP(rec, req)
+
+if rec.Code != http.StatusOK {
+t.Errorf("expected 200, got %d", rec.Code)
+}
+
+body := rec.Body.String()
+if !strings.Contains(body, "authRequired") {
+t.Error("expected authRequired in config")
+}
+}
+
+// TestHandler_ConfigJS_PostNotAllowed tests POST method not allowed on config.js
+func TestHandler_ConfigJS_PostNotAllowed(t *testing.T) {
+handler := NewHandler(HandlerOptions{
+InitialProfile: "default",
+Assets:         fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
+})
+
+req := httptest.NewRequest(http.MethodPost, "/config.js", nil)
+rec := httptest.NewRecorder()
+handler.ServeHTTP(rec, req)
+
+if rec.Code != http.StatusMethodNotAllowed {
+t.Errorf("expected 405, got %d", rec.Code)
+}
+}
+
+// TestHandler_MultipleProfiles tests loading multiple profiles 
+func TestHandler_MultipleProfiles_Real(t *testing.T) {
+configPath := createConfigFile(t, `
+profiles:
+  db1:
+    driver: mysql
+    host: db1.local
+    port: 3306
+    user: user1
+    database: db1
+  db2:
+    driver: pg
+    host: db2.local
+    port: 5432
+    user: user2
+    database: db2
+  db3:
+    driver: mysql
+    host: db3.local
+    port: 3306
+    user: user3
+    database: db3
+`)
+
+handler := NewHandler(HandlerOptions{
+ConfigPath: configPath,
+Assets:     fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
+})
+
+req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles", nil)
+rec := httptest.NewRecorder()
+handler.ServeHTTP(rec, req)
+
+if rec.Code != http.StatusOK {
+t.Errorf("expected 200, got %d", rec.Code)
+}
+
+var resp envelope
+if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+t.Fatalf("invalid JSON: %v", err)
+}
+
+if !resp.OK {
+t.Error("expected OK=true")
+}
+}
