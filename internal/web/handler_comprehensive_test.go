@@ -517,3 +517,45 @@ if !resp.OK {
 t.Error("expected OK=true")
 }
 }
+
+// TestHandler_ProfileShow_InvalidPath tests ProfileShow with invalid path
+func TestHandler_ProfileShow_InvalidPath(t *testing.T) {
+handler := NewHandler(HandlerOptions{
+Assets: fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
+})
+
+tests := []struct {
+path string
+name string
+}{
+{path: "/api/v1/profiles/", name: "empty name"},
+{path: "/api/v1/profiles/dev/extra", name: "path with extra segments"},
+}
+
+for _, tt := range tests {
+t.Run(tt.name, func(t *testing.T) {
+req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+rec := httptest.NewRecorder()
+handler.ServeHTTP(rec, req)
+
+if rec.Code == http.StatusOK {
+t.Errorf("expected error status for invalid path, got 200")
+}
+})
+}
+}
+
+// TestHandler_ProfileShow_PostNotAllowed tests POST to ProfileShow endpoint
+func TestHandler_ProfileShow_PostNotAllowed(t *testing.T) {
+handler := NewHandler(HandlerOptions{
+Assets: fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
+})
+
+req := httptest.NewRequest(http.MethodPost, "/api/v1/profiles/dev", nil)
+rec := httptest.NewRecorder()
+handler.ServeHTTP(rec, req)
+
+if rec.Code != http.StatusMethodNotAllowed {
+t.Errorf("expected 405, got %d", rec.Code)
+}
+}
