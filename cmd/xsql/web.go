@@ -68,6 +68,7 @@ func newWebCommand(use, short string, shouldOpenBrowser bool, w *output.Writer) 
 	return cmd
 }
 
+// runWebCommand initializes and runs the web server with signal handling.
 func runWebCommand(opts *webCommandOptions, w *output.Writer) error {
 	cfg, _, xe := config.LoadConfig(config.Options{
 		ConfigPath: GlobalConfig.ConfigStr,
@@ -122,6 +123,12 @@ func runWebCommand(opts *webCommandOptions, w *output.Writer) error {
 		}
 	}
 
+	return runServerWithSignalHandling(server)
+}
+
+// runServerWithSignalHandling manages the web server lifecycle with OS signal handling.
+// This function is extracted for testing and reusability.
+func runServerWithSignalHandling(server *webpkg.Server) error {
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- server.Serve()

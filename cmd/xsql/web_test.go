@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"testing"
 
 	"github.com/zx06/xsql/internal/config"
@@ -505,5 +506,141 @@ func TestWebCommand_AuthTokenSetFlag(t *testing.T) {
 	// The flag should be marked as changed
 	if !cmd.Flags().Changed("auth-token") {
 		t.Error("auth-token flag should be marked as changed after Set")
+	}
+}
+
+// TestRunWebCommand_ConfigLoadError tests error handling when config loading fails
+func TestRunWebCommand_ConfigLoadError(t *testing.T) {
+	opts := &webCommandOptions{
+		addr:        "127.0.0.1:0",
+		addrSet:     true,
+		authToken:   "",
+		authTokenSet: false,
+	}
+
+	// Save current GlobalConfig and restore after test
+	oldConfig := GlobalConfig
+	defer func() { GlobalConfig = oldConfig }()
+
+	// Set an invalid config path to trigger config loading error
+	GlobalConfig.ConfigStr = "/nonexistent/path/to/config.yaml"
+
+	var buf bytes.Buffer
+	w := output.New(&buf, &bytes.Buffer{})
+
+	err := runWebCommand(opts, &w)
+	
+	// Should return an error due to missing config file
+	if err == nil {
+		t.Error("expected error from loading invalid config path, got nil")
+	}
+}
+
+// TestRunWebCommand_ListenerCreationError tests error handling when port is in use
+func TestRunWebCommand_ListenerCreationError(t *testing.T) {
+	// Create a temporary config file for this test
+	configDir := t.TempDir()
+	configPath := configDir + "/config.yaml"
+	configContent := `profiles:
+  default:
+    driver: mysql
+    host: localhost
+    port: 3306
+    user: root
+    password: root
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to create temp config: %v", err)
+	}
+
+	opts := &webCommandOptions{
+		addr:         "127.0.0.1:1",  // Port 1 is unlikely to be available
+		addrSet:      true,
+		authToken:    "",
+		authTokenSet: false,
+	}
+
+	// Save and restore GlobalConfig
+	oldConfig := GlobalConfig
+	defer func() { GlobalConfig = oldConfig }()
+	GlobalConfig.ConfigStr = configPath
+
+	var buf bytes.Buffer
+	w := output.New(&buf, &bytes.Buffer{})
+
+	err := runWebCommand(opts, &w)
+	
+	// Should return an error (permission denied or port in use)
+	if err == nil {
+		t.Error("expected error from listener creation, got nil")
+	}
+}
+
+// TestResolveWebOptions_NonLoopbackWithoutToken tests auth requirement for non-loopback addresses
+func TestResolveWebOptions_NonLoopbackWithoutToken(t *testing.T) {
+	opts := &webCommandOptions{
+		addr:         "0.0.0.0:8080",
+		addrSet:      true,
+		authToken:    "",
+		authTokenSet: false,
+	}
+
+	cfg := config.File{}
+
+	_, err := resolveWebOptions(opts, cfg)
+	
+	if err == nil {
+		t.Error("expected error when non-loopback address without auth token, got nil")
+	}
+}
+
+// TestResolveWebOptions_NonLoopbackWithToken tests successful resolution with token
+func TestResolveWebOptions_NonLoopbackWithToken(t *testing.T) {
+	opts := &webCommandOptions{
+		addr:         "0.0.0.0:8080",
+		addrSet:      true,
+		authToken:    "test-token-12345",
+		authTokenSet: true,
+	}
+
+	cfg := config.File{}
+
+	resolved, err := resolveWebOptions(opts, cfg)
+	
+	if err != nil {
+		t.Errorf("expected no error for non-loopback with token, got: %v", err)
+	}
+	if resolved.addr != "0.0.0.0:8080" {
+		t.Errorf("expected addr 0.0.0.0:8080, got %s", resolved.addr)
+	}
+	if !resolved.authRequired {
+		t.Error("expected authRequired to be true for non-loopback address")
+	}
+	if resolved.authToken != "test-token-12345" {
+		t.Errorf("expected token test-token-12345, got %s", resolved.authToken)
+	}
+}
+
+// TestResolveWebOptions_LoopbackDefault tests default behavior with loopback
+func TestResolveWebOptions_LoopbackDefault(t *testing.T) {
+	opts := &webCommandOptions{
+		addr:         "",
+		addrSet:      false,
+		authToken:    "",
+		authTokenSet: false,
+	}
+
+	cfg := config.File{}
+
+	resolved, err := resolveWebOptions(opts, cfg)
+	
+	if err != nil {
+		t.Errorf("expected no error for loopback default, got: %v", err)
+	}
+	if resolved.addr != webpkg.DefaultAddr {
+		t.Errorf("expected default addr %s, got %s", webpkg.DefaultAddr, resolved.addr)
+	}
+	if resolved.authRequired {
+		t.Error("expected authRequired to be false for loopback")
 	}
 }
