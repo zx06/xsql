@@ -962,3 +962,101 @@ if pwd, ok := result["password"].(string); !ok || pwd != "***" {
 t.Errorf("expected password=***, got %v", result["password"])
 }
 }
+
+// TestQuery_NoDB tests Query with missing database type
+func TestQuery_NoDB(t *testing.T) {
+ctx := context.Background()
+req := QueryRequest{
+Profile: config.Profile{
+DB: "", // Empty DB type
+},
+SQL: "SELECT 1",
+}
+
+result, xe := Query(ctx, req)
+
+if xe == nil {
+t.Fatal("expected error for missing DB type, got nil")
+}
+
+if result != nil {
+t.Errorf("expected nil result for error case, got %v", result)
+}
+
+if xe.Code != errors.CodeCfgInvalid {
+t.Errorf("expected CodeCfgInvalid, got %q", xe.Code)
+}
+}
+
+// TestDumpSchema_NoDB tests DumpSchema with missing database type
+func TestDumpSchema_NoDB(t *testing.T) {
+ctx := context.Background()
+req := SchemaDumpRequest{
+Profile: config.Profile{
+DB: "", // Empty DB type
+},
+}
+
+result, xe := DumpSchema(ctx, req)
+
+if xe == nil {
+t.Fatal("expected error for missing DB type, got nil")
+}
+
+if result != nil {
+t.Errorf("expected nil result for error case, got %v", result)
+}
+
+if xe.Code != errors.CodeCfgInvalid {
+t.Errorf("expected CodeCfgInvalid, got %q", xe.Code)
+}
+}
+
+// TestListTables_NoDB tests ListTables with missing database type
+func TestListTables_NoDB(t *testing.T) {
+ctx := context.Background()
+req := TableListRequest{
+Profile: config.Profile{
+DB: "", // Empty DB type
+},
+}
+
+result, xe := ListTables(ctx, req)
+
+if xe == nil {
+t.Fatal("expected error for missing DB type, got nil")
+}
+
+if result != nil {
+t.Errorf("expected nil result for error case, got %v", result)
+}
+
+if xe.Code != errors.CodeCfgInvalid {
+t.Errorf("expected CodeCfgInvalid, got %q", xe.Code)
+}
+}
+
+// TestDescribeTable_NoDB tests DescribeTable with missing database type
+func TestDescribeTable_NoDB(t *testing.T) {
+ctx := context.Background()
+req := TableDescribeRequest{
+Profile: config.Profile{
+DB: "", // Empty DB type
+},
+Name: "test_table",
+}
+
+result, xe := DescribeTable(ctx, req)
+
+if xe == nil {
+t.Fatal("expected error for missing DB type, got nil")
+}
+
+if result != nil {
+t.Errorf("expected nil result for error case, got %v", result)
+}
+
+if xe.Code != errors.CodeCfgInvalid {
+t.Errorf("expected CodeCfgInvalid, got %q", xe.Code)
+}
+}
