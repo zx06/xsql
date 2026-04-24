@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/zx06/xsql/internal/errors"
 )
 
 // TestHandler_Health_Success tests successful health endpoint
@@ -368,6 +370,36 @@ func TestPublicURL_Various(t *testing.T) {
 		result := PublicURL(tc.addr)
 		if result != tc.wantURL {
 			t.Errorf("PublicURL(%q)=%q want %q", tc.addr, result, tc.wantURL)
+		}
+	}
+}
+
+// TestStatusCodeFor_AllCases tests all error code mappings to HTTP status codes
+func TestStatusCodeFor_AllCases(t *testing.T) {
+	tests := []struct {
+		code     errors.Code
+		expected int
+	}{
+		{errors.CodeCfgInvalid, http.StatusBadRequest},
+		{errors.CodeCfgNotFound, http.StatusBadRequest},
+		{errors.CodeSecretNotFound, http.StatusBadRequest},
+		{errors.CodeAuthRequired, http.StatusUnauthorized},
+		{errors.CodeAuthInvalid, http.StatusUnauthorized},
+		{errors.CodeROBlocked, http.StatusForbidden},
+		{errors.CodeDBConnectFailed, http.StatusBadGateway},
+		{errors.CodeDBAuthFailed, http.StatusBadGateway},
+		{errors.CodeSSHDialFailed, http.StatusBadGateway},
+		{errors.CodeSSHAuthFailed, http.StatusBadGateway},
+		{errors.CodeSSHHostKeyMismatch, http.StatusBadGateway},
+		{errors.CodeDBDriverUnsupported, http.StatusBadRequest},
+		{errors.CodeDBExecFailed, http.StatusBadRequest},
+		{errors.CodeInternal, http.StatusInternalServerError},
+	}
+
+	for _, test := range tests {
+		result := statusCodeFor(test.code)
+		if result != test.expected {
+			t.Errorf("statusCodeFor(%q) = %d, want %d", test.code, result, test.expected)
 		}
 	}
 }
