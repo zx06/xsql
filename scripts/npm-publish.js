@@ -25,6 +25,38 @@ function run(cmd, opts = {}) {
   return execSync(cmd, { stdio: "inherit", ...opts });
 }
 
+function getPrereleaseTag(version) {
+  const cleanVersion = version.replace(/^v/, "");
+  const match = cleanVersion.match(/^\d+\.\d+\.\d+-([0-9A-Za-z.-]+)$/);
+  if (!match) {
+    return "";
+  }
+  const parts = match[1].split(".");
+  const namedPart = parts.find((part) => /[A-Za-z-]/.test(part)) || "";
+  const sanitized = namedPart
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (sanitized === "" || /^\d/.test(sanitized)) {
+    return "next";
+  }
+  return sanitized;
+}
+
+function buildPublishCommand({ accessPublic = false, dryRun = false, tag = "" } = {}) {
+  const parts = ["npm", "publish"];
+  if (accessPublic) {
+    parts.push("--access", "public");
+  }
+  if (tag) {
+    parts.push("--tag", tag);
+  }
+  if (dryRun) {
+    parts.push("--dry-run");
+  }
+  return parts.join(" ");
+}
+
 function updateVersion(pkgPath, version) {
   const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
   pkg.version = version;
@@ -82,9 +114,13 @@ async function main() {
 
   const cleanVersion = version.replace(/^v/, "");
   const tmpDir = path.join(__dirname, "..", ".npm-tmp");
+  const prereleaseTag = getPrereleaseTag(cleanVersion);
   mkdirSync(tmpDir, { recursive: true });
 
   console.log(`\nPublishing xsql v${cleanVersion} to npm${dryRun ? " (dry-run)" : ""}...\n`);
+  if (prereleaseTag) {
+    console.log(`Using npm dist-tag "${prereleaseTag}" for prerelease version ${cleanVersion}`);
+  }
 
   console.log("==> Updating versions...");
   updateVersion(path.join(NPM_DIR, "xsql", "package.json"), cleanVersion);
@@ -112,24 +148,35 @@ async function main() {
   }
 
   console.log("\n==> Publishing platform packages...");
-  const publishFlag = dryRun ? "--dry-run" : "";
+  const platformPublishCmd = buildPublishCommand({
+    accessPublic: true,
+    dryRun,
+    tag: prereleaseTag,
+  });
   for (const p of PLATFORM_MAP) {
     const pkgDir = path.join(NPM_DIR, p.npm);
     console.log(`  Publishing ${NPM_SCOPE}/xsql-cli-${p.npm}...`);
-    run(`npm publish --access public ${publishFlag}`, { cwd: pkgDir });
+    run(platformPublishCmd, { cwd: pkgDir });
   }
 
   console.log("\n==> Publishing main package...");
-  run(`npm publish ${publishFlag}`, { cwd: path.join(NPM_DIR, "xsql") });
+  run(buildPublishCommand({ dryRun, tag: prereleaseTag }), { cwd: path.join(NPM_DIR, "xsql") });
 
   fs.rmSync(tmpDir, { recursive: true, force: true });
 
   console.log(`\nDone! xsql-cli v${cleanVersion} published to npm.`);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  buildPublishCommand,
+  getPrereleaseTag,
+};
 
 
