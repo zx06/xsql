@@ -135,11 +135,11 @@ func TestLoadProfileDetail_ProfileNotFound(t *testing.T) {
 func TestLoadProfileDetail_RedactsSensitiveFields(t *testing.T) {
 	// Test redaction of sensitive fields in result
 	result := map[string]any{
-		"config_path":        "/path/to/config.yaml",
-		"name":               "prod",
-		"db":                 "mysql",
-		"password":           "***",
-		"dsn":                "***",
+		"config_path": "/path/to/config.yaml",
+		"name":        "prod",
+		"db":          "mysql",
+		"password":    "***",
+		"dsn":         "***",
 	}
 
 	if pwd, ok := result["password"].(string); ok && pwd != "" && pwd != "***" {
@@ -658,14 +658,14 @@ func TestLoadProfileDetail_ResolvedSSHConfig(t *testing.T) {
 	// Test that resolved SSH config is included in detail output
 	// This requires a profile with SSH config attached
 	result := map[string]any{
-		"config_path":        "/etc/xsql.yaml",
-		"name":               "remote",
-		"db":                 "mysql",
-		"ssh_proxy":          "jump",
-		"ssh_host":           "jump.example.com",
-		"ssh_port":           2222,
-		"ssh_user":           "jumper",
-		"ssh_identity_file":  "/path/to/key",
+		"config_path":       "/etc/xsql.yaml",
+		"name":              "remote",
+		"db":                "mysql",
+		"ssh_proxy":         "jump",
+		"ssh_host":          "jump.example.com",
+		"ssh_port":          2222,
+		"ssh_user":          "jumper",
+		"ssh_identity_file": "/path/to/key",
 	}
 
 	// Verify SSH fields are present when SSH is configured
@@ -773,291 +773,291 @@ func TestResolveConnection_CalledWithMissingDriver(t *testing.T) {
 
 // TestLoadProfileDetail_ReallyCallsTheFunction verifies LoadProfileDetail is actually covered
 func TestLoadProfileDetail_ActualCall(t *testing.T) {
-cfg := config.File{
-Profiles: map[string]config.Profile{
-"test": {
-DB:       "mysql",
-Host:     "localhost",
-Port:     3306,
-User:     "root",
-Database: "testdb",
-Password: "secret",
-},
-},
-}
+	cfg := config.File{
+		Profiles: map[string]config.Profile{
+			"test": {
+				DB:       "mysql",
+				Host:     "localhost",
+				Port:     3306,
+				User:     "root",
+				Database: "testdb",
+				Password: "secret",
+			},
+		},
+	}
 
-// Create a temporary config file to test with
-tmpDir := t.TempDir()
-tmpFile := filepath.Join(tmpDir, "config.yaml")
+	// Create a temporary config file to test with
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "config.yaml")
 
-// Write config to file
-b, err := yaml.Marshal(cfg)
-if err != nil {
-t.Fatal(err)
-}
-if err := os.WriteFile(tmpFile, b, 0o600); err != nil {
-t.Fatal(err)
-}
+	// Write config to file
+	b, err := yaml.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tmpFile, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
 
-result, xe := LoadProfileDetail(config.Options{ConfigPath: tmpFile}, "test")
+	result, xe := LoadProfileDetail(config.Options{ConfigPath: tmpFile}, "test")
 
-if xe != nil {
-t.Fatalf("expected success, got error: %v", xe)
-}
+	if xe != nil {
+		t.Fatalf("expected success, got error: %v", xe)
+	}
 
-if result == nil {
-t.Fatal("expected non-nil result")
-}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
 
-// Verify password is redacted
-if pwd, ok := result["password"].(string); ok && pwd != "***" && pwd != "" {
-t.Errorf("password should be redacted, got: %s", pwd)
-}
+	// Verify password is redacted
+	if pwd, ok := result["password"].(string); ok && pwd != "***" && pwd != "" {
+		t.Errorf("password should be redacted, got: %s", pwd)
+	}
 
-if result["db"] != "mysql" {
-t.Errorf("expected db=mysql, got %v", result["db"])
-}
+	if result["db"] != "mysql" {
+		t.Errorf("expected db=mysql, got %v", result["db"])
+	}
 }
 
 // TestLoadProfileDetail_ProfileMissing verifies LoadProfileDetail error handling
 func TestLoadProfileDetail_ProfileMissing(t *testing.T) {
-tmpDir := t.TempDir()
-tmpFile := filepath.Join(tmpDir, "config.yaml")
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "config.yaml")
 
-cfg := config.File{
-Profiles: map[string]config.Profile{},
-}
+	cfg := config.File{
+		Profiles: map[string]config.Profile{},
+	}
 
-b, err := yaml.Marshal(cfg)
-if err != nil {
-t.Fatal(err)
-}
-if err := os.WriteFile(tmpFile, b, 0o600); err != nil {
-t.Fatal(err)
-}
+	b, err := yaml.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tmpFile, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
 
-result, xe := LoadProfileDetail(config.Options{ConfigPath: tmpFile}, "nonexistent")
+	result, xe := LoadProfileDetail(config.Options{ConfigPath: tmpFile}, "nonexistent")
 
-if xe == nil {
-t.Fatal("expected error for missing profile")
-}
+	if xe == nil {
+		t.Fatal("expected error for missing profile")
+	}
 
-if result != nil {
-t.Errorf("expected nil result, got %v", result)
-}
+	if result != nil {
+		t.Errorf("expected nil result, got %v", result)
+	}
 
-if xe.Code != errors.CodeCfgInvalid {
-t.Errorf("expected CodeCfgInvalid, got %s", xe.Code)
-}
+	if xe.Code != errors.CodeCfgInvalid {
+		t.Errorf("expected CodeCfgInvalid, got %s", xe.Code)
+	}
 }
 
 // TestLoadProfiles_Success_Real tests LoadProfiles with real configuration file
 func TestLoadProfiles_Success_Real(t *testing.T) {
-tmpDir := t.TempDir()
-tmpFile := filepath.Join(tmpDir, "config.yaml")
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "config.yaml")
 
-cfg := config.File{
-Profiles: map[string]config.Profile{
-"prod": {
-DB:       "mysql",
-Host:     "prod.example.com",
-Port:     3306,
-User:     "admin",
-Password: "secret",
-Database: "main_db",
-},
-"dev": {
-DB:       "pg",
-Host:     "localhost",
-Port:     5432,
-User:     "dev",
-Database: "dev_db",
-},
-},
-}
+	cfg := config.File{
+		Profiles: map[string]config.Profile{
+			"prod": {
+				DB:       "mysql",
+				Host:     "prod.example.com",
+				Port:     3306,
+				User:     "admin",
+				Password: "secret",
+				Database: "main_db",
+			},
+			"dev": {
+				DB:       "pg",
+				Host:     "localhost",
+				Port:     5432,
+				User:     "dev",
+				Database: "dev_db",
+			},
+		},
+	}
 
-b, err := yaml.Marshal(cfg)
-if err != nil {
-t.Fatal(err)
-}
-if err := os.WriteFile(tmpFile, b, 0o600); err != nil {
-t.Fatal(err)
-}
+	b, err := yaml.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tmpFile, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
 
-result, xe := LoadProfiles(config.Options{ConfigPath: tmpFile})
+	result, xe := LoadProfiles(config.Options{ConfigPath: tmpFile})
 
-if xe != nil {
-t.Fatalf("expected success, got error: %v", xe)
-}
+	if xe != nil {
+		t.Fatalf("expected success, got error: %v", xe)
+	}
 
-if result == nil {
-t.Fatal("expected non-nil result")
-}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
 
-if result.ConfigPath != tmpFile {
-t.Errorf("expected ConfigPath=%s, got %s", tmpFile, result.ConfigPath)
-}
+	if result.ConfigPath != tmpFile {
+		t.Errorf("expected ConfigPath=%s, got %s", tmpFile, result.ConfigPath)
+	}
 
-if len(result.Profiles) != 2 {
-t.Errorf("expected 2 profiles, got %d", len(result.Profiles))
-}
+	if len(result.Profiles) != 2 {
+		t.Errorf("expected 2 profiles, got %d", len(result.Profiles))
+	}
 
-// Profiles should be sorted alphabetically
-if len(result.Profiles) > 0 && result.Profiles[0].Name != "dev" {
-t.Errorf("expected first profile to be 'dev' (sorted), got %s", result.Profiles[0].Name)
-}
+	// Profiles should be sorted alphabetically
+	if len(result.Profiles) > 0 && result.Profiles[0].Name != "dev" {
+		t.Errorf("expected first profile to be 'dev' (sorted), got %s", result.Profiles[0].Name)
+	}
 }
 
 // TestLoadProfileDetail_WithSSHProxy tests LoadProfileDetail with SSH proxy setting
 func TestLoadProfileDetail_WithSSHProxy(t *testing.T) {
-tmpDir := t.TempDir()
-tmpFile := filepath.Join(tmpDir, "config.yaml")
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "config.yaml")
 
-cfg := config.File{
-SSHProxies: map[string]config.SSHProxy{
-"remote-proxy": {
-Host:         "ssh.example.com",
-Port:         22,
-User:         "sshuser",
-IdentityFile: "/home/user/.ssh/id_rsa",
-},
-},
-Profiles: map[string]config.Profile{
-"remote": {
-DB:       "mysql",
-Host:     "10.0.0.1",
-Port:     3306,
-User:     "admin",
-Password: "secret",
-Database: "mydb",
-SSHProxy: "remote-proxy",
-},
-},
-}
+	cfg := config.File{
+		SSHProxies: map[string]config.SSHProxy{
+			"remote-proxy": {
+				Host:         "ssh.example.com",
+				Port:         22,
+				User:         "sshuser",
+				IdentityFile: "/home/user/.ssh/id_rsa",
+			},
+		},
+		Profiles: map[string]config.Profile{
+			"remote": {
+				DB:       "mysql",
+				Host:     "10.0.0.1",
+				Port:     3306,
+				User:     "admin",
+				Password: "secret",
+				Database: "mydb",
+				SSHProxy: "remote-proxy",
+			},
+		},
+	}
 
-b, err := yaml.Marshal(cfg)
-if err != nil {
-t.Fatal(err)
-}
-if err := os.WriteFile(tmpFile, b, 0o600); err != nil {
-t.Fatal(err)
-}
+	b, err := yaml.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tmpFile, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
 
-result, xe := LoadProfileDetail(config.Options{ConfigPath: tmpFile}, "remote")
+	result, xe := LoadProfileDetail(config.Options{ConfigPath: tmpFile}, "remote")
 
-if xe != nil {
-t.Fatalf("expected success, got error: %v", xe)
-}
+	if xe != nil {
+		t.Fatalf("expected success, got error: %v", xe)
+	}
 
-if result == nil {
-t.Fatal("expected non-nil result")
-}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
 
-// Verify SSH proxy is included
-if sshProxy, ok := result["ssh_proxy"].(string); !ok || sshProxy != "remote-proxy" {
-t.Errorf("expected ssh_proxy=remote-proxy, got %v", result["ssh_proxy"])
-}
+	// Verify SSH proxy is included
+	if sshProxy, ok := result["ssh_proxy"].(string); !ok || sshProxy != "remote-proxy" {
+		t.Errorf("expected ssh_proxy=remote-proxy, got %v", result["ssh_proxy"])
+	}
 
-// Verify password is redacted
-if pwd, ok := result["password"].(string); !ok || pwd != "***" {
-t.Errorf("expected password=***, got %v", result["password"])
-}
+	// Verify password is redacted
+	if pwd, ok := result["password"].(string); !ok || pwd != "***" {
+		t.Errorf("expected password=***, got %v", result["password"])
+	}
 }
 
 // TestQuery_NoDB tests Query with missing database type
 func TestQuery_NoDB(t *testing.T) {
-ctx := context.Background()
-req := QueryRequest{
-Profile: config.Profile{
-DB: "", // Empty DB type
-},
-SQL: "SELECT 1",
-}
+	ctx := context.Background()
+	req := QueryRequest{
+		Profile: config.Profile{
+			DB: "", // Empty DB type
+		},
+		SQL: "SELECT 1",
+	}
 
-result, xe := Query(ctx, req)
+	result, xe := Query(ctx, req)
 
-if xe == nil {
-t.Fatal("expected error for missing DB type, got nil")
-}
+	if xe == nil {
+		t.Fatal("expected error for missing DB type, got nil")
+	}
 
-if result != nil {
-t.Errorf("expected nil result for error case, got %v", result)
-}
+	if result != nil {
+		t.Errorf("expected nil result for error case, got %v", result)
+	}
 
-if xe.Code != errors.CodeCfgInvalid {
-t.Errorf("expected CodeCfgInvalid, got %q", xe.Code)
-}
+	if xe.Code != errors.CodeCfgInvalid {
+		t.Errorf("expected CodeCfgInvalid, got %q", xe.Code)
+	}
 }
 
 // TestDumpSchema_NoDB tests DumpSchema with missing database type
 func TestDumpSchema_NoDB(t *testing.T) {
-ctx := context.Background()
-req := SchemaDumpRequest{
-Profile: config.Profile{
-DB: "", // Empty DB type
-},
-}
+	ctx := context.Background()
+	req := SchemaDumpRequest{
+		Profile: config.Profile{
+			DB: "", // Empty DB type
+		},
+	}
 
-result, xe := DumpSchema(ctx, req)
+	result, xe := DumpSchema(ctx, req)
 
-if xe == nil {
-t.Fatal("expected error for missing DB type, got nil")
-}
+	if xe == nil {
+		t.Fatal("expected error for missing DB type, got nil")
+	}
 
-if result != nil {
-t.Errorf("expected nil result for error case, got %v", result)
-}
+	if result != nil {
+		t.Errorf("expected nil result for error case, got %v", result)
+	}
 
-if xe.Code != errors.CodeCfgInvalid {
-t.Errorf("expected CodeCfgInvalid, got %q", xe.Code)
-}
+	if xe.Code != errors.CodeCfgInvalid {
+		t.Errorf("expected CodeCfgInvalid, got %q", xe.Code)
+	}
 }
 
 // TestListTables_NoDB tests ListTables with missing database type
 func TestListTables_NoDB(t *testing.T) {
-ctx := context.Background()
-req := TableListRequest{
-Profile: config.Profile{
-DB: "", // Empty DB type
-},
-}
+	ctx := context.Background()
+	req := TableListRequest{
+		Profile: config.Profile{
+			DB: "", // Empty DB type
+		},
+	}
 
-result, xe := ListTables(ctx, req)
+	result, xe := ListTables(ctx, req)
 
-if xe == nil {
-t.Fatal("expected error for missing DB type, got nil")
-}
+	if xe == nil {
+		t.Fatal("expected error for missing DB type, got nil")
+	}
 
-if result != nil {
-t.Errorf("expected nil result for error case, got %v", result)
-}
+	if result != nil {
+		t.Errorf("expected nil result for error case, got %v", result)
+	}
 
-if xe.Code != errors.CodeCfgInvalid {
-t.Errorf("expected CodeCfgInvalid, got %q", xe.Code)
-}
+	if xe.Code != errors.CodeCfgInvalid {
+		t.Errorf("expected CodeCfgInvalid, got %q", xe.Code)
+	}
 }
 
 // TestDescribeTable_NoDB tests DescribeTable with missing database type
 func TestDescribeTable_NoDB(t *testing.T) {
-ctx := context.Background()
-req := TableDescribeRequest{
-Profile: config.Profile{
-DB: "", // Empty DB type
-},
-Name: "test_table",
-}
+	ctx := context.Background()
+	req := TableDescribeRequest{
+		Profile: config.Profile{
+			DB: "", // Empty DB type
+		},
+		Name: "test_table",
+	}
 
-result, xe := DescribeTable(ctx, req)
+	result, xe := DescribeTable(ctx, req)
 
-if xe == nil {
-t.Fatal("expected error for missing DB type, got nil")
-}
+	if xe == nil {
+		t.Fatal("expected error for missing DB type, got nil")
+	}
 
-if result != nil {
-t.Errorf("expected nil result for error case, got %v", result)
-}
+	if result != nil {
+		t.Errorf("expected nil result for error case, got %v", result)
+	}
 
-if xe.Code != errors.CodeCfgInvalid {
-t.Errorf("expected CodeCfgInvalid, got %q", xe.Code)
-}
+	if xe.Code != errors.CodeCfgInvalid {
+		t.Errorf("expected CodeCfgInvalid, got %q", xe.Code)
+	}
 }

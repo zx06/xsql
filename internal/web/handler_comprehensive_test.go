@@ -404,7 +404,7 @@ func TestHandler_Frontend_Index(t *testing.T) {
 // TestHandler_Frontend_SubPath tests serving nested assets
 func TestHandler_Frontend_SubPath(t *testing.T) {
 	assets := fstest.MapFS{
-		"index.html":   &fstest.MapFile{Data: []byte("<html>index</html>")},
+		"index.html":    &fstest.MapFile{Data: []byte("<html>index</html>")},
 		"css/style.css": &fstest.MapFile{Data: []byte("body { color: red; }")},
 	}
 
@@ -509,10 +509,10 @@ func TestHandler_ResponseContentType(t *testing.T) {
 // TestParseSchemaTablePath_Complex tests path parsing with special characters
 func TestParseSchemaTablePath_Complex(t *testing.T) {
 	cases := []struct {
-		path      string
-		wantOK    bool
+		path       string
+		wantOK     bool
 		wantSchema string
-		wantTable string
+		wantTable  string
 	}{
 		{"/api/v1/schema/tables/public/users", true, "public", "users"},
 		{"/api/v1/schema/tables/my_schema/my_table", true, "my_schema", "my_table"},
@@ -609,7 +609,7 @@ func TestStatusCodeFor_AllCases(t *testing.T) {
 
 // TestHandler_ProfileShow_WithAuth tests ProfileShow with authentication
 func TestHandler_ProfileShow_WithAuth(t *testing.T) {
-configPath := createConfigFile(t, `
+	configPath := createConfigFile(t, `
 profiles:
   prod:
     driver: mysql
@@ -619,64 +619,64 @@ profiles:
     password: secret
 `)
 
-handler := NewHandler(HandlerOptions{
-ConfigPath:   configPath,
-AuthRequired: true,
-AuthToken:    "test-token-123",
-Assets:       fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
-})
+	handler := NewHandler(HandlerOptions{
+		ConfigPath:   configPath,
+		AuthRequired: true,
+		AuthToken:    "test-token-123",
+		Assets:       fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
+	})
 
-req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles/prod", nil)
-req.Header.Set("Authorization", "Bearer test-token-123")
-rec := httptest.NewRecorder()
-handler.ServeHTTP(rec, req)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles/prod", nil)
+	req.Header.Set("Authorization", "Bearer test-token-123")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
 
-if rec.Code != http.StatusOK {
-t.Errorf("expected 200, got %d", rec.Code)
-}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
 }
 
 // TestHandler_ConfigJS_WithoutAuth tests config endpoint when auth not required
 func TestHandler_ConfigJS_WithoutAuth(t *testing.T) {
-handler := NewHandler(HandlerOptions{
-InitialProfile: "default",
-AuthRequired:   false,
-Assets:         fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
-})
+	handler := NewHandler(HandlerOptions{
+		InitialProfile: "default",
+		AuthRequired:   false,
+		Assets:         fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
+	})
 
-req := httptest.NewRequest(http.MethodGet, "/config.js", nil)
-rec := httptest.NewRecorder()
-handler.ServeHTTP(rec, req)
+	req := httptest.NewRequest(http.MethodGet, "/config.js", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
 
-if rec.Code != http.StatusOK {
-t.Errorf("expected 200, got %d", rec.Code)
-}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
 
-body := rec.Body.String()
-if !strings.Contains(body, "authRequired") {
-t.Error("expected authRequired in config")
-}
+	body := rec.Body.String()
+	if !strings.Contains(body, "authRequired") {
+		t.Error("expected authRequired in config")
+	}
 }
 
 // TestHandler_ConfigJS_PostNotAllowed tests POST method not allowed on config.js
 func TestHandler_ConfigJS_PostNotAllowed(t *testing.T) {
-handler := NewHandler(HandlerOptions{
-InitialProfile: "default",
-Assets:         fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
-})
+	handler := NewHandler(HandlerOptions{
+		InitialProfile: "default",
+		Assets:         fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
+	})
 
-req := httptest.NewRequest(http.MethodPost, "/config.js", nil)
-rec := httptest.NewRecorder()
-handler.ServeHTTP(rec, req)
+	req := httptest.NewRequest(http.MethodPost, "/config.js", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
 
-if rec.Code != http.StatusMethodNotAllowed {
-t.Errorf("expected 405, got %d", rec.Code)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", rec.Code)
+	}
 }
-}
 
-// TestHandler_MultipleProfiles tests loading multiple profiles 
+// TestHandler_MultipleProfiles tests loading multiple profiles
 func TestHandler_MultipleProfiles_Real(t *testing.T) {
-configPath := createConfigFile(t, `
+	configPath := createConfigFile(t, `
 profiles:
   db1:
     driver: mysql
@@ -698,187 +698,187 @@ profiles:
     database: db3
 `)
 
-handler := NewHandler(HandlerOptions{
-ConfigPath: configPath,
-Assets:     fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
-})
+	handler := NewHandler(HandlerOptions{
+		ConfigPath: configPath,
+		Assets:     fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
+	})
 
-req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles", nil)
-rec := httptest.NewRecorder()
-handler.ServeHTTP(rec, req)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
 
-if rec.Code != http.StatusOK {
-t.Errorf("expected 200, got %d", rec.Code)
-}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
 
-var resp envelope
-if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-t.Fatalf("invalid JSON: %v", err)
-}
+	var resp envelope
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
 
-if !resp.OK {
-t.Error("expected OK=true")
-}
+	if !resp.OK {
+		t.Error("expected OK=true")
+	}
 }
 
 // TestHandler_ProfileShow_InvalidPath tests ProfileShow with invalid path
 func TestHandler_ProfileShow_InvalidPath(t *testing.T) {
-handler := NewHandler(HandlerOptions{
-Assets: fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
-})
+	handler := NewHandler(HandlerOptions{
+		Assets: fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
+	})
 
-tests := []struct {
-path string
-name string
-}{
-{path: "/api/v1/profiles/", name: "empty name"},
-{path: "/api/v1/profiles/dev/extra", name: "path with extra segments"},
-}
+	tests := []struct {
+		path string
+		name string
+	}{
+		{path: "/api/v1/profiles/", name: "empty name"},
+		{path: "/api/v1/profiles/dev/extra", name: "path with extra segments"},
+	}
 
-for _, tt := range tests {
-t.Run(tt.name, func(t *testing.T) {
-req := httptest.NewRequest(http.MethodGet, tt.path, nil)
-rec := httptest.NewRecorder()
-handler.ServeHTTP(rec, req)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
 
-if rec.Code == http.StatusOK {
-t.Errorf("expected error status for invalid path, got 200")
-}
-})
-}
+			if rec.Code == http.StatusOK {
+				t.Errorf("expected error status for invalid path, got 200")
+			}
+		})
+	}
 }
 
 // TestHandler_ProfileShow_PostNotAllowed tests POST to ProfileShow endpoint
 func TestHandler_ProfileShow_PostNotAllowed(t *testing.T) {
-handler := NewHandler(HandlerOptions{
-Assets: fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
-})
+	handler := NewHandler(HandlerOptions{
+		Assets: fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
+	})
 
-req := httptest.NewRequest(http.MethodPost, "/api/v1/profiles/dev", nil)
-rec := httptest.NewRecorder()
-handler.ServeHTTP(rec, req)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/profiles/dev", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
 
-if rec.Code != http.StatusMethodNotAllowed {
-t.Errorf("expected 405, got %d", rec.Code)
-}
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", rec.Code)
+	}
 }
 
 func TestHandler_HandleProfiles_ConfigError(t *testing.T) {
-handler := NewHandler(HandlerOptions{
-ConfigPath: "/nonexistent/path/config.yaml",
-Assets:     fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
-})
+	handler := NewHandler(HandlerOptions{
+		ConfigPath: "/nonexistent/path/config.yaml",
+		Assets:     fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
+	})
 
-req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles", nil)
-rec := httptest.NewRecorder()
-handler.ServeHTTP(rec, req)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
 
-// Should fail due to missing config
-if rec.Code != http.StatusNotFound && rec.Code != http.StatusInternalServerError {
-t.Logf("status code: %d", rec.Code)
-}
+	// Should fail due to missing config
+	if rec.Code != http.StatusNotFound && rec.Code != http.StatusInternalServerError {
+		t.Logf("status code: %d", rec.Code)
+	}
 }
 
 func TestHandler_HandleProfileShow_ConfigError(t *testing.T) {
-handler := NewHandler(HandlerOptions{
-ConfigPath: "/nonexistent/path/config.yaml",
-Assets:     fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
-})
+	handler := NewHandler(HandlerOptions{
+		ConfigPath: "/nonexistent/path/config.yaml",
+		Assets:     fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
+	})
 
-req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles/myprofile", nil)
-rec := httptest.NewRecorder()
-handler.ServeHTTP(rec, req)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/profiles/myprofile", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
 
-// Should fail due to missing config
-if rec.Code != http.StatusNotFound && rec.Code != http.StatusInternalServerError {
-t.Logf("status code: %d", rec.Code)
-}
+	// Should fail due to missing config
+	if rec.Code != http.StatusNotFound && rec.Code != http.StatusInternalServerError {
+		t.Logf("status code: %d", rec.Code)
+	}
 }
 
 func TestHandler_HandleSchemaTables_WithIncludeSystemTrue(t *testing.T) {
-handler := NewHandler(HandlerOptions{
-ConfigPath: "testdata/config.yaml",
-Assets:     fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
-})
+	handler := NewHandler(HandlerOptions{
+		ConfigPath: "testdata/config.yaml",
+		Assets:     fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
+	})
 
-req := httptest.NewRequest(http.MethodGet, "/api/v1/schema/tables?include_system=true", nil)
-rec := httptest.NewRecorder()
-handler.ServeHTTP(rec, req)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/schema/tables?include_system=true", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
 
-// Accept any status - just verify it handles the param
-t.Logf("status code: %d", rec.Code)
+	// Accept any status - just verify it handles the param
+	t.Logf("status code: %d", rec.Code)
 }
 
 func TestHandler_HandleQuery_EmptyProfile(t *testing.T) {
-handler := NewHandler(HandlerOptions{
-ConfigPath: "testdata/config.yaml",
-Assets:     fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
-})
+	handler := NewHandler(HandlerOptions{
+		ConfigPath: "testdata/config.yaml",
+		Assets:     fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
+	})
 
-body := []byte(`{"profile":"","sql":"SELECT 1"}`)
-req := httptest.NewRequest(http.MethodPost, "/api/v1/query", strings.NewReader(string(body)))
-req.Header.Set("Content-Type", "application/json")
-rec := httptest.NewRecorder()
-handler.ServeHTTP(rec, req)
+	body := []byte(`{"profile":"","sql":"SELECT 1"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/query", strings.NewReader(string(body)))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
 
-// Should handle empty profile
-t.Logf("status code: %d", rec.Code)
+	// Should handle empty profile
+	t.Logf("status code: %d", rec.Code)
 }
 
 func TestHandler_HandleQuery_EmptySQL(t *testing.T) {
-handler := NewHandler(HandlerOptions{
-ConfigPath: "testdata/config.yaml",
-Assets:     fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
-})
+	handler := NewHandler(HandlerOptions{
+		ConfigPath: "testdata/config.yaml",
+		Assets:     fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
+	})
 
-body := []byte(`{"profile":"dev","sql":""}`)
-req := httptest.NewRequest(http.MethodPost, "/api/v1/query", strings.NewReader(string(body)))
-req.Header.Set("Content-Type", "application/json")
-rec := httptest.NewRecorder()
-handler.ServeHTTP(rec, req)
+	body := []byte(`{"profile":"dev","sql":""}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/query", strings.NewReader(string(body)))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
 
-// Should handle empty SQL
-t.Logf("status code: %d", rec.Code)
+	// Should handle empty SQL
+	t.Logf("status code: %d", rec.Code)
 }
 
 func TestHandler_LargeRequestBody(t *testing.T) {
-handler := NewHandler(HandlerOptions{
-Assets: fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
-})
+	handler := NewHandler(HandlerOptions{
+		Assets: fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
+	})
 
-// Create a body larger than 1MB limit
-largeBody := strings.Repeat("x", 2*1024*1024)
-req := httptest.NewRequest(http.MethodPost, "/api/v1/query", strings.NewReader(largeBody))
-req.Header.Set("Content-Type", "application/json")
-rec := httptest.NewRecorder()
-handler.ServeHTTP(rec, req)
+	// Create a body larger than 1MB limit
+	largeBody := strings.Repeat("x", 2*1024*1024)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/query", strings.NewReader(largeBody))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
 
-// Should reject due to size limit
-t.Logf("status code: %d", rec.Code)
+	// Should reject due to size limit
+	t.Logf("status code: %d", rec.Code)
 }
 
 func TestHandler_Frontend_Directory(t *testing.T) {
-handler := NewHandler(HandlerOptions{
-Assets: fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
-})
+	handler := NewHandler(HandlerOptions{
+		Assets: fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html>ok</html>")}},
+	})
 
-req := httptest.NewRequest(http.MethodGet, "/app/", nil)
-rec := httptest.NewRecorder()
-handler.ServeHTTP(rec, req)
+	req := httptest.NewRequest(http.MethodGet, "/app/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
 
-// Should serve something (possibly index.html or 404)
-t.Logf("status code: %d", rec.Code)
+	// Should serve something (possibly index.html or 404)
+	t.Logf("status code: %d", rec.Code)
 }
 
 func TestHandler_FrontendNotFound(t *testing.T) {
-handler := NewHandler(HandlerOptions{
-Assets: fstest.MapFS{}, // Empty assets
-})
+	handler := NewHandler(HandlerOptions{
+		Assets: fstest.MapFS{}, // Empty assets
+	})
 
-req := httptest.NewRequest(http.MethodGet, "/", nil)
-rec := httptest.NewRecorder()
-handler.ServeHTTP(rec, req)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
 
-// Should handle missing index.html
-t.Logf("status code: %d", rec.Code)
+	// Should handle missing index.html
+	t.Logf("status code: %d", rec.Code)
 }
