@@ -8,10 +8,10 @@ import (
 // TestAsOrWrap tests the AsOrWrap function
 func TestAsOrWrap_XError(t *testing.T) {
 	tests := []struct {
-		name      string
-		err       error
-		wantXErr  bool
-		wantCode  Code
+		name     string
+		err      error
+		wantXErr bool
+		wantCode Code
 	}{
 		{
 			name:     "wrap_regular_error",

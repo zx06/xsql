@@ -177,9 +177,9 @@ func TestResolveWebOptions_AddressResolution(t *testing.T) {
 // Test all loopback address variations
 func TestResolveWebOptions_LoopbackAddresses(t *testing.T) {
 	tests := []struct {
-		name       string
-		addr       string
-		shouldReq  bool
+		name      string
+		addr      string
+		shouldReq bool
 	}{
 		{"IPv4 loopback", "127.0.0.1:8788", false},
 		{"IPv6 loopback", "[::1]:8788", false},
@@ -218,12 +218,12 @@ func TestResolveWebOptions_LoopbackAddresses(t *testing.T) {
 // TestResolveWebOptions_TokenResolution tests token resolution priority: CLI > ENV > Config > None
 func TestResolveWebOptions_TokenResolution(t *testing.T) {
 	tests := []struct {
-		name         string
-		setEnv       string
-		opts         *webCommandOptions
-		cfg          config.File
-		expectedTok  string
-		expectErr    bool
+		name        string
+		setEnv      string
+		opts        *webCommandOptions
+		cfg         config.File
+		expectedTok string
+		expectErr   bool
 	}{
 		{
 			name:   "CLI token takes priority",
@@ -271,10 +271,10 @@ func TestResolveWebOptions_TokenResolution(t *testing.T) {
 			expectedTok: "plaintext-token",
 		},
 		{
-			name:        "Non-loopback without token fails",
-			setEnv:      "",
-			opts:        &webCommandOptions{addr: "0.0.0.0:8788", addrSet: true},
-			expectErr:   true,
+			name:      "Non-loopback without token fails",
+			setEnv:    "",
+			opts:      &webCommandOptions{addr: "0.0.0.0:8788", addrSet: true},
+			expectErr: true,
 		},
 	}
 
@@ -491,9 +491,9 @@ func TestWebCommand_AuthTokenSetFlag(t *testing.T) {
 // TestRunWebCommand_ConfigLoadError tests error handling when config loading fails
 func TestRunWebCommand_ConfigLoadError(t *testing.T) {
 	opts := &webCommandOptions{
-		addr:        "127.0.0.1:0",
-		addrSet:     true,
-		authToken:   "",
+		addr:         "127.0.0.1:0",
+		addrSet:      true,
+		authToken:    "",
 		authTokenSet: false,
 	}
 
@@ -508,7 +508,7 @@ func TestRunWebCommand_ConfigLoadError(t *testing.T) {
 	w := output.New(&buf, &bytes.Buffer{})
 
 	err := runWebCommand(opts, &w)
-	
+
 	// Should return an error due to missing config file
 	if err == nil {
 		t.Error("expected error from loading invalid config path, got nil")
@@ -572,5 +572,3 @@ func TestRunWebCommand_ListenerCreationError(t *testing.T) {
 		t.Error("test timed out - runWebCommand likely blocked waiting for signals")
 	}
 }
-
-

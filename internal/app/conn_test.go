@@ -367,9 +367,9 @@ func TestResolveReconnectableSSH_PassphraseNotAllowed(t *testing.T) {
 func TestResolveReconnectableSSH_ConnectFails(t *testing.T) {
 	profile := config.Profile{
 		SSHConfig: &config.SSHProxy{
-			Host:       "127.0.0.1",
-			Port:       1, // unlikely to have SSH on port 1
-			User:       "user",
+			Host: "127.0.0.1",
+			Port: 1, // unlikely to have SSH on port 1
+			User: "user",
 		},
 	}
 

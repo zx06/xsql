@@ -7,8 +7,8 @@ import (
 // TestProfileToInfo tests ProfileToInfo conversion function
 func TestProfileToInfo(t *testing.T) {
 	tests := []struct {
-		name string
-		prof Profile
+		name     string
+		prof     Profile
 		wantMode string
 	}{
 		{
@@ -22,18 +22,18 @@ func TestProfileToInfo(t *testing.T) {
 		{
 			name: "read_write_enabled",
 			prof: Profile{
-				DB:                "mysql",
-				Description:       "Test profile",
-				UnsafeAllowWrite:  true,
+				DB:               "mysql",
+				Description:      "Test profile",
+				UnsafeAllowWrite: true,
 			},
 			wantMode: "read-write",
 		},
 		{
 			name: "read_write_false",
 			prof: Profile{
-				DB:                "postgresql",
-				Description:       "PG profile",
-				UnsafeAllowWrite:  false,
+				DB:               "postgresql",
+				Description:      "PG profile",
+				UnsafeAllowWrite: false,
 			},
 			wantMode: "read-only",
 		},

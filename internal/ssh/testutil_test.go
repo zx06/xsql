@@ -18,11 +18,11 @@ import (
 // testSSHServer is a minimal in-process SSH server for testing.
 // It supports keepalive requests and direct-tcpip channel forwarding.
 type testSSHServer struct {
-	listener   net.Listener
-	config     *gossh.ServerConfig
-	hostKey    gossh.Signer
+	listener    net.Listener
+	config      *gossh.ServerConfig
+	hostKey     gossh.Signer
 	tempKeyFile string // path to a temporary client private key for auth
-	wg         sync.WaitGroup
+	wg          sync.WaitGroup
 
 	mu     sync.Mutex
 	closed bool
