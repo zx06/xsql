@@ -276,7 +276,7 @@ func tryAsProfileList(data any) ([]ProfileListItem, bool) {
 		for i := 0; i < v.Len(); i++ {
 			elem := v.Index(i)
 			// Dereference pointer
-			if elem.Kind() == reflect.Ptr {
+			if elem.Kind() == reflect.Pointer {
 				elem = elem.Elem()
 			}
 			// Only handle structs
@@ -350,7 +350,7 @@ func tryAsQueryResultReflect(data any) (*queryResultLike, bool) {
 	}
 
 	v := reflect.ValueOf(data)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 	if v.Kind() != reflect.Struct {
