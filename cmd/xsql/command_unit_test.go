@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -444,7 +446,7 @@ func TestRunMCPServer_StdioTreatsContextCanceledAsCleanExit(t *testing.T) {
 	}()
 
 	configPath := filepath.Join(t.TempDir(), "xsql.yaml")
-	if err := os.WriteFile(configPath, []byte("profiles: {}\\nssh_proxies: {}\\n"), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte("profiles: {}\nssh_proxies: {}\n"), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
 
@@ -466,7 +468,7 @@ func TestRunMCPServer_StdioPropagatesNonCanceledError(t *testing.T) {
 	}()
 
 	configPath := filepath.Join(t.TempDir(), "xsql.yaml")
-	if err := os.WriteFile(configPath, []byte("profiles: {}\\nssh_proxies: {}\\n"), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte("profiles: {}\nssh_proxies: {}\n"), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
 
@@ -785,7 +787,7 @@ func TestConfigInitCommand_FileExists(t *testing.T) {
 func TestConfigSetCommand(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "xsql.yaml")
-	if err := os.WriteFile(path, []byte("profiles: {}\\nssh_proxies: {}\\n"), 0600); err != nil {
+	if err := os.WriteFile(path, []byte("profiles: {}\nssh_proxies: {}\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -813,7 +815,7 @@ func TestConfigSetCommand(t *testing.T) {
 func TestConfigSetCommand_InvalidKey(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "xsql.yaml")
-	if err := os.WriteFile(path, []byte("profiles: {}\\nssh_proxies: {}\\n"), 0600); err != nil {
+	if err := os.WriteFile(path, []byte("profiles: {}\nssh_proxies: {}\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -908,4 +910,260 @@ func TestFirstNonEmpty(t *testing.T) {
 
 func configProfile(dbType string) config.Profile {
 	return config.Profile{DB: dbType}
+}
+
+func TestHandlePortConflict_NonTTY(t *testing.T) {
+	_, err := handlePortConflict(3306, "127.0.0.1")
+	if err == nil {
+		t.Fatal("expected error for non-TTY port conflict")
+	}
+	if err.Code != errors.CodePortInUse {
+		t.Fatalf("expected CodePortInUse, got %s", err.Code)
+	}
+}
+
+func TestModeForWebCommand(t *testing.T) {
+	if got := modeForWebCommand(true); got != "web" {
+		t.Fatalf("expected 'web', got %q", got)
+	}
+	if got := modeForWebCommand(false); got != "serve" {
+		t.Fatalf("expected 'serve', got %q", got)
+	}
+}
+
+func TestResolveWebOptions_InvalidAddr(t *testing.T) {
+	_, xe := resolveWebOptions(&webCommandOptions{
+		addr:    "not-a-valid-addr",
+		addrSet: true,
+	}, config.File{})
+	if xe == nil {
+		t.Fatal("expected error for invalid addr")
+	}
+	if xe.Code != errors.CodeCfgInvalid {
+		t.Fatalf("expected CodeCfgInvalid, got %s", xe.Code)
+	}
+}
+
+func TestResolveWebOptions_EnvVars(t *testing.T) {
+	t.Setenv("XSQL_WEB_HTTP_AUTH_TOKEN", "env-token")
+	resolved, xe := resolveWebOptions(&webCommandOptions{
+		addr:    "0.0.0.0:9999",
+		addrSet: true,
+	}, config.File{})
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+	if resolved.authToken != "env-token" {
+		t.Fatalf("expected env-token, got %s", resolved.authToken)
+	}
+	if !resolved.authRequired {
+		t.Fatal("expected authRequired=true")
+	}
+}
+
+func TestResolveMCPServerOptions_HttpAddrEnv(t *testing.T) {
+	t.Setenv("XSQL_MCP_TRANSPORT", "streamable_http")
+	t.Setenv("XSQL_MCP_HTTP_AUTH_TOKEN", "token")
+	t.Setenv("XSQL_MCP_HTTP_ADDR", "127.0.0.1:5555")
+	cfg := config.File{
+		Profiles:   map[string]config.Profile{},
+		SSHProxies: map[string]config.SSHProxy{},
+	}
+	resolved, xe := resolveMCPServerOptions(&mcpServerOptions{}, cfg)
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+	if resolved.httpAddr != "127.0.0.1:5555" {
+		t.Fatalf("expected 127.0.0.1:5555, got %s", resolved.httpAddr)
+	}
+}
+
+func TestRunMCPServer_InvalidConfigPath(t *testing.T) {
+	GlobalConfig.ConfigStr = "/nonexistent/path/config.yaml"
+	err := runMCPServer(&mcpServerOptions{})
+	if err == nil {
+		t.Fatal("expected error for nonexistent config")
+	}
+}
+
+func TestRunMCPServer_StreamableHTTPStarts(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "xsql.yaml")
+	if err := os.WriteFile(configPath, []byte("profiles: {}\nmcp:\n  transport: streamable_http\n  http:\n    addr: 127.0.0.1:0\n    auth_token: test-token\n    allow_plaintext_token: true\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	GlobalConfig.ConfigStr = configPath
+
+	// This will start the HTTP server and then we need to stop it
+	// We'll use a goroutine to run it and cancel after a short time
+	done := make(chan error, 1)
+	go func() {
+		done <- runMCPServer(&mcpServerOptions{})
+	}()
+
+	// Give the server time to start
+	time.Sleep(100 * time.Millisecond)
+
+	// The server should be running, send SIGINT to stop it
+	p, _ := os.FindProcess(os.Getpid())
+	_ = p.Signal(syscall.SIGINT)
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for server to stop")
+	}
+}
+
+func TestNewServeCommand(t *testing.T) {
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	cmd := NewServeCommand(&w)
+	if cmd.Use != "serve" {
+		t.Fatalf("expected 'serve', got %s", cmd.Use)
+	}
+}
+
+func TestNewWebCommand(t *testing.T) {
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	cmd := NewWebCommand(&w)
+	if cmd.Use != "web" {
+		t.Fatalf("expected 'web', got %s", cmd.Use)
+	}
+}
+
+func TestNewMCPCommand(t *testing.T) {
+	cmd := NewMCPCommand()
+	if cmd.Use != "mcp" {
+		t.Fatalf("expected 'mcp', got %s", cmd.Use)
+	}
+}
+
+func TestNewProfileCommand(t *testing.T) {
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	cmd := NewProfileCommand(&w)
+	if cmd.Use != "profile" {
+		t.Fatalf("expected 'profile', got %s", cmd.Use)
+	}
+}
+
+func TestNewSchemaCommand(t *testing.T) {
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	cmd := NewSchemaCommand(&w)
+	if cmd.Use != "schema" {
+		t.Fatalf("expected 'schema', got %s", cmd.Use)
+	}
+}
+
+func TestResolveWebOptions_NilOpts(t *testing.T) {
+	resolved, xe := resolveWebOptions(nil, config.File{})
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+	if resolved.addr != "127.0.0.1:8788" {
+		t.Fatalf("expected default addr, got %s", resolved.addr)
+	}
+}
+
+func TestResolveWebOptions_ConfigAddr(t *testing.T) {
+	resolved, xe := resolveWebOptions(&webCommandOptions{}, config.File{
+		Web: config.WebConfig{
+			HTTP: config.WebHTTPConfig{
+				Addr: "127.0.0.1:9999",
+			},
+		},
+	})
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+	if resolved.addr != "127.0.0.1:9999" {
+		t.Fatalf("expected 127.0.0.1:9999, got %s", resolved.addr)
+	}
+}
+
+func TestResolveWebOptions_NonLoopbackRequiresToken(t *testing.T) {
+	_, xe := resolveWebOptions(&webCommandOptions{
+		addr:    "10.0.0.1:8788",
+		addrSet: true,
+	}, config.File{})
+	if xe == nil {
+		t.Fatal("expected error for non-loopback without token")
+	}
+	if xe.Code != errors.CodeCfgInvalid {
+		t.Fatalf("expected CodeCfgInvalid, got %s", xe.Code)
+	}
+}
+
+func TestRunProxy_InvalidFormat(t *testing.T) {
+	prev := GlobalConfig
+	GlobalConfig = &Config{ProfileStr: "dev", FormatStr: "invalid"}
+	t.Cleanup(func() { GlobalConfig = prev })
+
+	GlobalConfig.Resolved.Profile = config.Profile{DB: "mysql", SSHConfig: &config.SSHProxy{Host: "h", Port: 22, User: "u"}}
+
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	err := runProxy(nil, &ProxyFlags{}, &w)
+	if err == nil {
+		t.Fatal("expected error for invalid format")
+	}
+}
+
+func TestRunProxy_PlaintextNotAllowed(t *testing.T) {
+	prev := GlobalConfig
+	GlobalConfig = &Config{ProfileStr: "dev", FormatStr: "json"}
+	t.Cleanup(func() { GlobalConfig = prev })
+
+	GlobalConfig.Resolved.Profile = config.Profile{
+		DB:             "mysql",
+		Password:       "plain",
+		AllowPlaintext: false,
+		SSHConfig:      &config.SSHProxy{Host: "h", Port: 22, User: "u"},
+	}
+
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	err := runProxy(nil, &ProxyFlags{}, &w)
+	if err == nil {
+		t.Fatal("expected error for plaintext not allowed")
+	}
+}
+
+func TestResolveProxyPort_AllPaths(t *testing.T) {
+	// Test with config port and no CLI flag
+	cmd := NewProxyCommand(nil)
+	port, fromConfig := resolveProxyPort(cmd, &ProxyFlags{}, 5555)
+	if port != 5555 || !fromConfig {
+		t.Errorf("expected port=5555, fromConfig=true, got port=%d, fromConfig=%v", port, fromConfig)
+	}
+
+	// Test with zero config port
+	port, fromConfig = resolveProxyPort(cmd, &ProxyFlags{}, 0)
+	if port != 0 || fromConfig {
+		t.Errorf("expected port=0, fromConfig=false, got port=%d, fromConfig=%v", port, fromConfig)
+	}
+}
+
+func TestNewQueryCommand(t *testing.T) {
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	cmd := NewQueryCommand(&w)
+	if cmd.Use != "query [SQL]" {
+		t.Fatalf("expected 'query [SQL]', got %s", cmd.Use)
+	}
+}
+
+func TestNewProxyCommand(t *testing.T) {
+	var out bytes.Buffer
+	w := output.New(&out, &bytes.Buffer{})
+	cmd := NewProxyCommand(&w)
+	if cmd.Use != "proxy [flags]" {
+		t.Fatalf("expected 'proxy [flags]', got %s", cmd.Use)
+	}
 }
