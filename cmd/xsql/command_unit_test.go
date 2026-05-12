@@ -134,7 +134,7 @@ func TestRunQuery_MissingDB(t *testing.T) {
 
 	var out bytes.Buffer
 	w := output.New(&out, &bytes.Buffer{})
-	err := runQuery(nil, []string{"select 1"}, &QueryFlags{}, &w)
+	err := runQuery([]string{"select 1"}, &QueryFlags{}, &w)
 	if err == nil {
 		t.Fatal("expected error for missing db type")
 	}
@@ -149,7 +149,7 @@ func TestRunQuery_UnsupportedDriver(t *testing.T) {
 
 	var out bytes.Buffer
 	w := output.New(&out, &bytes.Buffer{})
-	err := runQuery(nil, []string{"select 1"}, &QueryFlags{}, &w)
+	err := runQuery([]string{"select 1"}, &QueryFlags{}, &w)
 	if err == nil {
 		t.Fatal("expected error for unsupported driver")
 	}
@@ -168,7 +168,7 @@ func TestRunQuery_PlaintextPasswordNotAllowed(t *testing.T) {
 
 	var out bytes.Buffer
 	w := output.New(&out, &bytes.Buffer{})
-	err := runQuery(nil, []string{"select 1"}, &QueryFlags{}, &w)
+	err := runQuery([]string{"select 1"}, &QueryFlags{}, &w)
 	if err == nil {
 		t.Fatal("expected error for plaintext password not allowed")
 	}
@@ -183,7 +183,7 @@ func TestRunSchemaDump_UnsupportedDriver(t *testing.T) {
 
 	var out bytes.Buffer
 	w := output.New(&out, &bytes.Buffer{})
-	err := runSchemaDump(nil, nil, &SchemaFlags{}, &w)
+	err := runSchemaDump(&SchemaFlags{}, &w)
 	if err == nil {
 		t.Fatal("expected error for unsupported driver")
 	}
@@ -202,7 +202,7 @@ func TestRunSchemaDump_PlaintextPasswordNotAllowed(t *testing.T) {
 
 	var out bytes.Buffer
 	w := output.New(&out, &bytes.Buffer{})
-	err := runSchemaDump(nil, nil, &SchemaFlags{}, &w)
+	err := runSchemaDump(&SchemaFlags{}, &w)
 	if err == nil {
 		t.Fatal("expected error for plaintext password not allowed")
 	}
@@ -217,7 +217,7 @@ func TestRunQuery_InvalidFormat(t *testing.T) {
 
 	var out bytes.Buffer
 	w := output.New(&out, &bytes.Buffer{})
-	err := runQuery(nil, []string{"select 1"}, &QueryFlags{}, &w)
+	err := runQuery([]string{"select 1"}, &QueryFlags{}, &w)
 	if err == nil {
 		t.Fatal("expected error for invalid format")
 	}
@@ -232,7 +232,7 @@ func TestRunSchemaDump_MissingDB(t *testing.T) {
 
 	var out bytes.Buffer
 	w := output.New(&out, &bytes.Buffer{})
-	err := runSchemaDump(nil, nil, &SchemaFlags{}, &w)
+	err := runSchemaDump(&SchemaFlags{}, &w)
 	if err == nil {
 		t.Fatal("expected error for missing db type")
 	}
@@ -247,7 +247,7 @@ func TestRunSchemaDump_InvalidFormat(t *testing.T) {
 
 	var out bytes.Buffer
 	w := output.New(&out, &bytes.Buffer{})
-	err := runSchemaDump(nil, nil, &SchemaFlags{}, &w)
+	err := runSchemaDump(&SchemaFlags{}, &w)
 	if err == nil {
 		t.Fatal("expected error for invalid format")
 	}
@@ -348,7 +348,7 @@ func TestRunProxy_SSHConnectError(t *testing.T) {
 }
 
 func TestResolveSSH_NoConfig(t *testing.T) {
-	client, err := app.ResolveSSH(nil, config.Profile{}, false, false)
+	client, err := app.ResolveSSH(context.TODO(), config.Profile{}, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -444,7 +444,7 @@ func TestRunMCPServer_StdioTreatsContextCanceledAsCleanExit(t *testing.T) {
 	}()
 
 	configPath := filepath.Join(t.TempDir(), "xsql.yaml")
-	if err := os.WriteFile(configPath, []byte("profiles: {}\nssh_proxies: {}\n"), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte("profiles: {}\\nssh_proxies: {}\\n"), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
 
@@ -466,7 +466,7 @@ func TestRunMCPServer_StdioPropagatesNonCanceledError(t *testing.T) {
 	}()
 
 	configPath := filepath.Join(t.TempDir(), "xsql.yaml")
-	if err := os.WriteFile(configPath, []byte("profiles: {}\nssh_proxies: {}\n"), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte("profiles: {}\\nssh_proxies: {}\\n"), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
 
@@ -785,7 +785,7 @@ func TestConfigInitCommand_FileExists(t *testing.T) {
 func TestConfigSetCommand(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "xsql.yaml")
-	if err := os.WriteFile(path, []byte("profiles: {}\nssh_proxies: {}\n"), 0600); err != nil {
+	if err := os.WriteFile(path, []byte("profiles: {}\\nssh_proxies: {}\\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -813,7 +813,7 @@ func TestConfigSetCommand(t *testing.T) {
 func TestConfigSetCommand_InvalidKey(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "xsql.yaml")
-	if err := os.WriteFile(path, []byte("profiles: {}\nssh_proxies: {}\n"), 0600); err != nil {
+	if err := os.WriteFile(path, []byte("profiles: {}\\nssh_proxies: {}\\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 

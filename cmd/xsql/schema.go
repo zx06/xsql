@@ -44,7 +44,7 @@ func NewSchemaDumpCommand(w *output.Writer, flags *SchemaFlags) *cobra.Command {
 		Short: "Dump database schema (tables, columns, indexes, foreign keys)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			flags.SchemaTimeoutSet = cmd.Flags().Changed("schema-timeout")
-			return runSchemaDump(cmd, args, flags, w)
+			return runSchemaDump(flags, w)
 		},
 	}
 
@@ -58,7 +58,7 @@ func NewSchemaDumpCommand(w *output.Writer, flags *SchemaFlags) *cobra.Command {
 }
 
 // runSchemaDump executes the schema dump command
-func runSchemaDump(cmd *cobra.Command, args []string, flags *SchemaFlags, w *output.Writer) error {
+func runSchemaDump(flags *SchemaFlags, w *output.Writer) error {
 	format, err := parseOutputFormat(GlobalConfig.FormatStr)
 	if err != nil {
 		return err

@@ -50,8 +50,8 @@ func NewRootCommand() *cobra.Command {
 				CLIFormatSet:  formatSet,
 				EnvProfile:    os.Getenv("XSQL_PROFILE"),
 				EnvFormat:     os.Getenv("XSQL_FORMAT"),
-				WorkDir:       "",
-				HomeDir:       "",
+				WorkDir:       os.Getenv("XSQL_WORKDIR"),
+				HomeDir:       os.Getenv("XSQL_HOMEDIR"),
 			})
 			if xe != nil {
 				return xe
