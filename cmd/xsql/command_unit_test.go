@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"testing"
 	"time"
@@ -987,6 +988,9 @@ func TestRunMCPServer_InvalidConfigPath(t *testing.T) {
 }
 
 func TestRunMCPServer_StreamableHTTPStarts(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping signal handling test on Windows")
+	}
 	configPath := filepath.Join(t.TempDir(), "xsql.yaml")
 	if err := os.WriteFile(configPath, []byte("profiles: {}\nmcp:\n  transport: streamable_http\n  http:\n    addr: 127.0.0.1:0\n    auth_token: test-token\n    allow_plaintext_token: true\n"), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)

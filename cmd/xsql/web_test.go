@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"runtime"
 	"syscall"
 	"testing"
 	"time"
@@ -575,6 +576,9 @@ func TestRunWebCommand_ListenerCreationError(t *testing.T) {
 }
 
 func TestRunServerWithSignalHandling_StopsOnSignal(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping signal handling test on Windows")
+	}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("failed to create listener: %v", err)
@@ -606,6 +610,9 @@ func TestRunServerWithSignalHandling_StopsOnSignal(t *testing.T) {
 }
 
 func TestRunWebCommand_StartAndStop(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping signal handling test on Windows")
+	}
 	configDir := t.TempDir()
 	configPath := configDir + "/config.yaml"
 	configContent := `profiles:
