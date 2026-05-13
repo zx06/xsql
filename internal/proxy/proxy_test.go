@@ -486,3 +486,148 @@ func TestProxy_PortInUse_ReturnsCorrectErrorCode(t *testing.T) {
 		t.Errorf("expected port=%d in details, got %v", port, xe.Details["port"])
 	}
 }
+
+func TestProxy_HandleConnection_BidirectionalCopy(t *testing.T) {
+	// Create a mock echo server as the remote target
+	echoListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = echoListener.Close() }()
+
+	go func() {
+		for {
+			conn, err := echoListener.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer func() { _ = c.Close() }()
+				buf := make([]byte, 1024)
+				for {
+					n, err := c.Read(buf)
+					if err != nil {
+						return
+					}
+					_, _ = c.Write(buf[:n])
+				}
+			}(conn)
+		}
+	}()
+
+	echoPort := echoListener.Addr().(*net.TCPAddr).Port
+
+	// Create a dialer that connects to the echo server
+	dialer := &directDialer{addr: echoListener.Addr().String()}
+	defer func() { _ = dialer.Close() }()
+
+	ctx := context.Background()
+	opts := Options{
+		LocalHost:  "127.0.0.1",
+		LocalPort:  0,
+		RemoteHost: "127.0.0.1",
+		RemotePort: echoPort,
+		Dialer:     dialer,
+	}
+
+	proxy, result, xe := Start(ctx, opts)
+	if xe != nil {
+		t.Fatalf("failed to start proxy: %v", xe)
+	}
+	defer func() { _ = proxy.Stop() }()
+
+	// Connect to the proxy and send/receive data
+	conn, err := net.DialTimeout("tcp", result.LocalAddress, 2*time.Second)
+	if err != nil {
+		t.Fatalf("failed to connect to proxy: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	testData := []byte("hello proxy")
+	if _, err := conn.Write(testData); err != nil {
+		t.Fatalf("failed to write: %v", err)
+	}
+
+	buf := make([]byte, len(testData))
+	if _, err := conn.Read(buf); err != nil {
+		t.Fatalf("failed to read: %v", err)
+	}
+
+	if string(buf) != string(testData) {
+		t.Errorf("expected %q, got %q", testData, buf)
+	}
+}
+
+func TestProxy_HandleConnection_ContextCancelled(t *testing.T) {
+	// Create a mock server that holds connections open
+	blockListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = blockListener.Close() }()
+
+	go func() {
+		for {
+			conn, err := blockListener.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer func() { _ = c.Close() }()
+				buf := make([]byte, 1024)
+				for {
+					if _, err := c.Read(buf); err != nil {
+						return
+					}
+				}
+			}(conn)
+		}
+	}()
+
+	blockAddr := blockListener.Addr().String()
+
+	dialer := &directDialer{addr: blockAddr}
+	defer func() { _ = dialer.Close() }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	opts := Options{
+		LocalHost:  "127.0.0.1",
+		LocalPort:  0,
+		RemoteHost: "127.0.0.1",
+		RemotePort: blockListener.Addr().(*net.TCPAddr).Port,
+		Dialer:     dialer,
+	}
+
+	proxy, result, xe := Start(ctx, opts)
+	if xe != nil {
+		t.Fatalf("failed to start proxy: %v", xe)
+	}
+
+	// Connect to the proxy to create a handleConnection goroutine
+	conn, err := net.DialTimeout("tcp", result.LocalAddress, 2*time.Second)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	_, _ = conn.Write([]byte("test"))
+
+	// Cancel context to trigger the context.Done path in handleConnection
+	cancel()
+
+	// Stop should complete without hanging
+	if err := proxy.Stop(); err != nil {
+		t.Errorf("failed to stop proxy: %v", err)
+	}
+	_ = conn.Close()
+}
+
+// directDialer connects directly to a TCP address (no SSH tunnel).
+type directDialer struct {
+	addr string
+}
+
+func (d *directDialer) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	var dialer net.Dialer
+	return dialer.DialContext(ctx, "tcp", d.addr)
+}
+
+func (d *directDialer) Close() error { return nil }

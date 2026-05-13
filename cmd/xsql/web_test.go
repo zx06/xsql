@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"runtime"
+	"syscall"
 	"testing"
 	"time"
 
@@ -570,5 +572,93 @@ func TestRunWebCommand_ListenerCreationError(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Error("test timed out - runWebCommand likely blocked waiting for signals")
+	}
+}
+
+func TestRunServerWithSignalHandling_StopsOnSignal(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping signal handling test on Windows")
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to create listener: %v", err)
+	}
+
+	handler := webpkg.NewHandler(webpkg.HandlerOptions{})
+	server := webpkg.NewServer(listener, handler)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- runServerWithSignalHandling(server)
+	}()
+
+	// Give the server time to start
+	time.Sleep(50 * time.Millisecond)
+
+	// Send SIGINT to the process to trigger shutdown
+	p, _ := os.FindProcess(os.Getpid())
+	_ = p.Signal(syscall.SIGINT)
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("expected nil error, got %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for server to stop")
+	}
+}
+
+func TestRunWebCommand_StartAndStop(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping signal handling test on Windows")
+	}
+	configDir := t.TempDir()
+	configPath := configDir + "/config.yaml"
+	configContent := `profiles:
+  default:
+    db: mysql
+    host: localhost
+    port: 3306
+    user: root
+    password: test
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to create temp config: %v", err)
+	}
+
+	oldConfig := GlobalConfig
+	defer func() { GlobalConfig = oldConfig }()
+	GlobalConfig.ConfigStr = configPath
+	GlobalConfig.ProfileStr = "default"
+	GlobalConfig.FormatStr = "json"
+
+	opts := &webCommandOptions{
+		addr:    "127.0.0.1:0",
+		addrSet: true,
+	}
+
+	var buf bytes.Buffer
+	w := output.New(&buf, &bytes.Buffer{})
+
+	done := make(chan error, 1)
+	go func() {
+		done <- runWebCommand(opts, &w)
+	}()
+
+	// Give the server time to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Send SIGINT
+	p, _ := os.FindProcess(os.Getpid())
+	_ = p.Signal(syscall.SIGINT)
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("expected nil error, got %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for web command to stop")
 	}
 }

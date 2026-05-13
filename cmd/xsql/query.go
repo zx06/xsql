@@ -31,7 +31,7 @@ func NewQueryCommand(w *output.Writer) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			flags.QueryTimeoutSet = cmd.Flags().Changed("query-timeout")
-			return runQuery(cmd, args, flags, w)
+			return runQuery(args, flags, w)
 		},
 	}
 
@@ -44,7 +44,7 @@ func NewQueryCommand(w *output.Writer) *cobra.Command {
 }
 
 // runQuery executes a SQL query
-func runQuery(cmd *cobra.Command, args []string, flags *QueryFlags, w *output.Writer) error {
+func runQuery(args []string, flags *QueryFlags, w *output.Writer) error {
 	sql := args[0]
 	format, err := parseOutputFormat(GlobalConfig.FormatStr)
 	if err != nil {
