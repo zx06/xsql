@@ -19,8 +19,10 @@ import (
 
 // Client wraps ssh.Client and provides DialContext for use by database drivers.
 type Client struct {
-	client *ssh.Client
-	alive  atomic.Bool
+	client           *ssh.Client
+	netConn          net.Conn
+	keepaliveTimeout time.Duration
+	alive            atomic.Bool
 }
 
 // Connect establishes an SSH connection.
@@ -80,8 +82,23 @@ func Connect(ctx context.Context, opts Options) (*Client, *errors.XError) {
 	// Clear the deadline after successful handshake so it doesn't affect later I/O.
 	_ = netConn.SetDeadline(time.Time{})
 
+	timeout := 5 * time.Second
+	if opts.KeepaliveInterval > 0 {
+		timeout = opts.KeepaliveInterval * 2
+		if timeout < 500 * time.Millisecond {
+			timeout = 500 * time.Millisecond
+		}
+		if timeout > 5 * time.Second {
+			timeout = 5 * time.Second
+		}
+	}
+
 	client := ssh.NewClient(sshConn, chans, reqs)
-	c := &Client{client: client}
+	c := &Client{
+		client:           client,
+		netConn:          netConn,
+		keepaliveTimeout: timeout,
+	}
 	c.alive.Store(true)
 	return c, nil
 }
@@ -109,8 +126,21 @@ func (c *Client) SendKeepalive() error {
 	if c.client == nil {
 		return fmt.Errorf("ssh client is nil")
 	}
-	_, _, err := c.client.SendRequest("keepalive@openssh.com", true, nil)
-	return err
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, _, err := c.client.SendRequest("keepalive@openssh.com", true, nil)
+		errCh <- err
+	}()
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-time.After(c.keepaliveTimeout):
+		// Connection lost or SendRequest deadlock - force close the client to release resources
+		_ = c.client.Close()
+		return fmt.Errorf("keepalive response timeout after %v", c.keepaliveTimeout)
+	}
 }
 
 // Alive reports whether the SSH connection is believed to be alive.
