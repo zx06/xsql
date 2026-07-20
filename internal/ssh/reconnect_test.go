@@ -603,6 +603,9 @@ func TestReconnectDialer_RealSSH_Reconnect(t *testing.T) {
 	// First, shut down the server (simulate network failure)
 	srv.Close()
 
+	// Wait a bit to let the TCP connection close and client readLoop detect it
+	time.Sleep(100 * time.Millisecond)
+
 	// Quickly start a new server on the same port (simulate network recovery)
 	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
