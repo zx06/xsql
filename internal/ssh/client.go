@@ -85,10 +85,10 @@ func Connect(ctx context.Context, opts Options) (*Client, *errors.XError) {
 	timeout := 5 * time.Second
 	if opts.KeepaliveInterval > 0 {
 		timeout = opts.KeepaliveInterval * 2
-		if timeout < 500 * time.Millisecond {
+		if timeout < 500*time.Millisecond {
 			timeout = 500 * time.Millisecond
 		}
-		if timeout > 5 * time.Second {
+		if timeout > 5*time.Second {
 			timeout = 5 * time.Second
 		}
 	}
