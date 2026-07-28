@@ -77,7 +77,15 @@ xsql query "SELECT 1" -p dev -f json
 
 ## 🤖 Let AI Use xsql
 
-### Option 1: Claude Code Plugin (Recommended)
+### Option 1: Agent Skills Directory (Recommended)
+
+Install via [The Agent Skills Directory](https://www.skills.sh/):
+
+```bash
+npx skills add zx06/xsql
+```
+
+### Option 2: Claude Code Plugin
 
 ```bash
 # 1. Add marketplace
@@ -89,7 +97,7 @@ xsql query "SELECT 1" -p dev -f json
 
 After installation, Claude automatically gains xsql skills and can query databases directly.
 
-### Option 2: Copy Skill Prompt to Any AI
+### Option 3: Copy Skill Prompt to Any AI
 
 Send the following to your AI assistant (ChatGPT/Claude/Cursor, etc.):
 
@@ -124,7 +132,7 @@ Failure: {"ok":false,"schema_version":1,"error":{"code":"XSQL_...","message":"..
 
 </details>
 
-### Option 3: MCP Server (Claude Desktop, etc.)
+### Option 4: MCP Server (Claude Desktop, etc.)
 
 Add the xsql MCP server to your Claude Desktop configuration:
 
@@ -141,7 +149,7 @@ Add the xsql MCP server to your Claude Desktop configuration:
 
 Once started, Claude can query databases directly via the MCP protocol.
 
-### Option 4: AGENTS.md / Rules (Cursor/Windsurf)
+### Option 5: AGENTS.md / Rules (Cursor/Windsurf)
 
 Create `.cursor/rules` or edit `AGENTS.md` in your project root:
 

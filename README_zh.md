@@ -77,7 +77,15 @@ xsql query "SELECT 1" -p dev -f json
 
 ## 🤖 让 AI 使用 xsql
 
-### 方式一：Claude Code Plugin（推荐）
+### 方式一：Agent Skills Directory（推荐）
+
+通过 [The Agent Skills Directory](https://www.skills.sh/) 安装：
+
+```bash
+npx skills add zx06/xsql
+```
+
+### 方式二：Claude Code Plugin
 
 ```bash
 # 1. 添加 marketplace
@@ -89,7 +97,7 @@ xsql query "SELECT 1" -p dev -f json
 
 安装后 Claude 自动获得 xsql 技能，可直接查询数据库。
 
-### 方式二：复制 Skill 给任意 AI
+### 方式三：复制 Skill 给任意 AI
 
 将以下内容发送给你的 AI 助手（ChatGPT/Claude/Cursor 等）：
 
@@ -124,7 +132,7 @@ xsql query "<SQL>" -p <profile> -f json
 
 </details>
 
-### 方式三：MCP Server（Claude Desktop 等）
+### 方式四：MCP Server（Claude Desktop 等）
 
 在 Claude Desktop 配置中添加 xsql MCP server：
 
@@ -141,7 +149,7 @@ xsql query "<SQL>" -p <profile> -f json
 
 启动后，Claude 可以直接通过 MCP 协议查询数据库。
 
-### 方式四：AGENTS.md / Rules（Cursor/Windsurf）
+### 方式五：AGENTS.md / Rules（Cursor/Windsurf）
 
 在项目根目录创建 `.cursor/rules` 或编辑 `AGENTS.md`：
 
