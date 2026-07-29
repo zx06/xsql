@@ -44,6 +44,16 @@ function detectValueKind(value) {
     return 'json';
   }
   if (typeof value === 'string') {
+    // Try parsing string as JSON
+    const trimmed = value.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try {
+        JSON.parse(trimmed);
+        return 'json';
+      } catch {
+        // regular string
+      }
+    }
     return 'string';
   }
   if (typeof value === 'number') {
@@ -56,6 +66,57 @@ function detectValueKind(value) {
     return 'json';
   }
   return 'other';
+}
+
+function escapeHTML(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+export function highlightJSON(input) {
+  if (input === null || input === undefined) {
+    return '<span class="text-[var(--muted)] italic">null</span>';
+  }
+
+  let formatted = '';
+  if (typeof input !== 'string') {
+    formatted = JSON.stringify(input, null, 2);
+  } else {
+    try {
+      formatted = JSON.stringify(JSON.parse(input), null, 2);
+    } catch {
+      return escapeHTML(input);
+    }
+  }
+
+  const regex = /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g;
+
+  return formatted.replace(regex, (match) => {
+    if (/^"/.test(match)) {
+      if (/:$/.test(match)) {
+        const key = match.slice(0, -1);
+        return `<span class="text-[var(--accent)] font-semibold">${escapeHTML(key)}</span>:`;
+      }
+      return `<span class="text-emerald-600 dark:text-emerald-400">${escapeHTML(match)}</span>`;
+    }
+    if (/true|false/.test(match)) {
+      return `<span class="text-pink-600 dark:text-pink-400 font-semibold">${escapeHTML(match)}</span>`;
+    }
+    if (/null/.test(match)) {
+      return `<span class="text-[var(--muted)] italic font-semibold">${escapeHTML(match)}</span>`;
+    }
+    return `<span class="text-amber-600 dark:text-amber-400">${escapeHTML(match)}</span>`;
+  });
+}
+
+export function isCellTruncated(element) {
+  if (!element) {
+    return false;
+  }
+  return element.scrollWidth > element.clientWidth;
 }
 
 export function formatResultCellValue(value) {
@@ -101,17 +162,6 @@ export async function copyText(value) {
   element.style.left = '-9999px';
   document.body.appendChild(element);
   element.select();
-
-  const copied = document.execCommand('copy');
+  document.execCommand('copy');
   document.body.removeChild(element);
-  if (!copied) {
-    throw new Error('Clipboard copy failed');
-  }
-}
-
-export function isCellTruncated(element) {
-  if (!element) {
-    return false;
-  }
-  return element.scrollWidth > element.clientWidth || element.scrollHeight > element.clientHeight;
 }

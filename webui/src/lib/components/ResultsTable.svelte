@@ -1,7 +1,7 @@
 <script>
   import { onDestroy, onMount } from 'svelte';
 
-  import { buildSelectedResultCell, copyText, formatResultCellValue, isCellTruncated } from '../result-grid.js';
+  import { buildSelectedResultCell, copyText, formatResultCellValue, highlightJSON, isCellTruncated } from '../result-grid.js';
   import SectionHeader from './SectionHeader.svelte';
 
   let {
@@ -342,6 +342,8 @@
           <div class="xsql-scroll min-h-0 overflow-auto px-4 py-3 text-xs text-[var(--text)]">
             {#if selectedCell.isEmptyString}
               <p class="italic text-[var(--muted)]">Empty string</p>
+            {:else if selectedCell.kind === 'json'}
+              <pre class={['m-0', selectedValueClass()]}>{@html highlightJSON(selectedCell.fullText)}</pre>
             {:else}
               <pre class={['m-0', selectedValueClass()]}>{selectedCell.fullText}</pre>
             {/if}
