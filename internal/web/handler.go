@@ -488,6 +488,27 @@ type configProfileRequest struct {
 	Profile config.Profile `json:"profile"`
 }
 
+func (h *handler) getResolvedConfigPath() string {
+	if h.configPath != "" {
+		return h.configPath
+	}
+	return config.FindConfigPath(config.Options{})
+}
+
+func (h *handler) parseConfigDeleteName(w http.ResponseWriter, r *http.Request, pathPrefix, nameReqMsg string) (string, bool) {
+	if r.Method != http.MethodDelete {
+		writeMethodNotAllowed(w)
+		return "", false
+	}
+	name := strings.TrimPrefix(r.URL.Path, apiPrefix+pathPrefix)
+	name = strings.TrimSpace(name)
+	if name == "" {
+		writeError(w, http.StatusBadRequest, errors.New(errors.CodeCfgInvalid, nameReqMsg, nil))
+		return "", false
+	}
+	return name, true
+}
+
 func (h *handler) handleConfigSaveProfile(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost && r.Method != http.MethodPut {
 		writeMethodNotAllowed(w)
@@ -503,10 +524,7 @@ func (h *handler) handleConfigSaveProfile(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, errors.New(errors.CodeCfgInvalid, "profile name is required", nil))
 		return
 	}
-	configPath := h.configPath
-	if configPath == "" {
-		configPath = config.FindConfigPath(config.Options{})
-	}
+	configPath := h.getResolvedConfigPath()
 	if xe := config.SaveProfile(configPath, name, req.Profile); xe != nil {
 		writeError(w, statusCodeFor(xe.Code), xe)
 		return
@@ -515,20 +533,11 @@ func (h *handler) handleConfigSaveProfile(w http.ResponseWriter, r *http.Request
 }
 
 func (h *handler) handleConfigDeleteProfile(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		writeMethodNotAllowed(w)
+	name, ok := h.parseConfigDeleteName(w, r, "/config/profiles/", "profile name is required")
+	if !ok {
 		return
 	}
-	name := strings.TrimPrefix(r.URL.Path, apiPrefix+"/config/profiles/")
-	name = strings.TrimSpace(name)
-	if name == "" {
-		writeError(w, http.StatusBadRequest, errors.New(errors.CodeCfgInvalid, "profile name is required", nil))
-		return
-	}
-	configPath := h.configPath
-	if configPath == "" {
-		configPath = config.FindConfigPath(config.Options{})
-	}
+	configPath := h.getResolvedConfigPath()
 	if xe := config.DeleteProfile(configPath, name); xe != nil {
 		writeError(w, statusCodeFor(xe.Code), xe)
 		return
@@ -556,10 +565,7 @@ func (h *handler) handleConfigSaveSSHProxy(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, errors.New(errors.CodeCfgInvalid, "proxy name is required", nil))
 		return
 	}
-	configPath := h.configPath
-	if configPath == "" {
-		configPath = config.FindConfigPath(config.Options{})
-	}
+	configPath := h.getResolvedConfigPath()
 	if xe := config.SaveSSHProxy(configPath, name, req.SSHProxy); xe != nil {
 		writeError(w, statusCodeFor(xe.Code), xe)
 		return
@@ -568,20 +574,11 @@ func (h *handler) handleConfigSaveSSHProxy(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *handler) handleConfigDeleteSSHProxy(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		writeMethodNotAllowed(w)
+	name, ok := h.parseConfigDeleteName(w, r, "/config/ssh-proxies/", "proxy name is required")
+	if !ok {
 		return
 	}
-	name := strings.TrimPrefix(r.URL.Path, apiPrefix+"/config/ssh-proxies/")
-	name = strings.TrimSpace(name)
-	if name == "" {
-		writeError(w, http.StatusBadRequest, errors.New(errors.CodeCfgInvalid, "proxy name is required", nil))
-		return
-	}
-	configPath := h.configPath
-	if configPath == "" {
-		configPath = config.FindConfigPath(config.Options{})
-	}
+	configPath := h.getResolvedConfigPath()
 	if xe := config.DeleteSSHProxy(configPath, name); xe != nil {
 		writeError(w, statusCodeFor(xe.Code), xe)
 		return
