@@ -25,8 +25,8 @@
   } = $props();
 </script>
 
-<aside class={['xsql-panel flex h-full min-h-0 flex-col gap-3 overflow-hidden p-3 transition-all', collapsed && 'w-14 p-2']}>
-  <div class="flex items-center justify-between gap-2">
+<aside class={['xsql-panel flex h-full min-h-0 flex-col gap-3 overflow-hidden transition-all', collapsed ? 'w-14 p-2 items-center' : 'p-3']}>
+  <div class={['flex items-center justify-between gap-2 w-full', collapsed && 'flex-col justify-center items-center gap-3 pt-1']}>
     {#if !collapsed}
       <div class="flex min-w-0 items-center gap-2">
         <span class="inline-flex items-center rounded-full bg-[var(--tag-bg)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--tag-text)]">
@@ -39,9 +39,13 @@
           </span>
         {/if}
       </div>
+    {:else}
+      <span class="inline-flex items-center rounded-full bg-[var(--tag-bg)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[var(--tag-text)]" title="xsql web">
+        xsql
+      </span>
     {/if}
 
-    <div class="flex items-center gap-1">
+    <div class={['flex items-center gap-1.5', collapsed && 'flex-col']}>
       {#if !collapsed}
         <button
           class="xsql-button border-[var(--input-border)] bg-[var(--panel-inner)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--accent-soft)]"
@@ -50,13 +54,34 @@
         >
           配置
         </button>
+      {:else}
+        <button
+          class="flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--input-border)] bg-[var(--panel-inner)] text-xs text-[var(--text)] transition hover:bg-[var(--accent-soft)]"
+          title="Open Graphical Config Manager"
+          onclick={onOpenConfig}
+        >
+          ⚙️
+        </button>
       {/if}
+
       <button
-        class="xsql-button border-[var(--input-border)] bg-[var(--panel-inner)] p-1.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+        class="flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--input-border)] bg-[var(--panel-inner)] text-[var(--muted)] transition hover:bg-[var(--accent-soft)] hover:text-[var(--text)]"
         title={collapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
         onclick={onToggleCollapse}
       >
-        {collapsed ? '➡️' : '⬅️'}
+        {#if collapsed}
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="18" height="18" x="3" y="3" rx="2"/>
+            <path d="M9 3v18"/>
+            <path d="m13 9 3 3-3 3"/>
+          </svg>
+        {:else}
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="18" height="18" x="3" y="3" rx="2"/>
+            <path d="M9 3v18"/>
+            <path d="m15 9-3 3 3 3"/>
+          </svg>
+        {/if}
       </button>
     </div>
   </div>
