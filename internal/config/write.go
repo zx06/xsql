@@ -185,6 +185,11 @@ func setSSHProxyField(cfg *File, name, field, value string) *errors.XError {
 }
 
 func writeFile(path string, cfg File) *errors.XError {
+	if dir := filepath.Dir(path); dir != "" {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return errors.Wrap(errors.CodeInternal, "failed to create config directory", map[string]any{"path": path}, err)
+		}
+	}
 	b, err := yaml.Marshal(cfg)
 	if err != nil {
 		return errors.Wrap(errors.CodeInternal, "failed to marshal config", nil, err)
@@ -200,6 +205,76 @@ func writeFile(path string, cfg File) *errors.XError {
 func parseBool(s string) bool {
 	s = strings.ToLower(s)
 	return s == "true" || s == "1" || s == "yes"
+}
+
+func modifyConfig(configPath, name, emptyErrMsg string, allowNotFound bool, fn func(cfg *File)) *errors.XError {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return errors.New(errors.CodeCfgInvalid, emptyErrMsg, nil)
+	}
+	if configPath == "" {
+		if allowNotFound {
+			path, xe := InitConfig("")
+			if xe != nil && xe.Code != errors.CodeCfgInvalid {
+				return xe
+			}
+			if path != "" {
+				configPath = path
+			} else {
+				configPath = FindConfigPath(Options{})
+			}
+		} else {
+			configPath = FindConfigPath(Options{})
+		}
+	}
+	cfg, xe := readFile(configPath)
+	if xe != nil {
+		if allowNotFound && xe.Code == errors.CodeCfgNotFound {
+			cfg = File{SSHProxies: map[string]SSHProxy{}, Profiles: map[string]Profile{}}
+		} else {
+			return xe
+		}
+	}
+	fn(&cfg)
+	return writeFile(configPath, cfg)
+}
+
+// SaveProfile creates or updates a profile in the specified config file.
+func SaveProfile(configPath, name string, p Profile) *errors.XError {
+	return modifyConfig(configPath, name, "profile name cannot be empty", true, func(cfg *File) {
+		if cfg.Profiles == nil {
+			cfg.Profiles = map[string]Profile{}
+		}
+		cfg.Profiles[name] = p
+	})
+}
+
+// DeleteProfile deletes a profile from the specified config file.
+func DeleteProfile(configPath, name string) *errors.XError {
+	return modifyConfig(configPath, name, "profile name cannot be empty", false, func(cfg *File) {
+		if cfg.Profiles != nil {
+			delete(cfg.Profiles, name)
+		}
+	})
+}
+
+// SaveSSHProxy creates or updates an SSH proxy in the specified config file.
+func SaveSSHProxy(configPath, name string, sp SSHProxy) *errors.XError {
+	return modifyConfig(configPath, name, "ssh proxy name cannot be empty", true, func(cfg *File) {
+		if cfg.SSHProxies == nil {
+			cfg.SSHProxies = map[string]SSHProxy{}
+		}
+		cfg.SSHProxies[name] = sp
+	})
+}
+
+// DeleteSSHProxy deletes an SSH proxy from the specified config file.
+func DeleteSSHProxy(configPath, name string) *errors.XError {
+	return modifyConfig(configPath, name, "ssh proxy name cannot be empty", false, func(cfg *File) {
+		if cfg.SSHProxies != nil {
+			delete(cfg.SSHProxies, name)
+		}
+	})
 }
 
 // FindConfigPath returns the path to the config file being used (or default path).

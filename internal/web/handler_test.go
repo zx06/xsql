@@ -409,3 +409,227 @@ func TestMustJSON(t *testing.T) {
 		// Either null or empty object is acceptable
 	}
 }
+
+func TestHandler_ConfigManagement(t *testing.T) {
+	configPath := createConfigFile(t, `
+profiles:
+  dev:
+    db: mysql
+    host: 127.0.0.1
+    port: 3306
+    user: root
+    database: app
+ssh_proxies: {}
+`)
+	handler := NewHandler(HandlerOptions{
+		ConfigPath: configPath,
+	})
+
+	// 1. GET /api/v1/config
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/config", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/config status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"dev"`) {
+		t.Fatalf("expected dev profile in config GET response: %s", rec.Body.String())
+	}
+
+	// 2. POST /api/v1/config/profiles
+	saveBody := `{"name":"staging","profile":{"db":"pg","host":"10.0.0.1","port":5432,"user":"postgres","database":"stg_db"}}`
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/config/profiles", strings.NewReader(saveBody))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST /api/v1/config/profiles status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// 3. GET /api/v1/config to verify staging saved
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/config", nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if !strings.Contains(rec.Body.String(), `"staging"`) {
+		t.Fatalf("expected staging profile in config GET response: %s", rec.Body.String())
+	}
+
+	// 4. DELETE /api/v1/config/profiles/staging
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/config/profiles/staging", nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("DELETE /api/v1/config/profiles/staging status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// 5. POST /api/v1/config/ssh-proxies
+	saveProxyBody := `{"name":"bastion","ssh_proxy":{"host":"bastion.example.com","port":22,"user":"admin"}}`
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/config/ssh-proxies", strings.NewReader(saveProxyBody))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST /api/v1/config/ssh-proxies status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// 6. DELETE /api/v1/config/ssh-proxies/bastion
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/config/ssh-proxies/bastion", nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("DELETE /api/v1/config/ssh-proxies/bastion status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandler_ConfigManagementErrors(t *testing.T) {
+	// 1. GET with non-existent config path returns 200 OK with empty profiles
+	hInvalid := NewHandler(HandlerOptions{ConfigPath: "/nonexistent/path/xsql.yaml"})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/config", nil)
+	rec := httptest.NewRecorder()
+	hInvalid.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 for non-existent config GET, got %d", rec.Code)
+	}
+
+	// 2. Save profile invalid JSON body
+	configPath := createConfigFile(t, "profiles: {}\nssh_proxies: {}\n")
+	h := NewHandler(HandlerOptions{ConfigPath: configPath})
+
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/config/profiles", strings.NewReader("invalid_json"))
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid JSON body, got %d", rec.Code)
+	}
+
+	// 3. Save profile missing name
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/config/profiles", strings.NewReader(`{"name":"","profile":{}}`))
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for empty profile name, got %d", rec.Code)
+	}
+
+	// 4. Delete profile missing name
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/config/profiles/", nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for empty profile delete name, got %d", rec.Code)
+	}
+
+	// 5. Delete profile non-existent file error (400)
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/config/profiles/dev", nil)
+	rec = httptest.NewRecorder()
+	hInvalid.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for profile delete error on non-existent config, got %d", rec.Code)
+	}
+
+	// 6. Save SSH proxy invalid JSON body
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/config/ssh-proxies", strings.NewReader("invalid_json"))
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid SSH proxy JSON, got %d", rec.Code)
+	}
+
+	// 7. Save SSH proxy missing name
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/config/ssh-proxies", strings.NewReader(`{"name":"","ssh_proxy":{}}`))
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for empty SSH proxy name, got %d", rec.Code)
+	}
+
+	// 8. Delete SSH proxy missing name
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/config/ssh-proxies/", nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for empty SSH proxy delete name, got %d", rec.Code)
+	}
+
+	// 9. Delete SSH proxy non-existent file error (400)
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/config/ssh-proxies/bastion", nil)
+	rec = httptest.NewRecorder()
+	hInvalid.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for SSH proxy delete error on non-existent config, got %d", rec.Code)
+	}
+
+	// 10. Method Not Allowed (405) checks
+	methodsNotAllowed := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodPost, "/api/v1/config"},
+		{http.MethodGet, "/api/v1/config/profiles"},
+		{http.MethodGet, "/api/v1/config/profiles/dev"},
+		{http.MethodGet, "/api/v1/config/ssh-proxies"},
+		{http.MethodGet, "/api/v1/config/ssh-proxies/bastion"},
+	}
+	for _, tc := range methodsNotAllowed {
+		r := httptest.NewRequest(tc.method, tc.path, nil)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != http.StatusMethodNotAllowed {
+			t.Errorf("%s %s: expected 405 MethodNotAllowed, got %d", tc.method, tc.path, w.Code)
+		}
+	}
+
+	// 11. Test PUT method for profile and SSH proxy save
+	putProfileReq := httptest.NewRequest(http.MethodPut, "/api/v1/config/profiles", strings.NewReader(`{"name":"dev2","profile":{"db":"mysql"}}`))
+	putProfileRec := httptest.NewRecorder()
+	h.ServeHTTP(putProfileRec, putProfileReq)
+	if putProfileRec.Code != http.StatusOK {
+		t.Errorf("expected 200 for PUT profile save, got %d", putProfileRec.Code)
+	}
+
+	putProxyReq := httptest.NewRequest(http.MethodPut, "/api/v1/config/ssh-proxies", strings.NewReader(`{"name":"bastion2","ssh_proxy":{"host":"1.2.3.4"}}`))
+	putProxyRec := httptest.NewRecorder()
+	h.ServeHTTP(putProxyRec, putProxyReq)
+	if putProxyRec.Code != http.StatusOK {
+		t.Errorf("expected 200 for PUT ssh proxy save, got %d", putProxyRec.Code)
+	}
+
+	// 12. Test Handler with explicit temporary ConfigPath
+	tempConfig := createConfigFile(t, "profiles: {}\nssh_proxies: {}\n")
+	hEmpty := NewHandler(HandlerOptions{ConfigPath: tempConfig})
+
+	reqGet := httptest.NewRequest(http.MethodGet, "/api/v1/config", nil)
+	recGet := httptest.NewRecorder()
+	hEmpty.ServeHTTP(recGet, reqGet)
+	if recGet.Code != http.StatusOK {
+		t.Errorf("expected 200 for GET config with handler ConfigPath, got %d", recGet.Code)
+	}
+
+	reqSaveP := httptest.NewRequest(http.MethodPost, "/api/v1/config/profiles", strings.NewReader(`{"name":"dev3","profile":{"db":"mysql"}}`))
+	recSaveP := httptest.NewRecorder()
+	hEmpty.ServeHTTP(recSaveP, reqSaveP)
+	if recSaveP.Code != http.StatusOK {
+		t.Errorf("expected 200 for SaveProfile with handler ConfigPath, got %d", recSaveP.Code)
+	}
+
+	reqDelP := httptest.NewRequest(http.MethodDelete, "/api/v1/config/profiles/dev3", nil)
+	recDelP := httptest.NewRecorder()
+	hEmpty.ServeHTTP(recDelP, reqDelP)
+	if recDelP.Code != http.StatusOK {
+		t.Errorf("expected 200 for DeleteProfile with handler ConfigPath, got %d", recDelP.Code)
+	}
+
+	reqSaveSP := httptest.NewRequest(http.MethodPost, "/api/v1/config/ssh-proxies", strings.NewReader(`{"name":"bastion3","ssh_proxy":{"host":"1.1.1.1"}}`))
+	recSaveSP := httptest.NewRecorder()
+	hEmpty.ServeHTTP(recSaveSP, reqSaveSP)
+	if recSaveSP.Code != http.StatusOK {
+		t.Errorf("expected 200 for SaveSSHProxy with handler ConfigPath, got %d", recSaveSP.Code)
+	}
+
+	reqDelSP := httptest.NewRequest(http.MethodDelete, "/api/v1/config/ssh-proxies/bastion3", nil)
+	recDelSP := httptest.NewRecorder()
+	hEmpty.ServeHTTP(recDelSP, reqDelSP)
+	if recDelSP.Code != http.StatusOK {
+		t.Errorf("expected 200 for DeleteSSHProxy with handler ConfigPath, got %d", recDelSP.Code)
+	}
+}
+

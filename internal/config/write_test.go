@@ -438,3 +438,238 @@ ssh_proxies: {}
 		t.Errorf("expected local_port=13306, got %d", p.LocalPort)
 	}
 }
+
+func TestSaveAndDeleteProfile(t *testing.T) {
+	t.Run("SaveProfile creates and updates profile", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "xsql.yaml")
+		if err := os.WriteFile(path, []byte("profiles: {}\nssh_proxies: {}\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		prof := Profile{
+			DB:          "mysql",
+			Host:        "127.0.0.1",
+			Port:        3306,
+			User:        "root",
+			Database:    "mydb",
+			Description: "test profile",
+		}
+
+		if err := SaveProfile(path, "dev", prof); err != nil {
+			t.Fatalf("unexpected error saving profile: %v", err)
+		}
+
+		f, err := readFile(path)
+		if err != nil {
+			t.Fatalf("failed to read back config: %v", err)
+		}
+		if p, ok := f.Profiles["dev"]; !ok || p.Host != "127.0.0.1" || p.Database != "mydb" {
+			t.Errorf("expected profile dev with host=127.0.0.1, got %+v", p)
+		}
+	})
+
+	t.Run("SaveProfile with empty configPath initializes default path", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Setenv("HOME", dir)
+		t.Setenv("USERPROFILE", dir)
+
+		prof := Profile{DB: "mysql", Host: "127.0.0.1"}
+		if err := SaveProfile("", "dev", prof); err != nil {
+			t.Fatalf("unexpected error saving profile with empty path: %v", err)
+		}
+
+		// Also test SaveProfile when file already exists
+		if err := SaveProfile("", "prod", prof); err != nil {
+			t.Fatalf("unexpected error updating profile: %v", err)
+		}
+	})
+
+	t.Run("SaveProfile validation errors", func(t *testing.T) {
+		if err := SaveProfile("/tmp/test.yaml", "", Profile{}); err == nil {
+			t.Error("expected error when profile name is empty")
+		}
+		if err := SaveProfile("/nonexistent/dir/xsql.yaml", "dev", Profile{}); err == nil {
+			t.Error("expected error when config file cannot be read/written")
+		}
+	})
+
+	t.Run("DeleteProfile removes profile", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "xsql.yaml")
+		if err := os.WriteFile(path, []byte("profiles:\n  dev:\n    db: mysql\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := DeleteProfile(path, "dev"); err != nil {
+			t.Fatalf("unexpected error deleting profile: %v", err)
+		}
+
+		f, err := readFile(path)
+		if err != nil {
+			t.Fatalf("failed to read config: %v", err)
+		}
+		if _, ok := f.Profiles["dev"]; ok {
+			t.Error("expected profile 'dev' to be deleted")
+		}
+	})
+
+	t.Run("DeleteProfile with empty configPath", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Setenv("HOME", dir)
+		t.Setenv("USERPROFILE", dir)
+
+		prof := Profile{DB: "mysql", Host: "127.0.0.1"}
+		_ = SaveProfile("", "dev", prof)
+
+		if err := DeleteProfile("", "dev"); err != nil {
+			t.Fatalf("unexpected error deleting profile with empty path: %v", err)
+		}
+	})
+
+	t.Run("DeleteProfile validation errors", func(t *testing.T) {
+		if err := DeleteProfile("/tmp/test.yaml", ""); err == nil {
+			t.Error("expected error when profile name is empty")
+		}
+	})
+}
+
+func TestSaveAndDeleteSSHProxy(t *testing.T) {
+	t.Run("SaveSSHProxy creates and updates proxy", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "xsql.yaml")
+		if err := os.WriteFile(path, []byte("profiles: {}\nssh_proxies: {}\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		proxy := SSHProxy{
+			Host: "bastion.example.com",
+			Port: 22,
+			User: "ubuntu",
+		}
+
+		if err := SaveSSHProxy(path, "bastion", proxy); err != nil {
+			t.Fatalf("unexpected error saving ssh proxy: %v", err)
+		}
+
+		f, err := readFile(path)
+		if err != nil {
+			t.Fatalf("failed to read back config: %v", err)
+		}
+		if sp, ok := f.SSHProxies["bastion"]; !ok || sp.Host != "bastion.example.com" {
+			t.Errorf("expected ssh proxy bastion with host=bastion.example.com, got %+v", sp)
+		}
+	})
+
+	t.Run("SaveSSHProxy with empty configPath initializes default path", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Setenv("HOME", dir)
+		t.Setenv("USERPROFILE", dir)
+
+		proxy := SSHProxy{Host: "bastion.example.com"}
+		if err := SaveSSHProxy("", "bastion", proxy); err != nil {
+			t.Fatalf("unexpected error saving ssh proxy with empty path: %v", err)
+		}
+
+		if err := SaveSSHProxy("", "bastion2", proxy); err != nil {
+			t.Fatalf("unexpected error updating ssh proxy: %v", err)
+		}
+	})
+
+	t.Run("SaveSSHProxy validation errors", func(t *testing.T) {
+		if err := SaveSSHProxy("/tmp/test.yaml", "", SSHProxy{}); err == nil {
+			t.Error("expected error when ssh proxy name is empty")
+		}
+		if err := SaveSSHProxy("/nonexistent/dir/xsql.yaml", "bastion", SSHProxy{}); err == nil {
+			t.Error("expected error when config file cannot be read/written")
+		}
+	})
+
+	t.Run("DeleteSSHProxy removes ssh proxy", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "xsql.yaml")
+		if err := os.WriteFile(path, []byte("ssh_proxies:\n  bastion:\n    host: bastion.example.com\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := DeleteSSHProxy(path, "bastion"); err != nil {
+			t.Fatalf("unexpected error deleting ssh proxy: %v", err)
+		}
+
+		f, err := readFile(path)
+		if err != nil {
+			t.Fatalf("failed to read config: %v", err)
+		}
+		if _, ok := f.SSHProxies["bastion"]; ok {
+			t.Error("expected ssh proxy 'bastion' to be deleted")
+		}
+	})
+
+	t.Run("DeleteSSHProxy with empty configPath", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Setenv("HOME", dir)
+		t.Setenv("USERPROFILE", dir)
+
+		proxy := SSHProxy{Host: "bastion.example.com"}
+		_ = SaveSSHProxy("", "bastion", proxy)
+
+		if err := DeleteSSHProxy("", "bastion"); err != nil {
+			t.Fatalf("unexpected error deleting ssh proxy with empty path: %v", err)
+		}
+	})
+
+	t.Run("DeleteSSHProxy validation errors", func(t *testing.T) {
+		if err := DeleteSSHProxy("/tmp/test.yaml", ""); err == nil {
+			t.Error("expected error when ssh proxy name is empty")
+		}
+	})
+
+	t.Run("SaveProfile and DeleteProfile with invalid YAML file", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "xsql.yaml")
+		if err := os.WriteFile(path, []byte("invalid_yaml: [unclosed"), 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := SaveProfile(path, "dev", Profile{}); err == nil {
+			t.Error("expected error for invalid YAML in SaveProfile")
+		}
+
+		if err := DeleteProfile(path, "dev"); err == nil {
+			t.Error("expected error for invalid YAML in DeleteProfile")
+		}
+	})
+
+	t.Run("SaveSSHProxy and DeleteSSHProxy with invalid YAML file", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "xsql.yaml")
+		if err := os.WriteFile(path, []byte("invalid_yaml: [unclosed"), 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := SaveSSHProxy(path, "bastion", SSHProxy{}); err == nil {
+			t.Error("expected error for invalid YAML in SaveSSHProxy")
+		}
+
+		if err := DeleteSSHProxy(path, "bastion"); err == nil {
+			t.Error("expected error for invalid YAML in DeleteSSHProxy")
+		}
+	})
+
+	t.Run("SaveProfile on non-existent config file creates file", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "new_dir", "xsql.yaml")
+		// Parent dir created automatically by writeFile
+		if err := SaveProfile(path, "dev", Profile{Host: "localhost"}); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("SaveSSHProxy on non-existent config file creates file", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "new_dir", "xsql.yaml")
+		if err := SaveSSHProxy(path, "bastion", SSHProxy{Host: "bastion.example.com"}); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+}

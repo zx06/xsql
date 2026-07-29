@@ -18,6 +18,44 @@ function readThemeMode() {
   return 'auto';
 }
 
+function readNumberStorage(key, defaultValue) {
+  if (typeof localStorage === 'undefined') {
+    return defaultValue;
+  }
+  const val = Number(localStorage.getItem(key));
+  return Number.isFinite(val) && val > 0 ? val : defaultValue;
+}
+
+function readBoolStorage(key, defaultValue = false) {
+  if (typeof localStorage === 'undefined') {
+    return defaultValue;
+  }
+  return localStorage.getItem(key) === 'true';
+}
+
+function readHistoryStorage() {
+  if (typeof localStorage === 'undefined') {
+    return [];
+  }
+  try {
+    const raw = localStorage.getItem('xsql-web-query-history');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveHistoryStorage(history) {
+  if (typeof localStorage === 'undefined') {
+    return;
+  }
+  try {
+    localStorage.setItem('xsql-web-query-history', JSON.stringify(history.slice(0, 50)));
+  } catch {
+    // ignore
+  }
+}
+
 function formatTableName(table) {
   return `${table.schema}.${table.name}`;
 }
@@ -89,12 +127,60 @@ export class WebUIController {
   systemPrefersDark = $state(false);
   completionCatalog = $state.raw(createEmptyCompletionCatalog());
 
+  // Layout & Resizing
+  sidebarWidth = $state(readNumberStorage('xsql-web-sidebar-width', 270));
+  editorHeight = $state(readNumberStorage('xsql-web-editor-height', 220));
+  sidebarCollapsed = $state(readBoolStorage('xsql-web-sidebar-collapsed', false));
+
+  // Query History & Timing
+  queryHistory = $state(readHistoryStorage());
+  queryHistoryOpen = $state(false);
+  lastExecutionMs = $state(null);
+
+  // Config Modal & Graphical Management
+  configModalOpen = $state(false);
+  configLoading = $state(false);
+  fullConfig = $state(null);
+
+  // Results Grid enhancements: Filter & Sort & Modal
+  resultFilter = $state('');
+  sortColumn = $state('');
+  sortDirection = $state('asc'); // 'asc' | 'desc'
+  selectedJsonModalData = $state(null);
+
   rowCount = $derived(this.rows.length);
   tableCount = $derived(this.schemaTables.length);
   selectedProfileMeta = $derived(this.profiles.find((profile) => profile.name === this.selectedProfile) ?? null);
   selectedTableName = $derived(this.selectedTable ? formatTableName(this.selectedTable) : '');
   resolvedTheme = $derived(this.themeMode === 'auto' ? (this.systemPrefersDark ? 'black' : 'white') : this.themeMode);
   sqlDialect = $derived(resolveSQLDialectName(this.selectedProfileMeta?.db));
+
+  // Processed Rows (Filtered & Sorted)
+  processedRows = $derived.by(() => {
+    let result = this.rows;
+    if (this.resultFilter.trim()) {
+      const q = this.resultFilter.trim().toLowerCase();
+      result = result.filter((row) =>
+        Object.values(row).some((val) => String(val ?? '').toLowerCase().includes(q))
+      );
+    }
+    if (this.sortColumn && this.columns.includes(this.sortColumn)) {
+      const col = this.sortColumn;
+      const dir = this.sortDirection === 'desc' ? -1 : 1;
+      result = [...result].sort((a, b) => {
+        const valA = a[col];
+        const valB = b[col];
+        if (valA === valB) return 0;
+        if (valA === null || valA === undefined) return 1;
+        if (valB === null || valB === undefined) return -1;
+        if (typeof valA === 'number' && typeof valB === 'number') {
+          return (valA - valB) * dir;
+        }
+        return String(valA).localeCompare(String(valB)) * dir;
+      });
+    }
+    return result;
+  });
 
   #schemaRequestSeq = 0;
   #structureRequestSeq = 0;
@@ -124,7 +210,7 @@ export class WebUIController {
       const code = payload?.error?.code ? ` [${payload.error.code}]` : '';
       throw new Error(`${payload?.error?.message || 'Request failed'}${code}`);
     }
-    return payload.data;
+    return payload.data ?? payload;
   }
 
   setThemeMode(mode) {
@@ -141,12 +227,59 @@ export class WebUIController {
     sessionStorage.setItem('xsql-web-auth-token', token.trim());
   }
 
+  setSidebarWidth(width) {
+    const nextWidth = Math.max(180, Math.min(500, width));
+    this.sidebarWidth = nextWidth;
+    localStorage.setItem('xsql-web-sidebar-width', String(nextWidth));
+  }
+
+  setEditorHeight(height) {
+    const nextHeight = Math.max(100, Math.min(600, height));
+    this.editorHeight = nextHeight;
+    localStorage.setItem('xsql-web-editor-height', String(nextHeight));
+  }
+
+  toggleSidebarCollapsed() {
+    this.sidebarCollapsed = !this.sidebarCollapsed;
+    localStorage.setItem('xsql-web-sidebar-collapsed', String(this.sidebarCollapsed));
+  }
+
+  toggleQueryHistory() {
+    this.queryHistoryOpen = !this.queryHistoryOpen;
+  }
+
   setSQL(sql) {
     this.sql = sql;
   }
 
   setActiveTab(tab) {
     this.activeTab = tab;
+  }
+
+  toggleSortColumn(columnName) {
+    if (this.sortColumn === columnName) {
+      if (this.sortDirection === 'asc') {
+        this.sortDirection = 'desc';
+      } else {
+        this.sortColumn = '';
+        this.sortDirection = 'asc';
+      }
+    } else {
+      this.sortColumn = columnName;
+      this.sortDirection = 'asc';
+    }
+  }
+
+  setResultFilter(text) {
+    this.resultFilter = text;
+  }
+
+  openJsonModal(data) {
+    this.selectedJsonModalData = data;
+  }
+
+  closeJsonModal() {
+    this.selectedJsonModalData = null;
   }
 
   formatSQL() {
@@ -161,6 +294,138 @@ export class WebUIController {
     } catch (error) {
       this.errorMessage = error instanceof Error ? `Format failed: ${error.message}` : 'Format failed';
     }
+  }
+
+  // --- Graphical Config Management ---
+  async openConfigModal() {
+    this.configModalOpen = true;
+    await this.loadConfig();
+  }
+
+  closeConfigModal() {
+    this.configModalOpen = false;
+  }
+
+  async loadConfig() {
+    this.configLoading = true;
+    try {
+      const data = await this.api('/api/v1/config');
+      this.fullConfig = data;
+      this.configPath = data.config_path || this.configPath;
+    } catch (error) {
+      this.errorMessage = `Failed to load config: ${error.message}`;
+    } finally {
+      this.configLoading = false;
+    }
+  }
+
+  async saveProfileConfig(name, profileData) {
+    this.errorMessage = '';
+    try {
+      await this.api('/api/v1/config/profiles', {
+        method: 'POST',
+        body: JSON.stringify({ name, profile: profileData })
+      });
+      await this.loadConfig();
+      const profileList = await this.api('/api/v1/profiles');
+      this.profiles = profileList.profiles || [];
+    } catch (error) {
+      this.errorMessage = `Failed to save profile: ${error.message}`;
+      throw error;
+    }
+  }
+
+  async deleteProfileConfig(name) {
+    this.errorMessage = '';
+    try {
+      await this.api(`/api/v1/config/profiles/${encodeURIComponent(name)}`, {
+        method: 'DELETE'
+      });
+      await this.loadConfig();
+      const profileList = await this.api('/api/v1/profiles');
+      this.profiles = profileList.profiles || [];
+      if (this.selectedProfile === name) {
+        this.selectedProfile = this.profiles[0]?.name || '';
+        await this.loadTables();
+      }
+    } catch (error) {
+      this.errorMessage = `Failed to delete profile: ${error.message}`;
+      throw error;
+    }
+  }
+
+  async saveSSHProxyConfig(name, proxyData) {
+    this.errorMessage = '';
+    try {
+      await this.api('/api/v1/config/ssh-proxies', {
+        method: 'POST',
+        body: JSON.stringify({ name, ssh_proxy: proxyData })
+      });
+      await this.loadConfig();
+    } catch (error) {
+      this.errorMessage = `Failed to save SSH proxy: ${error.message}`;
+      throw error;
+    }
+  }
+
+  async deleteSSHProxyConfig(name) {
+    this.errorMessage = '';
+    try {
+      await this.api(`/api/v1/config/ssh-proxies/${encodeURIComponent(name)}`, {
+        method: 'DELETE'
+      });
+      await this.loadConfig();
+    } catch (error) {
+      this.errorMessage = `Failed to delete SSH proxy: ${error.message}`;
+      throw error;
+    }
+  }
+
+  // --- Export Results ---
+  exportResults(type = 'csv') {
+    if (!this.columns.length || !this.rows.length) {
+      return;
+    }
+
+    let content = '';
+    let mimeType = 'text/plain';
+    let ext = 'txt';
+
+    const rowsToExport = this.processedRows;
+
+    if (type === 'csv') {
+      mimeType = 'text/csv;charset=utf-8;';
+      ext = 'csv';
+      const escapeCSV = (val) => {
+        if (val === null || val === undefined) return '""';
+        const str = String(val).replace(/"/g, '""');
+        return `"${str}"`;
+      };
+      const header = this.columns.map(escapeCSV).join(',');
+      const body = rowsToExport.map((row) => this.columns.map((col) => escapeCSV(row[col])).join(',')).join('\n');
+      content = `${header}\n${body}`;
+    } else if (type === 'tsv') {
+      mimeType = 'text/tab-separated-values;charset=utf-8;';
+      ext = 'tsv';
+      const escapeTSV = (val) => (val === null || val === undefined ? '' : String(val).replace(/\t/g, ' '));
+      const header = this.columns.map(escapeTSV).join('\t');
+      const body = rowsToExport.map((row) => this.columns.map((col) => escapeTSV(row[col])).join('\t')).join('\n');
+      content = `${header}\n${body}`;
+    } else if (type === 'json') {
+      mimeType = 'application/json;charset=utf-8;';
+      ext = 'json';
+      content = JSON.stringify(rowsToExport, null, 2);
+    }
+
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `query_result_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '_')}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   #tableDetailCacheKey(profileName, schemaName, tableName) {
@@ -340,21 +605,53 @@ export class WebUIController {
 
     this.queryLoading = true;
     this.errorMessage = '';
+    this.resultFilter = '';
+    this.sortColumn = '';
+    this.sortDirection = 'asc';
+    const startTime = performance.now();
+
+    let queryError = null;
+    let returnedRows = [];
+    let returnedColumns = [];
+
     try {
       const data = await this.api('/api/v1/query', {
         method: 'POST',
         body: JSON.stringify({ profile: this.selectedProfile, sql: this.sql })
       });
-      this.columns = data.columns || [];
-      this.rows = data.rows || [];
+      returnedColumns = data.columns || [];
+      returnedRows = data.rows || [];
+      this.columns = returnedColumns;
+      this.rows = returnedRows;
       this.activeTab = 'results';
     } catch (error) {
+      queryError = error.message;
       this.columns = [];
       this.rows = [];
       this.errorMessage = error.message;
     } finally {
+      const durationMs = Math.round(performance.now() - startTime);
+      this.lastExecutionMs = durationMs;
       this.queryLoading = false;
+
+      // Add to Query History
+      const historyItem = {
+        id: String(Date.now()),
+        sql: this.sql,
+        profile: this.selectedProfile,
+        durationMs,
+        rowCount: returnedRows.length,
+        error: queryError,
+        timestamp: new Date().toLocaleTimeString()
+      };
+      this.queryHistory = [historyItem, ...this.queryHistory.slice(0, 49)];
+      saveHistoryStorage(this.queryHistory);
     }
+  }
+
+  clearQueryHistory() {
+    this.queryHistory = [];
+    saveHistoryStorage([]);
   }
 
   async selectProfile(profileName) {
