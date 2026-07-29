@@ -17,11 +17,14 @@
     selectedProfile = '',
     sqlDialect = 'sql',
     completionCatalog = null,
+    lastExecutionMs = null,
+    queryHistoryCount = 0,
     onEnsureTableDetail,
     onFormat,
     onGetTableDetail,
     onRun,
-    onSqlChange
+    onSqlChange,
+    onToggleHistory
   } = $props();
 
   let editorHost = null;
@@ -154,30 +157,45 @@
   });
 </script>
 
-<section class="xsql-panel flex min-h-0 min-w-0 flex-col overflow-hidden p-4">
-  <div class="mb-3 flex items-start justify-between gap-3">
-    <div class="min-w-0 flex-1">
-      <SectionHeader label="Query" meta="read-only" />
+<section class="xsql-panel flex min-h-0 min-w-0 flex-col overflow-hidden p-3.5">
+  <div class="mb-2.5 flex items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <SectionHeader label="SQL Editor" meta="read-only mode" />
+      {#if lastExecutionMs !== null}
+        <span class="rounded bg-[var(--pill-bg)] px-2 py-0.5 font-mono text-[11px] text-[var(--pill-text)]">
+          {lastExecutionMs}ms
+        </span>
+      {/if}
     </div>
+
     <div class="flex shrink-0 items-center gap-2">
       <button
-        class="xsql-button shrink-0 border-[var(--input-border)] bg-[var(--panel-inner)] text-[var(--text)] hover:bg-[var(--accent-soft)]"
+        class="xsql-button shrink-0 border-[var(--input-border)] bg-[var(--panel-inner)] px-2.5 py-1 text-xs text-[var(--text)] hover:bg-[var(--accent-soft)]"
+        onclick={() => onToggleHistory?.()}
+        title="Open Query History"
+      >
+        📜 History ({queryHistoryCount})
+      </button>
+
+      <button
+        class="xsql-button shrink-0 border-[var(--input-border)] bg-[var(--panel-inner)] px-2.5 py-1 text-xs text-[var(--text)] hover:bg-[var(--accent-soft)]"
         onclick={() => onFormat?.()}
         disabled={!sql.trim()}
         title="Format SQL (Shift+Alt+F)"
       >
         Format
       </button>
+
       <button
-        class="xsql-button xsql-button-primary shrink-0"
+        class="xsql-button xsql-button-primary shrink-0 px-3 py-1 text-xs"
         onclick={() => onRun?.()}
         disabled={queryLoading || !selectedProfile}
-        title="Run query (Ctrl/Cmd+Enter)"
+        title="Run query (Cmd/Ctrl+Enter)"
       >
-        {queryLoading ? 'Running…' : 'Run'}
+        {queryLoading ? 'Running…' : '▶ Run'}
       </button>
     </div>
   </div>
 
-  <div class="xsql-cm min-h-[7rem] flex-1 overflow-hidden" bind:this={editorHost}></div>
+  <div class="xsql-cm min-h-[5rem] flex-1 overflow-hidden rounded-lg border border-[var(--editor-border)] bg-[var(--editor-bg)]" bind:this={editorHost}></div>
 </section>

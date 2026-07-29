@@ -202,6 +202,92 @@ func parseBool(s string) bool {
 	return s == "true" || s == "1" || s == "yes"
 }
 
+// SaveProfile creates or updates a profile in the specified config file.
+func SaveProfile(configPath, name string, p Profile) *errors.XError {
+	if configPath == "" {
+		path, xe := InitConfig("")
+		if xe != nil && xe.Code != errors.CodeCfgInvalid {
+			return xe
+		}
+		if path != "" {
+			configPath = path
+		} else {
+			configPath = FindConfigPath(Options{})
+		}
+	}
+	cfg, xe := readFile(configPath)
+	if xe != nil {
+		if xe.Code == errors.CodeCfgNotFound {
+			cfg = File{SSHProxies: map[string]SSHProxy{}, Profiles: map[string]Profile{}}
+		} else {
+			return xe
+		}
+	}
+	if cfg.Profiles == nil {
+		cfg.Profiles = map[string]Profile{}
+	}
+	cfg.Profiles[name] = p
+	return writeFile(configPath, cfg)
+}
+
+// DeleteProfile deletes a profile from the specified config file.
+func DeleteProfile(configPath, name string) *errors.XError {
+	if configPath == "" {
+		configPath = FindConfigPath(Options{})
+	}
+	cfg, xe := readFile(configPath)
+	if xe != nil {
+		return xe
+	}
+	if cfg.Profiles != nil {
+		delete(cfg.Profiles, name)
+	}
+	return writeFile(configPath, cfg)
+}
+
+// SaveSSHProxy creates or updates an SSH proxy in the specified config file.
+func SaveSSHProxy(configPath, name string, sp SSHProxy) *errors.XError {
+	if configPath == "" {
+		path, xe := InitConfig("")
+		if xe != nil && xe.Code != errors.CodeCfgInvalid {
+			return xe
+		}
+		if path != "" {
+			configPath = path
+		} else {
+			configPath = FindConfigPath(Options{})
+		}
+	}
+	cfg, xe := readFile(configPath)
+	if xe != nil {
+		if xe.Code == errors.CodeCfgNotFound {
+			cfg = File{SSHProxies: map[string]SSHProxy{}, Profiles: map[string]Profile{}}
+		} else {
+			return xe
+		}
+	}
+	if cfg.SSHProxies == nil {
+		cfg.SSHProxies = map[string]SSHProxy{}
+	}
+	cfg.SSHProxies[name] = sp
+	return writeFile(configPath, cfg)
+}
+
+// DeleteSSHProxy deletes an SSH proxy from the specified config file.
+func DeleteSSHProxy(configPath, name string) *errors.XError {
+	if configPath == "" {
+		configPath = FindConfigPath(Options{})
+	}
+	cfg, xe := readFile(configPath)
+	if xe != nil {
+		return xe
+	}
+	if cfg.SSHProxies != nil {
+		delete(cfg.SSHProxies, name)
+	}
+	return writeFile(configPath, cfg)
+}
+
 // FindConfigPath returns the path to the config file being used (or default path).
 func FindConfigPath(opts Options) string {
 	if opts.ConfigPath != "" {
@@ -232,3 +318,4 @@ func FindConfigPath(opts Options) string {
 	}
 	return ""
 }
+

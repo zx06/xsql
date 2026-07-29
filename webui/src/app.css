@@ -16,8 +16,17 @@ body,
     margin: 0;
     background: var(--app-bg);
     color: var(--text);
-    font-family: Georgia, "Times New Roman", serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif;
     overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  code,
+  pre,
+  kbd,
+  samp {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   }
 
   button,
@@ -37,60 +46,62 @@ body,
 }
 
 .theme-white {
-  --app-bg: #ede8df;
-  --text: #1d2529;
-  --muted: #66737a;
-  --panel-bg: rgba(255, 255, 255, 0.82);
-  --panel-border: rgba(29, 37, 41, 0.1);
-  --panel-shadow: rgba(29, 37, 41, 0.05);
-  --panel-inner: rgba(255, 255, 255, 0.58);
-  --input-bg: #fcfbf8;
-  --input-border: rgba(29, 37, 41, 0.14);
-  --table-bg: #fcfbf8;
-  --table-head-bg: #f7f2eb;
-  --table-border: rgba(29, 37, 41, 0.08);
-  --accent: #214f7b;
-  --accent-soft: #fff5eb;
-  --accent-border: #b36a41;
-  --tag-bg: #e7ddd0;
-  --tag-text: #7b5137;
-  --pill-bg: #e6edf6;
-  --pill-text: #2d5679;
-  --error-bg: rgba(255, 237, 232, 0.92);
-  --error-text: #8f281d;
-  --editor-bg: #f6f1ea;
-  --editor-border: rgba(29, 37, 41, 0.12);
+  --app-bg: #f3f4f6;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --panel-bg: rgba(255, 255, 255, 0.92);
+  --panel-border: rgba(0, 0, 0, 0.08);
+  --panel-shadow: rgba(0, 0, 0, 0.04);
+  --panel-inner: rgba(249, 250, 251, 0.8);
+  --input-bg: #ffffff;
+  --input-border: rgba(0, 0, 0, 0.12);
+  --table-bg: #ffffff;
+  --table-head-bg: #f9fafb;
+  --table-border: rgba(0, 0, 0, 0.06);
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-soft: rgba(37, 99, 235, 0.08);
+  --accent-border: #3b82f6;
+  --tag-bg: #e0e7ff;
+  --tag-text: #3730a3;
+  --pill-bg: #e0f2fe;
+  --pill-text: #0369a1;
+  --error-bg: #fef2f2;
+  --error-text: #991b1b;
+  --editor-bg: #f9fafb;
+  --editor-border: rgba(0, 0, 0, 0.08);
 }
 
 .theme-black {
-  --app-bg: #121518;
-  --text: #e8ecef;
-  --muted: #a4b0b7;
-  --panel-bg: rgba(24, 28, 32, 0.92);
-  --panel-border: rgba(232, 236, 239, 0.08);
-  --panel-shadow: rgba(0, 0, 0, 0.28);
-  --panel-inner: rgba(38, 44, 50, 0.72);
-  --input-bg: #181d22;
-  --input-border: rgba(232, 236, 239, 0.1);
-  --table-bg: #171c20;
-  --table-head-bg: #20262c;
-  --table-border: rgba(232, 236, 239, 0.08);
-  --accent: #5f95c8;
-  --accent-soft: rgba(95, 149, 200, 0.14);
-  --accent-border: #5f95c8;
-  --tag-bg: #2b3138;
-  --tag-text: #d4dde3;
-  --pill-bg: #243340;
-  --pill-text: #9bc0e5;
-  --error-bg: rgba(95, 31, 25, 0.55);
-  --error-text: #ffd8d1;
-  --editor-bg: #14191d;
-  --editor-border: rgba(232, 236, 239, 0.08);
+  --app-bg: #0b0f17;
+  --text: #f3f4f6;
+  --muted: #9ca3af;
+  --panel-bg: rgba(17, 24, 39, 0.88);
+  --panel-border: rgba(255, 255, 255, 0.08);
+  --panel-shadow: rgba(0, 0, 0, 0.4);
+  --panel-inner: rgba(31, 41, 55, 0.6);
+  --input-bg: #111827;
+  --input-border: rgba(255, 255, 255, 0.12);
+  --table-bg: #0f172a;
+  --table-head-bg: #1e293b;
+  --table-border: rgba(255, 255, 255, 0.07);
+  --accent: #3b82f6;
+  --accent-hover: #60a5fa;
+  --accent-soft: rgba(59, 130, 246, 0.15);
+  --accent-border: #60a5fa;
+  --tag-bg: #1e1b4b;
+  --tag-text: #a5b4fc;
+  --pill-bg: #082f49;
+  --pill-text: #7dd3fc;
+  --error-bg: rgba(127, 29, 29, 0.5);
+  --error-text: #fca5a5;
+  --editor-bg: #0f172a;
+  --editor-border: rgba(255, 255, 255, 0.08);
 }
 
 @layer components {
   .xsql-panel {
-    @apply rounded-xl border border-[var(--panel-border)] bg-[var(--panel-bg)] shadow-[0_10px_24px_var(--panel-shadow)];
+    @apply rounded-xl border border-[var(--panel-border)] bg-[var(--panel-bg)] shadow-[0_10px_24px_var(--panel-shadow)] backdrop-blur-md transition-all;
   }
 
   .xsql-input {
@@ -98,11 +109,11 @@ body,
   }
 
   .xsql-button {
-    @apply inline-flex items-center justify-center rounded-lg border px-3 py-2 text-sm font-medium transition disabled:opacity-60;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none;
   }
 
   .xsql-button-primary {
-    @apply border-[var(--accent-border)] bg-[var(--accent)] text-white hover:brightness-105;
+    @apply border-[var(--accent-border)] bg-[var(--accent)] text-white shadow-sm hover:brightness-110;
   }
 
   .xsql-tab {
@@ -113,14 +124,32 @@ body,
     @apply bg-[var(--accent-soft)] text-[var(--text)] ring-1 ring-[var(--panel-border)];
   }
 
+  .xsql-resizer-h {
+    @apply relative flex w-2 cursor-col-resize items-center justify-center transition hover:bg-[var(--accent-soft)];
+  }
+
+  .xsql-resizer-h::after {
+    content: '';
+    @apply h-8 w-1 rounded-full bg-[var(--muted)] opacity-30 transition hover:opacity-100;
+  }
+
+  .xsql-resizer-v {
+    @apply relative flex h-2 cursor-row-resize items-center justify-center transition hover:bg-[var(--accent-soft)];
+  }
+
+  .xsql-resizer-v::after {
+    content: '';
+    @apply h-1 w-8 rounded-full bg-[var(--muted)] opacity-30 transition hover:opacity-100;
+  }
+
   .xsql-scroll {
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--muted) 55%, transparent) transparent;
+    scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent;
   }
 
   .xsql-scroll::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
   }
 
   .xsql-scroll::-webkit-scrollbar-track {
@@ -130,12 +159,12 @@ body,
   .xsql-scroll::-webkit-scrollbar-thumb {
     border: 2px solid transparent;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--muted) 50%, transparent);
+    background: color-mix(in srgb, var(--muted) 40%, transparent);
     background-clip: padding-box;
   }
 
   .xsql-scroll::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in srgb, var(--muted) 70%, transparent);
+    background: color-mix(in srgb, var(--muted) 65%, transparent);
     background-clip: padding-box;
   }
 }
@@ -154,21 +183,25 @@ body,
   padding: 0.55rem 0.75rem;
   text-align: left;
   vertical-align: top;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 .xsql-table th {
   position: sticky;
   top: 0;
+  z-index: 10;
   background: var(--table-head-bg);
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  user-select: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 .xsql-table td {
-  font-size: 0.84rem;
+  font-size: 0.83rem;
   color: var(--text);
   word-break: break-word;
 }
@@ -188,18 +221,19 @@ body,
 
 .xsql-cm .cm-editor {
   height: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 .xsql-cm .cm-scroller,
 .xsql-cm .cm-tooltip-autocomplete > ul {
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--muted) 55%, transparent) transparent;
+  scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent;
 }
 
 .xsql-cm .cm-scroller::-webkit-scrollbar,
 .xsql-cm .cm-tooltip-autocomplete > ul::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 
 .xsql-cm .cm-scroller::-webkit-scrollbar-track,
@@ -211,13 +245,13 @@ body,
 .xsql-cm .cm-tooltip-autocomplete > ul::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--muted) 50%, transparent);
+  background: color-mix(in srgb, var(--muted) 40%, transparent);
   background-clip: padding-box;
 }
 
 .xsql-cm .cm-scroller::-webkit-scrollbar-thumb:hover,
 .xsql-cm .cm-tooltip-autocomplete > ul::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--muted) 70%, transparent);
+  background: color-mix(in srgb, var(--muted) 65%, transparent);
   background-clip: padding-box;
 }
 

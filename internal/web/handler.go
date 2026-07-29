@@ -69,6 +69,11 @@ func NewHandler(opts HandlerOptions) http.Handler {
 	mux.HandleFunc(apiPrefix+"/health", h.handleHealth)
 	mux.Handle(apiPrefix+"/profiles", h.withAuth(http.HandlerFunc(h.handleProfiles)))
 	mux.Handle(apiPrefix+"/profiles/", h.withAuth(http.HandlerFunc(h.handleProfileShow)))
+	mux.Handle(apiPrefix+"/config", h.withAuth(http.HandlerFunc(h.handleConfigGet)))
+	mux.Handle(apiPrefix+"/config/profiles", h.withAuth(http.HandlerFunc(h.handleConfigSaveProfile)))
+	mux.Handle(apiPrefix+"/config/profiles/", h.withAuth(http.HandlerFunc(h.handleConfigDeleteProfile)))
+	mux.Handle(apiPrefix+"/config/ssh-proxies", h.withAuth(http.HandlerFunc(h.handleConfigSaveSSHProxy)))
+	mux.Handle(apiPrefix+"/config/ssh-proxies/", h.withAuth(http.HandlerFunc(h.handleConfigDeleteSSHProxy)))
 	mux.Handle(apiPrefix+"/schema/tables/", h.withAuth(http.HandlerFunc(h.handleSchemaTable)))
 	mux.Handle(apiPrefix+"/schema/tables", h.withAuth(http.HandlerFunc(h.handleSchemaTables)))
 	mux.Handle(apiPrefix+"/query", h.withAuth(http.HandlerFunc(h.handleQuery)))
@@ -454,3 +459,133 @@ func PublicURL(addr string) string {
 	}
 	return "http://" + net.JoinHostPort(displayHost, port) + "/"
 }
+
+func (h *handler) handleConfigGet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowed(w)
+		return
+	}
+	cfg, configPath, xe := config.LoadConfig(config.Options{ConfigPath: h.configPath})
+	if xe != nil && xe.Code != errors.CodeCfgNotFound {
+		writeError(w, statusCodeFor(xe.Code), xe)
+		return
+	}
+	if configPath == "" {
+		configPath = config.FindConfigPath(config.Options{ConfigPath: h.configPath})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":          true,
+		"config_path": configPath,
+		"profiles":    cfg.Profiles,
+		"ssh_proxies": cfg.SSHProxies,
+		"mcp":         cfg.MCP,
+		"web":         cfg.Web,
+	})
+}
+
+type configProfileRequest struct {
+	Name    string         `json:"name"`
+	Profile config.Profile `json:"profile"`
+}
+
+func (h *handler) handleConfigSaveProfile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		writeMethodNotAllowed(w)
+		return
+	}
+	var req configProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, errors.Wrap(errors.CodeCfgInvalid, "invalid JSON payload", nil, err))
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		writeError(w, http.StatusBadRequest, errors.New(errors.CodeCfgInvalid, "profile name is required", nil))
+		return
+	}
+	configPath := h.configPath
+	if configPath == "" {
+		configPath = config.FindConfigPath(config.Options{})
+	}
+	if xe := config.SaveProfile(configPath, name, req.Profile); xe != nil {
+		writeError(w, statusCodeFor(xe.Code), xe)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "name": name, "config_path": configPath})
+}
+
+func (h *handler) handleConfigDeleteProfile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		writeMethodNotAllowed(w)
+		return
+	}
+	name := strings.TrimPrefix(r.URL.Path, apiPrefix+"/config/profiles/")
+	name = strings.TrimSpace(name)
+	if name == "" {
+		writeError(w, http.StatusBadRequest, errors.New(errors.CodeCfgInvalid, "profile name is required", nil))
+		return
+	}
+	configPath := h.configPath
+	if configPath == "" {
+		configPath = config.FindConfigPath(config.Options{})
+	}
+	if xe := config.DeleteProfile(configPath, name); xe != nil {
+		writeError(w, statusCodeFor(xe.Code), xe)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "name": name})
+}
+
+type configSSHProxyRequest struct {
+	Name     string          `json:"name"`
+	SSHProxy config.SSHProxy `json:"ssh_proxy"`
+}
+
+func (h *handler) handleConfigSaveSSHProxy(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		writeMethodNotAllowed(w)
+		return
+	}
+	var req configSSHProxyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, errors.Wrap(errors.CodeCfgInvalid, "invalid JSON payload", nil, err))
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		writeError(w, http.StatusBadRequest, errors.New(errors.CodeCfgInvalid, "proxy name is required", nil))
+		return
+	}
+	configPath := h.configPath
+	if configPath == "" {
+		configPath = config.FindConfigPath(config.Options{})
+	}
+	if xe := config.SaveSSHProxy(configPath, name, req.SSHProxy); xe != nil {
+		writeError(w, statusCodeFor(xe.Code), xe)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "name": name, "config_path": configPath})
+}
+
+func (h *handler) handleConfigDeleteSSHProxy(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		writeMethodNotAllowed(w)
+		return
+	}
+	name := strings.TrimPrefix(r.URL.Path, apiPrefix+"/config/ssh-proxies/")
+	name = strings.TrimSpace(name)
+	if name == "" {
+		writeError(w, http.StatusBadRequest, errors.New(errors.CodeCfgInvalid, "proxy name is required", nil))
+		return
+	}
+	configPath := h.configPath
+	if configPath == "" {
+		configPath = config.FindConfigPath(config.Options{})
+	}
+	if xe := config.DeleteSSHProxy(configPath, name); xe != nil {
+		writeError(w, statusCodeFor(xe.Code), xe)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "name": name})
+}
+

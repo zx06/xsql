@@ -409,3 +409,75 @@ func TestMustJSON(t *testing.T) {
 		// Either null or empty object is acceptable
 	}
 }
+
+func TestHandler_ConfigManagement(t *testing.T) {
+	configPath := createConfigFile(t, `
+profiles:
+  dev:
+    db: mysql
+    host: 127.0.0.1
+    port: 3306
+    user: root
+    database: app
+ssh_proxies: {}
+`)
+	handler := NewHandler(HandlerOptions{
+		ConfigPath: configPath,
+	})
+
+	// 1. GET /api/v1/config
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/config", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/config status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"dev"`) {
+		t.Fatalf("expected dev profile in config GET response: %s", rec.Body.String())
+	}
+
+	// 2. POST /api/v1/config/profiles
+	saveBody := `{"name":"staging","profile":{"db":"pg","host":"10.0.0.1","port":5432,"user":"postgres","database":"stg_db"}}`
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/config/profiles", strings.NewReader(saveBody))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST /api/v1/config/profiles status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// 3. GET /api/v1/config to verify staging saved
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/config", nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if !strings.Contains(rec.Body.String(), `"staging"`) {
+		t.Fatalf("expected staging profile in config GET response: %s", rec.Body.String())
+	}
+
+	// 4. DELETE /api/v1/config/profiles/staging
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/config/profiles/staging", nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("DELETE /api/v1/config/profiles/staging status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// 5. POST /api/v1/config/ssh-proxies
+	saveProxyBody := `{"name":"bastion","ssh_proxy":{"host":"bastion.example.com","port":22,"user":"admin"}}`
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/config/ssh-proxies", strings.NewReader(saveProxyBody))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST /api/v1/config/ssh-proxies status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// 6. DELETE /api/v1/config/ssh-proxies/bastion
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/config/ssh-proxies/bastion", nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("DELETE /api/v1/config/ssh-proxies/bastion status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
