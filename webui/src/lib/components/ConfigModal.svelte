@@ -47,16 +47,16 @@
     if (key && fullConfig?.profiles?.[key]) {
       const p = fullConfig.profiles[key];
       profileForm = {
-        db: p.db || 'mysql',
-        host: p.host || '127.0.0.1',
-        port: p.port || (p.db === 'pg' ? 5432 : 3306),
-        user: p.user || 'root',
-        password: p.password || '',
-        database: p.database || '',
-        description: p.description || '',
-        unsafe_allow_write: Boolean(p.unsafe_allow_write),
-        allow_plaintext: p.allow_plaintext !== undefined ? Boolean(p.allow_plaintext) : true,
-        ssh_proxy: p.ssh_proxy || ''
+        db: p.db ?? p.DB ?? 'mysql',
+        host: p.host ?? p.Host ?? '127.0.0.1',
+        port: p.port ?? p.Port ?? ((p.db ?? p.DB) === 'pg' ? 5432 : 3306),
+        user: p.user ?? p.User ?? 'root',
+        password: p.password ?? p.Password ?? '',
+        database: p.database ?? p.Database ?? '',
+        description: p.description ?? p.Description ?? '',
+        unsafe_allow_write: Boolean(p.unsafe_allow_write ?? p.UnsafeAllowWrite ?? false),
+        allow_plaintext: p.allow_plaintext !== undefined ? Boolean(p.allow_plaintext) : (p.AllowPlaintext !== undefined ? Boolean(p.AllowPlaintext) : true),
+        ssh_proxy: p.ssh_proxy ?? p.SSHProxy ?? ''
       };
     } else {
       selectedProfileKey = '';
@@ -80,13 +80,13 @@
     if (key && fullConfig?.ssh_proxies?.[key]) {
       const sp = fullConfig.ssh_proxies[key];
       proxyForm = {
-        host: sp.host || '',
-        port: sp.port || 22,
-        user: sp.user || '',
-        identity_file: sp.identity_file || '',
-        passphrase: sp.passphrase || '',
-        known_hosts_file: sp.known_hosts_file || '',
-        skip_host_key: Boolean(sp.skip_host_key)
+        host: sp.host ?? sp.Host ?? '',
+        port: sp.port ?? sp.Port ?? 22,
+        user: sp.user ?? sp.User ?? '',
+        identity_file: sp.identity_file ?? sp.IdentityFile ?? '',
+        passphrase: sp.passphrase ?? sp.Passphrase ?? '',
+        known_hosts_file: sp.known_hosts_file ?? sp.KnownHostsFile ?? '',
+        skip_host_key: Boolean(sp.skip_host_key ?? sp.SkipHostKey ?? false)
       };
     } else {
       selectedProxyKey = '';
@@ -101,6 +101,23 @@
       };
     }
   }
+
+  // Auto select first item if none selected when config loads
+  $effect(() => {
+    if (isOpen && fullConfig) {
+      if (activeTab === 'profiles' && !selectedProfileKey) {
+        const keys = Object.keys(fullConfig.profiles || {});
+        if (keys.length > 0) {
+          selectProfileToEdit(keys[0]);
+        }
+      } else if (activeTab === 'ssh_proxies' && !selectedProxyKey) {
+        const keys = Object.keys(fullConfig.ssh_proxies || {});
+        if (keys.length > 0) {
+          selectProxyToEdit(keys[0]);
+        }
+      }
+    }
+  });
 
   async function handleProfileSubmit(e) {
     e.preventDefault();
@@ -127,7 +144,8 @@
     formError = '';
     try {
       await onDeleteProfile?.(key);
-      selectProfileToEdit('');
+      const remaining = Object.keys(fullConfig?.profiles || {}).filter((k) => k !== key);
+      selectProfileToEdit(remaining[0] || '');
     } catch (err) {
       formError = err.message;
     } finally {
@@ -160,7 +178,8 @@
     formError = '';
     try {
       await onDeleteSSHProxy?.(key);
-      selectProxyToEdit('');
+      const remaining = Object.keys(fullConfig?.ssh_proxies || {}).filter((k) => k !== key);
+      selectProxyToEdit(remaining[0] || '');
     } catch (err) {
       formError = err.message;
     } finally {
@@ -200,13 +219,21 @@
       <div class="flex items-center gap-4 border-b border-[var(--panel-border)] px-5 py-2">
         <button
           class={['xsql-tab', activeTab === 'profiles' && 'xsql-tab-active']}
-          onclick={() => (activeTab = 'profiles')}
+          onclick={() => {
+            activeTab = 'profiles';
+            const keys = Object.keys(fullConfig?.profiles || {});
+            if (!selectedProfileKey && keys.length > 0) selectProfileToEdit(keys[0]);
+          }}
         >
           Database Profiles ({Object.keys(fullConfig?.profiles || {}).length})
         </button>
         <button
           class={['xsql-tab', activeTab === 'ssh_proxies' && 'xsql-tab-active']}
-          onclick={() => (activeTab = 'ssh_proxies')}
+          onclick={() => {
+            activeTab = 'ssh_proxies';
+            const keys = Object.keys(fullConfig?.ssh_proxies || {});
+            if (!selectedProxyKey && keys.length > 0) selectProxyToEdit(keys[0]);
+          }}
         >
           SSH Proxies ({Object.keys(fullConfig?.ssh_proxies || {}).length})
         </button>
@@ -248,7 +275,7 @@
                   >
                     <span class="truncate">{pKey}</span>
                     <span class="rounded bg-[var(--pill-bg)] px-1.5 py-0.5 text-[10px] uppercase text-[var(--pill-text)]">
-                      {p.db}
+                      {p.db ?? p.DB}
                     </span>
                   </button>
                 {/each}
@@ -387,7 +414,7 @@
                     onclick={() => selectProxyToEdit(spKey)}
                   >
                     <span class="truncate">{spKey}</span>
-                    <span class="text-[10px] text-[var(--muted)]">{sp.host}</span>
+                    <span class="text-[10px] text-[var(--muted)]">{sp.host ?? sp.Host}</span>
                   </button>
                 {/each}
               </div>

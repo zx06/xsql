@@ -44,11 +44,11 @@
     <div class="flex items-center gap-1">
       {#if !collapsed}
         <button
-          class="xsql-button border-[var(--input-border)] bg-[var(--panel-inner)] p-1.5 text-xs text-[var(--text)] hover:bg-[var(--accent-soft)]"
+          class="xsql-button border-[var(--input-border)] bg-[var(--panel-inner)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--accent-soft)]"
           title="Open Graphical Config Manager"
           onclick={onOpenConfig}
         >
-          ⚙️
+          配置
         </button>
       {/if}
       <button
