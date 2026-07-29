@@ -481,3 +481,81 @@ ssh_proxies: {}
 	}
 }
 
+func TestHandler_ConfigManagementErrors(t *testing.T) {
+	// 1. GET with non-existent config path returns 200 OK with empty profiles
+	hInvalid := NewHandler(HandlerOptions{ConfigPath: "/nonexistent/path/xsql.yaml"})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/config", nil)
+	rec := httptest.NewRecorder()
+	hInvalid.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 for non-existent config GET, got %d", rec.Code)
+	}
+
+	// 2. Save profile invalid JSON body
+	configPath := createConfigFile(t, "profiles: {}\nssh_proxies: {}\n")
+	h := NewHandler(HandlerOptions{ConfigPath: configPath})
+
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/config/profiles", strings.NewReader("invalid_json"))
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid JSON body, got %d", rec.Code)
+	}
+
+	// 3. Save profile missing name
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/config/profiles", strings.NewReader(`{"name":"","profile":{}}`))
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for empty profile name, got %d", rec.Code)
+	}
+
+	// 4. Delete profile missing name
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/config/profiles/", nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for empty profile delete name, got %d", rec.Code)
+	}
+
+	// 5. Delete profile non-existent file error (400)
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/config/profiles/dev", nil)
+	rec = httptest.NewRecorder()
+	hInvalid.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for profile delete error on non-existent config, got %d", rec.Code)
+	}
+
+	// 6. Save SSH proxy invalid JSON body
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/config/ssh-proxies", strings.NewReader("invalid_json"))
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid SSH proxy JSON, got %d", rec.Code)
+	}
+
+	// 7. Save SSH proxy missing name
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/config/ssh-proxies", strings.NewReader(`{"name":"","ssh_proxy":{}}`))
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for empty SSH proxy name, got %d", rec.Code)
+	}
+
+	// 8. Delete SSH proxy missing name
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/config/ssh-proxies/", nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for empty SSH proxy delete name, got %d", rec.Code)
+	}
+
+	// 9. Delete SSH proxy non-existent file error (400)
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/config/ssh-proxies/bastion", nil)
+	rec = httptest.NewRecorder()
+	hInvalid.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for SSH proxy delete error on non-existent config, got %d", rec.Code)
+	}
+}
+

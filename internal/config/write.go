@@ -204,6 +204,10 @@ func parseBool(s string) bool {
 
 // SaveProfile creates or updates a profile in the specified config file.
 func SaveProfile(configPath, name string, p Profile) *errors.XError {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return errors.New(errors.CodeCfgInvalid, "profile name cannot be empty", nil)
+	}
 	if configPath == "" {
 		path, xe := InitConfig("")
 		if xe != nil && xe.Code != errors.CodeCfgInvalid {
@@ -232,6 +236,10 @@ func SaveProfile(configPath, name string, p Profile) *errors.XError {
 
 // DeleteProfile deletes a profile from the specified config file.
 func DeleteProfile(configPath, name string) *errors.XError {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return errors.New(errors.CodeCfgInvalid, "profile name cannot be empty", nil)
+	}
 	if configPath == "" {
 		configPath = FindConfigPath(Options{})
 	}
@@ -247,6 +255,10 @@ func DeleteProfile(configPath, name string) *errors.XError {
 
 // SaveSSHProxy creates or updates an SSH proxy in the specified config file.
 func SaveSSHProxy(configPath, name string, sp SSHProxy) *errors.XError {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return errors.New(errors.CodeCfgInvalid, "ssh proxy name cannot be empty", nil)
+	}
 	if configPath == "" {
 		path, xe := InitConfig("")
 		if xe != nil && xe.Code != errors.CodeCfgInvalid {
@@ -275,6 +287,10 @@ func SaveSSHProxy(configPath, name string, sp SSHProxy) *errors.XError {
 
 // DeleteSSHProxy deletes an SSH proxy from the specified config file.
 func DeleteSSHProxy(configPath, name string) *errors.XError {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return errors.New(errors.CodeCfgInvalid, "ssh proxy name cannot be empty", nil)
+	}
 	if configPath == "" {
 		configPath = FindConfigPath(Options{})
 	}
