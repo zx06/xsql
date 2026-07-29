@@ -2,13 +2,45 @@
   let {
     isOpen = false,
     history = [],
+    profiles = [],
+    selectedProfile = '',
     onClose,
+    onSelectHistoryItem,
     onSelectSQL,
     onClear
   } = $props();
 
+  let selectedFilter = $state('__current__');
+
   function formatTime(timestamp) {
     return timestamp || '';
+  }
+
+  let filteredHistory = $derived.by(() => {
+    if (selectedFilter === '__current__') {
+      if (!selectedProfile) return history;
+      return history.filter((item) => item.profile === selectedProfile);
+    }
+    if (selectedFilter === '__all__') {
+      return history;
+    }
+    return history.filter((item) => item.profile === selectedFilter);
+  });
+
+  let effectiveClearFilter = $derived.by(() => {
+    if (selectedFilter === '__current__') {
+      return selectedProfile || '__all__';
+    }
+    return selectedFilter;
+  });
+
+  function handleSelect(item) {
+    if (onSelectHistoryItem) {
+      onSelectHistoryItem(item);
+    } else if (onSelectSQL) {
+      onSelectSQL(item.sql);
+    }
+    onClose?.();
   }
 </script>
 
@@ -23,18 +55,18 @@
       onkeydown={(e) => e.key === 'Escape' && onClose()}
     ></div>
     <aside class="relative z-50 flex h-full w-96 max-w-full flex-col border-l border-[var(--panel-border)] bg-[var(--panel-bg)] p-4 shadow-2xl">
-      <div class="mb-4 flex items-center justify-between border-b border-[var(--panel-border)] pb-3">
+      <div class="mb-3 flex items-center justify-between border-b border-[var(--panel-border)] pb-3">
         <div class="flex items-center gap-2">
           <strong class="text-base text-[var(--text)]">Query History</strong>
           <span class="rounded-full bg-[var(--pill-bg)] px-2 py-0.5 text-xs text-[var(--pill-text)]">
-            {history.length}
+            {filteredHistory.length}
           </span>
         </div>
         <div class="flex items-center gap-2">
-          {#if history.length > 0}
+          {#if filteredHistory.length > 0}
             <button
               class="text-xs text-[var(--muted)] hover:text-[var(--error-text)]"
-              onclick={onClear}
+              onclick={() => onClear?.(effectiveClearFilter)}
             >
               Clear
             </button>
@@ -48,26 +80,50 @@
         </div>
       </div>
 
-      {#if history.length === 0}
-        <div class="flex flex-1 items-center justify-center text-sm text-[var(--muted)]">
-          No query history recorded yet.
+      <!-- Profile Filter Select -->
+      <div class="mb-3 flex items-center justify-between gap-2 border-b border-[var(--panel-border)] pb-3">
+        <label for="history-profile-filter" class="text-xs font-medium text-[var(--muted)] shrink-0">
+          Filter by Profile:
+        </label>
+        <select
+          id="history-profile-filter"
+          class="flex-1 rounded border border-[var(--panel-border)] bg-[var(--panel-inner)] px-2 py-1 text-xs text-[var(--text)] outline-none focus:border-[var(--accent-border)]"
+          bind:value={selectedFilter}
+        >
+          <option value="__current__">
+            Current Profile ({selectedProfile || 'None'})
+          </option>
+          <option value="__all__">All Profiles</option>
+          {#each profiles as p (p.name)}
+            {#if p.name !== selectedProfile}
+              <option value={p.name}>{p.name}</option>
+            {/if}
+          {/each}
+        </select>
+      </div>
+
+      {#if filteredHistory.length === 0}
+        <div class="flex flex-1 items-center justify-center text-center text-sm text-[var(--muted)] px-4">
+          {#if selectedFilter === '__current__'}
+            No query history for current profile ({selectedProfile || 'None'}).
+          {:else if selectedFilter === '__all__'}
+            No query history recorded yet.
+          {:else}
+            No query history for profile "{selectedFilter}".
+          {/if}
         </div>
       {:else}
         <div class="xsql-scroll flex-1 overflow-y-auto pr-1">
           <div class="grid gap-2.5">
-            {#each history as item (item.id)}
+            {#each filteredHistory as item (item.id)}
               <div
                 role="button"
                 tabindex="0"
                 class="group flex flex-col gap-1.5 rounded-lg border border-[var(--panel-border)] bg-[var(--panel-inner)] p-3 transition hover:border-[var(--accent-border)] hover:shadow-sm"
-                onclick={() => {
-                  onSelectSQL?.(item.sql);
-                  onClose?.();
-                }}
+                onclick={() => handleSelect(item)}
                 onkeydown={(e) => {
                   if (e.key === 'Enter') {
-                    onSelectSQL?.(item.sql);
-                    onClose?.();
+                    handleSelect(item);
                   }
                 }}
               >
