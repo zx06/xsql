@@ -16,6 +16,33 @@
     }
   }
 
+  function highlightJson(jsonStr) {
+    if (!jsonStr) return '';
+    const escaped = String(jsonStr)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    const jsonRegex = /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g;
+
+    return escaped.replace(jsonRegex, (match) => {
+      if (/^"/.test(match)) {
+        if (/:$/.test(match)) {
+          const key = match.slice(0, -1);
+          return `<span class="json-key">${key}</span>:`;
+        }
+        return `<span class="json-string">${match}</span>`;
+      }
+      if (/true|false/.test(match)) {
+        return `<span class="json-boolean">${match}</span>`;
+      }
+      if (/null/.test(match)) {
+        return `<span class="json-null">${match}</span>`;
+      }
+      return `<span class="json-number">${match}</span>`;
+    });
+  }
+
   async function handleCopy() {
     try {
       await navigator.clipboard.writeText(formattedJson());
@@ -57,8 +84,8 @@
           </button>
         </div>
       </div>
-      <div class="xsql-scroll flex-1 overflow-auto p-4">
-        <pre class="m-0 font-mono text-xs text-[var(--text)] whitespace-pre-wrap break-all">{formattedJson()}</pre>
+      <div class="xsql-scroll flex-1 overflow-auto p-4 bg-[var(--editor-bg)]">
+        <pre class="m-0 font-mono text-xs text-[var(--text)] whitespace-pre-wrap break-all">{@html highlightJson(formattedJson())}</pre>
       </div>
     </div>
   </div>

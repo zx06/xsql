@@ -99,6 +99,35 @@ body,
   --editor-border: rgba(255, 255, 255, 0.08);
 }
 
+.json-key {
+  color: var(--accent);
+  font-weight: 600;
+}
+.json-string {
+  color: #059669;
+}
+.theme-black .json-string {
+  color: #34d399;
+}
+.json-number {
+  color: #d97706;
+}
+.theme-black .json-number {
+  color: #fbbf24;
+}
+.json-boolean {
+  color: #db2777;
+  font-weight: 600;
+}
+.theme-black .json-boolean {
+  color: #f472b6;
+}
+.json-null {
+  color: var(--muted);
+  font-style: italic;
+  font-weight: 600;
+}
+
 @layer components {
   .xsql-panel {
     @apply rounded-xl border border-[var(--panel-border)] bg-[var(--panel-bg)] shadow-[0_10px_24px_var(--panel-shadow)] backdrop-blur-md transition-all;
