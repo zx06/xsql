@@ -185,6 +185,11 @@ func setSSHProxyField(cfg *File, name, field, value string) *errors.XError {
 }
 
 func writeFile(path string, cfg File) *errors.XError {
+	if dir := filepath.Dir(path); dir != "" {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return errors.Wrap(errors.CodeInternal, "failed to create config directory", map[string]any{"path": path}, err)
+		}
+	}
 	b, err := yaml.Marshal(cfg)
 	if err != nil {
 		return errors.Wrap(errors.CodeInternal, "failed to marshal config", nil, err)

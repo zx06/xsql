@@ -623,4 +623,53 @@ func TestSaveAndDeleteSSHProxy(t *testing.T) {
 			t.Error("expected error when ssh proxy name is empty")
 		}
 	})
+
+	t.Run("SaveProfile and DeleteProfile with invalid YAML file", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "xsql.yaml")
+		if err := os.WriteFile(path, []byte("invalid_yaml: [unclosed"), 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := SaveProfile(path, "dev", Profile{}); err == nil {
+			t.Error("expected error for invalid YAML in SaveProfile")
+		}
+
+		if err := DeleteProfile(path, "dev"); err == nil {
+			t.Error("expected error for invalid YAML in DeleteProfile")
+		}
+	})
+
+	t.Run("SaveSSHProxy and DeleteSSHProxy with invalid YAML file", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "xsql.yaml")
+		if err := os.WriteFile(path, []byte("invalid_yaml: [unclosed"), 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := SaveSSHProxy(path, "bastion", SSHProxy{}); err == nil {
+			t.Error("expected error for invalid YAML in SaveSSHProxy")
+		}
+
+		if err := DeleteSSHProxy(path, "bastion"); err == nil {
+			t.Error("expected error for invalid YAML in DeleteSSHProxy")
+		}
+	})
+
+	t.Run("SaveProfile on non-existent config file creates file", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "new_dir", "xsql.yaml")
+		// Parent dir created automatically by writeFile
+		if err := SaveProfile(path, "dev", Profile{Host: "localhost"}); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("SaveSSHProxy on non-existent config file creates file", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "new_dir", "xsql.yaml")
+		if err := SaveSSHProxy(path, "bastion", SSHProxy{Host: "bastion.example.com"}); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
 }
