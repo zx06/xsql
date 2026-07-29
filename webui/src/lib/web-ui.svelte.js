@@ -662,9 +662,10 @@ export class WebUIController {
   async selectHistoryItem(item) {
     if (!item) return;
     if (item.profile && item.profile !== this.selectedProfile) {
-      const exists = this.profiles.some((p) => p.name === item.profile);
-      if (exists) {
+      try {
         await this.selectProfile(item.profile);
+      } catch (e) {
+        console.error('Failed to switch profile:', e);
       }
     }
     if (item.sql) {

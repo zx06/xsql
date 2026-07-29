@@ -10,7 +10,7 @@
     onClear
   } = $props();
 
-  let selectedFilter = $state('__current__');
+  let selectedFilter = $state('__all__');
 
   function formatTime(timestamp) {
     return timestamp || '';
@@ -90,10 +90,10 @@
           class="flex-1 rounded border border-[var(--panel-border)] bg-[var(--panel-inner)] px-2 py-1 text-xs text-[var(--text)] outline-none focus:border-[var(--accent-border)]"
           bind:value={selectedFilter}
         >
+          <option value="__all__">All Profiles</option>
           <option value="__current__">
             Current Profile ({selectedProfile || 'None'})
           </option>
-          <option value="__all__">All Profiles</option>
           {#each profiles as p (p.name)}
             {#if p.name !== selectedProfile}
               <option value={p.name}>{p.name}</option>
@@ -119,7 +119,7 @@
               <div
                 role="button"
                 tabindex="0"
-                class="group flex flex-col gap-1.5 rounded-lg border border-[var(--panel-border)] bg-[var(--panel-inner)] p-3 transition hover:border-[var(--accent-border)] hover:shadow-sm"
+                class="group flex flex-col gap-1.5 rounded-lg border border-[var(--panel-border)] bg-[var(--panel-inner)] p-3 transition hover:border-[var(--accent-border)] hover:shadow-sm cursor-pointer"
                 onclick={() => handleSelect(item)}
                 onkeydown={(e) => {
                   if (e.key === 'Enter') {
@@ -128,9 +128,16 @@
                 }}
               >
                 <div class="flex items-center justify-between gap-2 text-xs">
-                  <span class="rounded bg-[var(--pill-bg)] px-1.5 py-0.5 font-medium text-[var(--pill-text)]">
-                    {item.profile}
-                  </span>
+                  <div class="flex items-center gap-1.5">
+                    <span class="rounded bg-[var(--pill-bg)] px-1.5 py-0.5 font-medium text-[var(--pill-text)]">
+                      {item.profile || 'default'}
+                    </span>
+                    {#if item.profile && item.profile !== selectedProfile}
+                      <span class="text-[10px] text-[var(--accent-border)] font-semibold">
+                        (Click to switch)
+                      </span>
+                    {/if}
+                  </div>
                   <span class="text-[var(--muted)]">{formatTime(item.timestamp)}</span>
                 </div>
 
