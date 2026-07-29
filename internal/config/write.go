@@ -318,4 +318,3 @@ func FindConfigPath(opts Options) string {
 	}
 	return ""
 }
-

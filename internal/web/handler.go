@@ -588,4 +588,3 @@ func (h *handler) handleConfigDeleteSSHProxy(w http.ResponseWriter, r *http.Requ
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "name": name})
 }
-
