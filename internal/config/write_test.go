@@ -486,10 +486,14 @@ func TestSaveAndDeleteProfile(t *testing.T) {
 	})
 
 	t.Run("SaveProfile validation errors", func(t *testing.T) {
-		if err := SaveProfile("/tmp/test.yaml", "", Profile{}); err == nil {
+		dummyFile := filepath.Join(t.TempDir(), "dummy_file")
+		_ = os.WriteFile(dummyFile, []byte("x"), 0600)
+		invalidPath := filepath.Join(dummyFile, "xsql.yaml")
+
+		if err := SaveProfile(invalidPath, "", Profile{}); err == nil {
 			t.Error("expected error when profile name is empty")
 		}
-		if err := SaveProfile("/nonexistent/dir/xsql.yaml", "dev", Profile{}); err == nil {
+		if err := SaveProfile(invalidPath, "dev", Profile{}); err == nil {
 			t.Error("expected error when config file cannot be read/written")
 		}
 	})
@@ -528,7 +532,11 @@ func TestSaveAndDeleteProfile(t *testing.T) {
 	})
 
 	t.Run("DeleteProfile validation errors", func(t *testing.T) {
-		if err := DeleteProfile("/tmp/test.yaml", ""); err == nil {
+		dummyFile := filepath.Join(t.TempDir(), "dummy_file")
+		_ = os.WriteFile(dummyFile, []byte("x"), 0600)
+		invalidPath := filepath.Join(dummyFile, "xsql.yaml")
+
+		if err := DeleteProfile(invalidPath, ""); err == nil {
 			t.Error("expected error when profile name is empty")
 		}
 	})
@@ -577,10 +585,14 @@ func TestSaveAndDeleteSSHProxy(t *testing.T) {
 	})
 
 	t.Run("SaveSSHProxy validation errors", func(t *testing.T) {
-		if err := SaveSSHProxy("/tmp/test.yaml", "", SSHProxy{}); err == nil {
+		dummyFile := filepath.Join(t.TempDir(), "dummy_file")
+		_ = os.WriteFile(dummyFile, []byte("x"), 0600)
+		invalidPath := filepath.Join(dummyFile, "xsql.yaml")
+
+		if err := SaveSSHProxy(invalidPath, "", SSHProxy{}); err == nil {
 			t.Error("expected error when ssh proxy name is empty")
 		}
-		if err := SaveSSHProxy("/nonexistent/dir/xsql.yaml", "bastion", SSHProxy{}); err == nil {
+		if err := SaveSSHProxy(invalidPath, "bastion", SSHProxy{}); err == nil {
 			t.Error("expected error when config file cannot be read/written")
 		}
 	})
@@ -619,7 +631,11 @@ func TestSaveAndDeleteSSHProxy(t *testing.T) {
 	})
 
 	t.Run("DeleteSSHProxy validation errors", func(t *testing.T) {
-		if err := DeleteSSHProxy("/tmp/test.yaml", ""); err == nil {
+		dummyFile := filepath.Join(t.TempDir(), "dummy_file")
+		_ = os.WriteFile(dummyFile, []byte("x"), 0600)
+		invalidPath := filepath.Join(dummyFile, "xsql.yaml")
+
+		if err := DeleteSSHProxy(invalidPath, ""); err == nil {
 			t.Error("expected error when ssh proxy name is empty")
 		}
 	})
