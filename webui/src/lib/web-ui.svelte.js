@@ -649,9 +649,29 @@ export class WebUIController {
     }
   }
 
-  clearQueryHistory() {
-    this.queryHistory = [];
-    saveHistoryStorage([]);
+  clearQueryHistory(filterProfile) {
+    if (!filterProfile || filterProfile === '__all__') {
+      this.queryHistory = [];
+      saveHistoryStorage([]);
+    } else {
+      this.queryHistory = this.queryHistory.filter((item) => item.profile !== filterProfile);
+      saveHistoryStorage(this.queryHistory);
+    }
+  }
+
+  async selectHistoryItem(item) {
+    if (!item) return;
+    if (item.profile && item.profile !== this.selectedProfile) {
+      try {
+        await this.selectProfile(item.profile);
+      } catch (e) {
+        console.error('Failed to switch profile:', e);
+      }
+    }
+    if (item.sql) {
+      this.setSQL(item.sql);
+    }
+    this.queryHistoryOpen = false;
   }
 
   async selectProfile(profileName) {

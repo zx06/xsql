@@ -202,7 +202,7 @@
       <!-- Header -->
       <div class="flex items-center justify-between border-b border-[var(--panel-border)] px-5 py-4">
         <div>
-          <strong class="text-base text-[var(--text)]">Configuration Manager (图形化配置中心)</strong>
+          <strong class="text-base text-[var(--text)]">Configuration Manager</strong>
           {#if configPath}
             <p class="text-xs text-[var(--muted)] font-mono mt-0.5">{configPath}</p>
           {/if}

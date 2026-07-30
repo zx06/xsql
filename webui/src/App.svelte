@@ -150,9 +150,12 @@
   <QueryHistoryDrawer
     isOpen={ui.queryHistoryOpen}
     history={ui.queryHistory}
+    profiles={ui.profiles}
+    selectedProfile={ui.selectedProfile}
     onClose={() => (ui.queryHistoryOpen = false)}
+    onSelectHistoryItem={(item) => ui.selectHistoryItem(item)}
     onSelectSQL={(sql) => ui.setSQL(sql)}
-    onClear={() => ui.clearQueryHistory()}
+    onClear={(filter) => ui.clearQueryHistory(filter)}
   />
 
   <JsonModal
