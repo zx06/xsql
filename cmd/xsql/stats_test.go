@@ -197,3 +197,153 @@ func TestNewStatsCommand(t *testing.T) {
 		t.Error("expected --json flag")
 	}
 }
+
+func TestRunStats_WithProfile(t *testing.T) {
+	dir := t.TempDir()
+	statsPath := filepath.Join(dir, "stats.jsonl")
+
+	GlobalConfig.Stats.FilePath = statsPath
+
+	store := stats.NewStore(statsPath)
+	_ = store.Append(&stats.Record{
+		Timestamp:  time.Now(),
+		Cmd:        "query",
+		Profile:    "dev",
+		OK:         true,
+		DurationMs: 100,
+	})
+
+	var buf bytes.Buffer
+	w := output.New(&buf, &buf)
+	flags := &StatsFlags{Profile: "dev"}
+
+	err := runStats(flags, &w)
+	if err != nil {
+		t.Fatalf("runStats: %v", err)
+	}
+}
+
+func TestRunStats_JSON(t *testing.T) {
+	dir := t.TempDir()
+	statsPath := filepath.Join(dir, "stats.jsonl")
+
+	GlobalConfig.Stats.FilePath = statsPath
+
+	var buf bytes.Buffer
+	w := output.New(&buf, &buf)
+	flags := &StatsFlags{JSON: true}
+
+	err := runStats(flags, &w)
+	if err != nil {
+		t.Fatalf("runStats: %v", err)
+	}
+}
+
+func TestRunStatsLog_WithProfile(t *testing.T) {
+	dir := t.TempDir()
+	statsPath := filepath.Join(dir, "stats.jsonl")
+
+	GlobalConfig.Stats.FilePath = statsPath
+
+	store := stats.NewStore(statsPath)
+	_ = store.Append(&stats.Record{
+		Timestamp:  time.Now(),
+		Cmd:        "query",
+		Profile:    "dev",
+		OK:         true,
+		DurationMs: 100,
+	})
+	_ = store.Append(&stats.Record{
+		Timestamp:  time.Now(),
+		Cmd:        "query",
+		Profile:    "staging",
+		OK:         true,
+		DurationMs: 200,
+	})
+
+	var buf bytes.Buffer
+	w := output.New(&buf, &buf)
+	flags := &StatsLogFlags{Profile: "dev", Limit: 100}
+
+	err := runStatsLog(flags, &w)
+	if err != nil {
+		t.Fatalf("runStatsLog: %v", err)
+	}
+}
+
+func TestRunStatsLog_LimitExceeded(t *testing.T) {
+	dir := t.TempDir()
+	statsPath := filepath.Join(dir, "stats.jsonl")
+
+	GlobalConfig.Stats.FilePath = statsPath
+
+	store := stats.NewStore(statsPath)
+	for i := 0; i < 5; i++ {
+		_ = store.Append(&stats.Record{
+			Timestamp:  time.Now(),
+			Cmd:        "query",
+			Profile:    "dev",
+			OK:         true,
+			DurationMs: 100,
+		})
+	}
+
+	var buf bytes.Buffer
+	w := output.New(&buf, &buf)
+	flags := &StatsLogFlags{Limit: 2}
+
+	err := runStatsLog(flags, &w)
+	if err != nil {
+		t.Fatalf("runStatsLog: %v", err)
+	}
+}
+
+func TestRunStatsLog_JSON(t *testing.T) {
+	dir := t.TempDir()
+	statsPath := filepath.Join(dir, "stats.jsonl")
+
+	GlobalConfig.Stats.FilePath = statsPath
+
+	var buf bytes.Buffer
+	w := output.New(&buf, &buf)
+	flags := &StatsLogFlags{Limit: 100, JSON: true}
+
+	err := runStatsLog(flags, &w)
+	if err != nil {
+		t.Fatalf("runStatsLog: %v", err)
+	}
+}
+
+func TestNewStatsResetCommand(t *testing.T) {
+	dir := t.TempDir()
+	statsPath := filepath.Join(dir, "stats.jsonl")
+
+	GlobalConfig.Stats.FilePath = statsPath
+
+	// Create a stats file
+	store := stats.NewStore(statsPath)
+	_ = store.Append(&stats.Record{
+		Timestamp: time.Now(),
+		Cmd:       "query",
+		Profile:   "dev",
+		OK:        true,
+	})
+
+	var buf bytes.Buffer
+	w := output.New(&buf, &buf)
+
+	cmd := newStatsResetCommand(&w)
+	if cmd.Use != "reset" {
+		t.Errorf("expected use=reset, got %s", cmd.Use)
+	}
+
+	// Execute the command
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	// Verify file is removed
+	if _, err := os.Stat(statsPath); !os.IsNotExist(err) {
+		t.Error("expected stats file to be removed")
+	}
+}
