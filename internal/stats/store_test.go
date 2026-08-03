@@ -3,6 +3,7 @@ package stats
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -174,6 +175,10 @@ func TestStore_Cleanup_NoRetention(t *testing.T) {
 }
 
 func TestStore_Permissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping permissions test on Windows")
+	}
+
 	dir := t.TempDir()
 	path := filepath.Join(dir, "stats.jsonl")
 	store := NewStore(path)

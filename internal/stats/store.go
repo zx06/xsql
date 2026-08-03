@@ -46,18 +46,19 @@ func (s *Store) Append(r *Record) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 
 	data, err := json.Marshal(r)
 	if err != nil {
+		_ = f.Close()
 		return err
 	}
 	data = append(data, '\n')
 
 	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
 		return err
 	}
-	return nil
+	return f.Close()
 }
 
 // Load reads all records from the JSONL file.
@@ -72,7 +73,6 @@ func (s *Store) Load() ([]*Record, error) {
 		}
 		return nil, err
 	}
-	defer f.Close()
 
 	var records []*Record
 	scanner := bufio.NewScanner(f)
@@ -89,9 +89,10 @@ func (s *Store) Load() ([]*Record, error) {
 		records = append(records, &r)
 	}
 	if err := scanner.Err(); err != nil {
+		_ = f.Close()
 		return nil, err
 	}
-	return records, nil
+	return records, f.Close()
 }
 
 // Reset clears the stats file.
@@ -143,14 +144,14 @@ func (s *Store) Cleanup(retentionDays int) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer f.Close()
 
 	enc := json.NewEncoder(f)
 	for _, r := range kept {
 		if err := enc.Encode(r); err != nil {
+			_ = f.Close()
 			return removed, err
 		}
 	}
 
-	return removed, nil
+	return removed, f.Close()
 }

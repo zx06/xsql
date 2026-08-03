@@ -88,13 +88,13 @@ func (f *StatsLogTableFormatter) ToTableData() ([]string, []map[string]any, bool
 			okStr = "true"
 		}
 		rows = append(rows, map[string]any{
-			"ts":           r.Timestamp.Format(time.RFC3339),
-			"cmd":          r.Cmd,
-			"profile":      r.Profile,
-			"attrs":        attrs,
-			"ok":           okStr,
-			"duration_ms":  r.DurationMs,
-			"error_code":   r.ErrorCode,
+			"ts":          r.Timestamp.Format(time.RFC3339),
+			"cmd":         r.Cmd,
+			"profile":     r.Profile,
+			"attrs":       attrs,
+			"ok":          okStr,
+			"duration_ms": r.DurationMs,
+			"error_code":  r.ErrorCode,
 		})
 	}
 	return columns, rows, true
