@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -18,6 +19,18 @@ func DefaultFilePath() string {
 	return filepath.Join(home, ".config", "xsql", "stats.jsonl")
 }
 
+// expandPath expands ~ to the user's home directory.
+func expandPath(p string) string {
+	if strings.HasPrefix(p, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return p
+		}
+		return filepath.Join(home, p[2:])
+	}
+	return p
+}
+
 // Store manages the JSONL stats file.
 type Store struct {
 	path string
@@ -26,11 +39,12 @@ type Store struct {
 
 // NewStore creates a stats store with the given path.
 // If path is empty, uses the default path.
+// Supports ~ expansion to user home directory.
 func NewStore(path string) *Store {
 	if path == "" {
 		path = DefaultFilePath()
 	}
-	return &Store{path: path}
+	return &Store{path: expandPath(path)}
 }
 
 // Append atomically appends a record to the JSONL file.

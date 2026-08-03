@@ -301,3 +301,37 @@ func TestStore_Append_MkdirError(t *testing.T) {
 		t.Error("expected error for invalid path")
 	}
 }
+
+func TestExpandPath(t *testing.T) {
+	home, _ := os.UserHomeDir()
+
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"~/test.jsonl", filepath.Join(home, "test.jsonl")},
+		{"~/.config/xsql/stats.jsonl", filepath.Join(home, ".config", "xsql", "stats.jsonl")},
+		{"/absolute/path.jsonl", "/absolute/path.jsonl"},
+		{"relative/path.jsonl", "relative/path.jsonl"},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := expandPath(tt.input)
+			if result != tt.expected {
+				t.Errorf("expandPath(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestNewStore_ExpandPath(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	store := NewStore("~/stats.jsonl")
+
+	expected := filepath.Join(home, "stats.jsonl")
+	if store.path != expected {
+		t.Errorf("NewStore(\"~/stats.jsonl\").path = %q, want %q", store.path, expected)
+	}
+}
