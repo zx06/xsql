@@ -1,3 +1,0 @@
-{"ts":"2026-08-03T11:55:44.527239+08:00","cmd":"query","profile":"default","ok":false,"duration_ms":767,"error_code":"XSQL_DB_EXEC_FAILED","sql":"select * from apikeys limit 1"}
-{"ts":"2026-08-03T11:56:09.654472+08:00","cmd":"query","profile":"default","ok":true,"duration_ms":824,"sql":"select * from api_keys limit 1"}
-{"ts":"2026-08-03T11:59:08.102631+08:00","cmd":"query","profile":"default","ok":true,"duration_ms":831,"sql":"select * from api_keys limit 1","attrs":{"foo":"bar","testk":"testv"}}
