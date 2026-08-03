@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -14,6 +15,7 @@ import (
 	"github.com/zx06/xsql/internal/errors"
 	"github.com/zx06/xsql/internal/secret"
 	"github.com/zx06/xsql/internal/ssh"
+	"github.com/zx06/xsql/internal/stats"
 )
 
 // QueryInput represents the input for the query tool
@@ -30,10 +32,11 @@ type ProfileShowInput struct {
 // ToolHandler manages MCP tools
 type ToolHandler struct {
 	config *config.File
+	stats  stats.StatsConfig
 }
 
 // NewToolHandler creates a new tool handler
-func NewToolHandler(cfg *config.File) *ToolHandler {
+func NewToolHandler(cfg *config.File, st stats.StatsConfig) *ToolHandler {
 	if cfg == nil {
 		cfg = &config.File{
 			Profiles:   map[string]config.Profile{},
@@ -42,6 +45,7 @@ func NewToolHandler(cfg *config.File) *ToolHandler {
 	}
 	return &ToolHandler{
 		config: cfg,
+		stats:  st,
 	}
 }
 
@@ -277,10 +281,15 @@ func (h *ToolHandler) Query(ctx context.Context, req *mcp.CallToolRequest, input
 	defer conn.Close()
 
 	// Query options - use read-only mode by default
+	start := time.Now()
 	result, xe := db.Query(ctx, conn, input.SQL, db.QueryOptions{
 		UnsafeAllowWrite: profile.UnsafeAllowWrite,
 		DBType:           profile.DB,
 	})
+
+	// Record stats
+	h.recordMCPStats("query", input.Profile, xe == nil, time.Since(start), xe, input.SQL)
+
 	if xe != nil {
 		return &mcp.CallToolResult{
 			IsError: true,
@@ -460,14 +469,36 @@ func (h *ToolHandler) formatError(err error) string {
 }
 
 // CreateServer creates a new MCP server
-func CreateServer(version string, cfg *config.File) (*mcp.Server, error) {
+func CreateServer(version string, cfg *config.File, st stats.StatsConfig) (*mcp.Server, error) {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "xsql",
 		Version: version,
 	}, nil)
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, st)
 	handler.RegisterTools(server)
 
 	return server, nil
+}
+
+// recordMCPStats records an MCP query to the stats store.
+func (h *ToolHandler) recordMCPStats(cmd, profile string, ok bool, duration time.Duration, xe *errors.XError, sql string) {
+	if !h.stats.Enabled {
+		return
+	}
+	store := stats.NewStore(h.stats.FilePath)
+	r := &stats.Record{
+		Timestamp:  time.Now(),
+		Cmd:        cmd,
+		Profile:    profile,
+		OK:         ok,
+		DurationMs: duration.Milliseconds(),
+	}
+	if xe != nil {
+		r.ErrorCode = string(xe.Code)
+	}
+	if h.stats.LogSQL && sql != "" {
+		r.SQL = sql
+	}
+	_ = store.Append(r)
 }

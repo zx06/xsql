@@ -100,6 +100,7 @@ func runWebCommand(opts *webCommandOptions, w *output.Writer) error {
 		SkipHostKeyCheck: opts.skipHostKey,
 		AuthRequired:     resolved.authRequired,
 		AuthToken:        resolved.authToken,
+		Stats:            GlobalConfig.Stats,
 	})
 	server := webpkg.NewServer(listener, handler)
 	url := webpkg.PublicURL(server.Addr())

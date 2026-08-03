@@ -33,6 +33,7 @@ func run() int {
 	root.AddCommand(NewConfigCommand(&w))
 	root.AddCommand(NewServeCommand(&w))
 	root.AddCommand(NewWebCommand(&w))
+	root.AddCommand(NewStatsCommand(&w))
 
 	// Execute and handle errors
 	if err := root.Execute(); err != nil {

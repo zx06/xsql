@@ -21,6 +21,7 @@ func (a App) BuildSpec() spec.Spec {
 		{Name: "config", Default: "", Description: "Config file path (YAML); default: ./xsql.yaml or $HOME/.config/xsql/xsql.yaml"},
 		{Name: "profile", Shorthand: "p", Env: "XSQL_PROFILE", Default: "", Description: "Profile name (config: profiles.<name>)"},
 		{Name: "format", Shorthand: "f", Env: "XSQL_FORMAT", Default: "auto", Description: "Output format: json|yaml|table|csv|auto"},
+		{Name: "attr", Env: "XSQL_ATTR", Default: "", Description: "Attribute key=value pair (repeatable)"},
 	}
 	return spec.Spec{
 		SchemaVersion: output.SchemaVersion,
@@ -92,6 +93,13 @@ func (a App) BuildSpec() spec.Spec {
 					spec.FlagSpec{Name: "auth-token", Default: "", Env: "XSQL_WEB_HTTP_AUTH_TOKEN", Description: "Bearer auth token required for non-loopback addresses"},
 					spec.FlagSpec{Name: "allow-plaintext", Default: "false", Description: "Allow plaintext secrets in config"},
 					spec.FlagSpec{Name: "ssh-skip-known-hosts-check", Default: "false", Description: "Skip SSH known_hosts check (dangerous)"},
+				),
+			},
+			{
+				Name:        "stats",
+				Description: "Show usage statistics",
+				Flags: append(globalFlags,
+					spec.FlagSpec{Name: "json", Default: "false", Description: "Output as JSON"},
 				),
 			},
 		},

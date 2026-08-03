@@ -19,6 +19,7 @@ import (
 	"github.com/zx06/xsql/internal/config"
 	"github.com/zx06/xsql/internal/errors"
 	"github.com/zx06/xsql/internal/output"
+	"github.com/zx06/xsql/internal/stats"
 	frontend "github.com/zx06/xsql/webui"
 )
 
@@ -31,6 +32,7 @@ type HandlerOptions struct {
 	AuthRequired     bool
 	AuthToken        string
 	Assets           fs.FS
+	Stats            stats.StatsConfig
 }
 
 type handler struct {
@@ -41,6 +43,7 @@ type handler struct {
 	authRequired     bool
 	authToken        string
 	assets           fs.FS
+	stats            stats.StatsConfig
 }
 
 type queryRequest struct {
@@ -63,6 +66,7 @@ func NewHandler(opts HandlerOptions) http.Handler {
 		authRequired:     opts.AuthRequired,
 		authToken:        opts.AuthToken,
 		assets:           assets,
+		stats:            opts.Stats,
 	}
 
 	mux := http.NewServeMux()
@@ -252,6 +256,7 @@ func (h *handler) handleQuery(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
 
+	start := time.Now()
 	result, xe := app.Query(ctx, app.QueryRequest{
 		Profile:          profile,
 		SQL:              req.SQL,
@@ -259,6 +264,10 @@ func (h *handler) handleQuery(w http.ResponseWriter, r *http.Request) {
 		SkipHostKeyCheck: h.skipHostKeyCheck,
 		UnsafeAllowWrite: false,
 	})
+
+	// Record stats
+	h.recordWebStats("query", req.Profile, xe == nil, time.Since(start), xe, req.SQL)
+
 	if xe != nil {
 		writeError(w, statusCodeFor(xe.Code), xe)
 		return
@@ -429,6 +438,28 @@ func mustJSON(v any) string {
 		return "{}"
 	}
 	return string(b)
+}
+
+// recordWebStats records a web query to the stats store.
+func (h *handler) recordWebStats(cmd, profile string, ok bool, duration time.Duration, xe *errors.XError, sql string) {
+	if !h.stats.Enabled {
+		return
+	}
+	store := stats.NewStore(h.stats.FilePath)
+	r := &stats.Record{
+		Timestamp:  time.Now(),
+		Cmd:        cmd,
+		Profile:    profile,
+		OK:         ok,
+		DurationMs: duration.Milliseconds(),
+	}
+	if xe != nil {
+		r.ErrorCode = string(xe.Code)
+	}
+	if h.stats.LogSQL && sql != "" {
+		r.SQL = sql
+	}
+	_ = store.Append(r)
 }
 
 // IsLoopbackAddr reports whether the listen address is bound only to loopback.

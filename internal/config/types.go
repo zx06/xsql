@@ -1,5 +1,7 @@
 package config
 
+import "github.com/zx06/xsql/internal/stats"
+
 // File represents the xsql.yaml configuration structure.
 // Constraint: config priority is CLI > ENV > Config.
 type File struct {
@@ -7,6 +9,7 @@ type File struct {
 	Profiles   map[string]Profile  `yaml:"profiles" json:"profiles"`
 	MCP        MCPConfig           `yaml:"mcp" json:"mcp"`
 	Web        WebConfig           `yaml:"web" json:"web"`
+	Stats      stats.StatsConfig   `yaml:"stats" json:"stats"`
 }
 
 // SSHProxy defines a reusable SSH proxy configuration.

@@ -548,3 +548,99 @@ xsql mcp server --transport streamable_http --http-addr 127.0.0.1:8787 --http-au
 
 ## 参数来源优先级
 - CLI > ENV > Config
+
+### `xsql stats`
+
+显示使用统计。
+
+```bash
+# 聚合报告
+xsql stats
+
+# 按 profile 过滤
+xsql stats --profile prod-mysql
+
+# JSON 输出
+xsql stats --json
+
+# 明细查询
+xsql stats log --limit 100
+
+# 重置统计
+xsql stats reset
+```
+
+**Flags:**
+| Flag | 默认值 | 说明 |
+|------|--------|------|
+| `--profile` | - | 按 profile 过滤 |
+| `--json` | false | 输出 JSON 格式 |
+
+**输出示例（Table）：**
+```
+cmd      profile     attrs                    ok    fail   avg_ms
+------   ------      -----                    --    ----   ------
+query    prod-mysql  env=prod,team=ai         10    2      145
+query    dev-mysql   env=dev,team=ai          5     0      89
+schema   prod-mysql  env=prod                 3     0      210
+
+(3 aggregated records)
+```
+
+**输出示例（JSON）：**
+```json
+{
+  "ok": true,
+  "schema_version": 1,
+  "data": {
+    "records": [
+      {
+        "cmd": "query",
+        "profile": "prod-mysql",
+        "attrs": {"env": "prod", "team": "ai"},
+        "ok": 10,
+        "fail": 2,
+        "avg_ms": 145
+      }
+    ]
+  }
+}
+```
+
+### `xsql stats log`
+
+显示详细统计日志。
+
+**Flags:**
+| Flag | 默认值 | 说明 |
+|------|--------|------|
+| `--profile` | - | 按 profile 过滤 |
+| `--json` | false | 输出 JSON 格式 |
+| `--limit` | 100 | 最大记录数 |
+
+### `xsql stats reset`
+
+重置统计数据。
+
+## 全局 `--attr` flag
+
+在执行命令时标记自定义属性，用于按维度统计。
+
+```bash
+# 单个属性
+xsql query "SELECT * FROM users" -p prod --attr env=prod
+
+# 多个属性
+xsql query "SELECT * FROM users" -p prod --attr env=prod --attr team=ai
+
+# 通过 ENV 传递
+export XSQL_ATTR='env=prod,team=ai'
+xsql query "SELECT * FROM users" -p prod
+```
+
+**属性规则：**
+- 格式：`key=value`
+- key 只支持 `[a-zA-Z0-9_-]`
+- CLI `--attr` 可重复使用
+- ENV `XSQL_ATTR` 用逗号分隔
+- CLI 优先级高于 ENV

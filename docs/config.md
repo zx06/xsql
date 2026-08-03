@@ -32,6 +32,12 @@ ssh_proxies:
 
 ```yaml
 # xsql.yaml
+stats:
+  enabled: true
+  log_sql: false
+  file_path: ~/.config/xsql/stats.jsonl
+  retention_days: 30
+
 mcp:
   transport: streamable_http
   http:
@@ -149,6 +155,15 @@ profiles:
 | `ssh_proxy` | string | SSH 代理名称（引用 `ssh_proxies` 中定义的名称） |
 | `query_timeout` | int | 查询超时秒数（默认 30 秒） |
 | `schema_timeout` | int | Schema 导出超时秒数（默认 60 秒） |
+
+## Stats 配置项
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `enabled` | bool | 是否启用使用统计（默认 false） |
+| `log_sql` | bool | 是否记录 SQL 内容（默认 false，审计场景可开启） |
+| `file_path` | string | 统计文件路径（默认 `~/.config/xsql/stats.jsonl`） |
+| `retention_days` | int | 自动清理旧记录的天数（默认 0，不清理） |
 
 ## CLI Timeout Flags
 

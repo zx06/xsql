@@ -65,7 +65,7 @@ func runMCPServer(opts *mcpServerOptions) error {
 	}
 
 	// Create MCP server using official SDK
-	server, err := mcp_pkg.CreateServer(version, &cfg)
+	server, err := mcp_pkg.CreateServer(version, &cfg, GlobalConfig.Stats)
 	if err != nil {
 		// Convert SDK error to XError if needed
 		if xe, ok := err.(*errors.XError); ok {

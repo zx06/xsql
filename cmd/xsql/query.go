@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/zx06/xsql/internal/app"
+	"github.com/zx06/xsql/internal/errors"
 	"github.com/zx06/xsql/internal/output"
 )
 
@@ -56,6 +57,7 @@ func runQuery(args []string, flags *QueryFlags, w *output.Writer) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
+	start := time.Now()
 	result, xe := app.Query(ctx, app.QueryRequest{
 		Profile:          p,
 		SQL:              sql,
@@ -63,6 +65,15 @@ func runQuery(args []string, flags *QueryFlags, w *output.Writer) error {
 		SkipHostKeyCheck: flags.SSHSkipHostKey,
 		UnsafeAllowWrite: flags.UnsafeAllowWrite || p.UnsafeAllowWrite,
 	})
+
+	// Record stats
+	duration := time.Since(start)
+	var errCode errors.Code
+	if xe != nil {
+		errCode = xe.Code
+	}
+	recordCmdStats("query", GlobalConfig.ProfileStr, xe == nil, duration, errCode, sql)
+
 	if xe != nil {
 		return xe
 	}

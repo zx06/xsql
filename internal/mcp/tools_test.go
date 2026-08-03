@@ -9,6 +9,7 @@ import (
 
 	"github.com/zx06/xsql/internal/config"
 	"github.com/zx06/xsql/internal/errors"
+	"github.com/zx06/xsql/internal/stats"
 )
 
 func TestCreateServer(t *testing.T) {
@@ -23,7 +24,7 @@ func TestCreateServer(t *testing.T) {
 		},
 	}
 
-	server, err := CreateServer("test", cfg)
+	server, err := CreateServer("test", cfg, stats.StatsConfig{})
 	if err != nil {
 		t.Fatalf("CreateServer failed: %v", err)
 	}
@@ -49,7 +50,7 @@ func TestNewToolHandler(t *testing.T) {
 		},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 	if handler == nil {
 		t.Fatal("handler is nil")
 	}
@@ -77,7 +78,7 @@ func TestGetProfile_Default(t *testing.T) {
 		},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	// Get default profile (empty name)
 	profile := handler.getProfile("")
@@ -105,7 +106,7 @@ func TestGetProfile_ByName(t *testing.T) {
 		},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	// Get dev profile
 	profile := handler.getProfile("dev")
@@ -141,7 +142,7 @@ func TestGetProfile_NotFound(t *testing.T) {
 		},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	// Get non-existent profile
 	profile := handler.getProfile("nonexistent")
@@ -155,7 +156,7 @@ func TestGetProfile_EmptyProfiles(t *testing.T) {
 		Profiles: map[string]config.Profile{},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	// Get default profile with empty config
 	profile := handler.getProfile("")
@@ -169,7 +170,7 @@ func TestFormatError(t *testing.T) {
 		Profiles: map[string]config.Profile{},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	// Test formatError with nil error (should handle gracefully)
 	err := handler.formatError(nil)
@@ -201,7 +202,7 @@ func TestProfileList(t *testing.T) {
 		},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	// Create a mock request
 	req := &mcp.CallToolRequest{}
@@ -231,7 +232,7 @@ func TestQuery_SSHProxyMissing(t *testing.T) {
 		},
 		SSHProxies: map[string]config.SSHProxy{},
 	}
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	result, _, err := handler.Query(context.Background(), &mcp.CallToolRequest{}, QueryInput{SQL: "select 1", Profile: "dev"})
 	if err != nil {
@@ -261,7 +262,7 @@ func TestProfileShow_RedactsSensitiveFields(t *testing.T) {
 			},
 		},
 	}
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	result, _, err := handler.ProfileShow(context.Background(), &mcp.CallToolRequest{}, ProfileShowInput{Name: "dev"})
 	if err != nil {
@@ -291,7 +292,7 @@ func TestProfileList_Output(t *testing.T) {
 			"prod": {DB: "pg", UnsafeAllowWrite: true},
 		},
 	}
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	result, _, err := handler.ProfileList(context.Background(), &mcp.CallToolRequest{}, struct{}{})
 	if err != nil {
@@ -317,7 +318,7 @@ func TestProfileShow_ProfileNotFound(t *testing.T) {
 		},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	// Test with non-existent profile
 	result, _, err := handler.ProfileShow(context.TODO(), &mcp.CallToolRequest{}, ProfileShowInput{Name: "nonexistent"})
@@ -339,7 +340,7 @@ func TestQuery_MissingSQL(t *testing.T) {
 		},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	// Test with missing SQL parameter
 	result, _, err := handler.Query(context.TODO(), &mcp.CallToolRequest{}, QueryInput{Profile: "dev"})
@@ -361,7 +362,7 @@ func TestQuery_MissingProfile(t *testing.T) {
 		},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	// Test with missing profile parameter
 	result, _, err := handler.Query(context.TODO(), &mcp.CallToolRequest{}, QueryInput{SQL: "SELECT 1"})
@@ -383,7 +384,7 @@ func TestQuery_ProfileNotFound(t *testing.T) {
 		},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	result, _, err := handler.Query(context.TODO(), &mcp.CallToolRequest{}, QueryInput{
 		SQL:     "SELECT 1",
@@ -407,7 +408,7 @@ func TestQuery_MissingDBType(t *testing.T) {
 		},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	result, _, err := handler.Query(context.TODO(), &mcp.CallToolRequest{}, QueryInput{
 		SQL:     "SELECT 1",
@@ -431,7 +432,7 @@ func TestQuery_UnsupportedDBType(t *testing.T) {
 		},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	result, _, err := handler.Query(context.TODO(), &mcp.CallToolRequest{}, QueryInput{
 		SQL:     "SELECT 1",
@@ -456,7 +457,7 @@ func TestQuery_InvalidPasswordFormat(t *testing.T) {
 		},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	result, _, err := handler.Query(context.TODO(), &mcp.CallToolRequest{}, QueryInput{
 		SQL:     "SELECT 1",
@@ -486,7 +487,7 @@ func TestQuery_WithSSHConfig(t *testing.T) {
 		},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	result, _, err := handler.Query(context.TODO(), &mcp.CallToolRequest{}, QueryInput{
 		SQL:     "SELECT 1",
@@ -517,7 +518,7 @@ func TestQuery_WithSSHInvalidPassphrase(t *testing.T) {
 		},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	result, _, err := handler.Query(context.TODO(), &mcp.CallToolRequest{}, QueryInput{
 		SQL:     "SELECT 1",
@@ -555,7 +556,7 @@ func TestProfileShow_WithSSHProxy(t *testing.T) {
 		},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	result, _, err := handler.ProfileShow(context.TODO(), &mcp.CallToolRequest{}, ProfileShowInput{Name: "dev"})
 	if err != nil {
@@ -582,7 +583,7 @@ func TestProfileShow_WithDSN(t *testing.T) {
 		},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	result, _, err := handler.ProfileShow(context.TODO(), &mcp.CallToolRequest{}, ProfileShowInput{Name: "dev"})
 	if err != nil {
@@ -610,7 +611,7 @@ func TestProfileShow_WithPassword(t *testing.T) {
 		},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	result, _, err := handler.ProfileShow(context.TODO(), &mcp.CallToolRequest{}, ProfileShowInput{Name: "dev"})
 	if err != nil {
@@ -649,7 +650,7 @@ func TestProfileList_WithReadWriteProfile(t *testing.T) {
 		},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	result, _, err := handler.ProfileList(context.TODO(), &mcp.CallToolRequest{}, struct{}{})
 	if err != nil {
@@ -675,7 +676,7 @@ func TestFormatError_WithXError(t *testing.T) {
 		Profiles: map[string]config.Profile{},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	// Test with a specific XError
 	err := errors.New(errors.CodeCfgInvalid, "test error", map[string]interface{}{"key": "value"})
@@ -698,7 +699,7 @@ func TestFormatError_WithGenericError(t *testing.T) {
 		Profiles: map[string]config.Profile{},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	// Test with a generic error (non-XError)
 	genericErr := &customError{msg: "something went wrong"}
@@ -734,7 +735,7 @@ func TestRegisterTools(t *testing.T) {
 		},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	// Create a mock server
 	server := mcp.NewServer(&mcp.Implementation{
@@ -768,7 +769,7 @@ func TestQuery_AllFields(t *testing.T) {
 		},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	// Test with all fields populated
 	// This test requires actual database connection or mocking
@@ -808,7 +809,7 @@ func TestQueryHandler_InvalidJSON(t *testing.T) {
 			"dev": {DB: "mysql"},
 		},
 	}
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	req := &mcp.CallToolRequest{
 		Params: &mcp.CallToolParamsRaw{
@@ -838,7 +839,7 @@ func TestProfileShowHandler_InvalidJSON(t *testing.T) {
 			"dev": {DB: "mysql"},
 		},
 	}
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	req := &mcp.CallToolRequest{
 		Params: &mcp.CallToolParamsRaw{
@@ -872,7 +873,7 @@ func TestGetProfile_ResolvesSSHProxy(t *testing.T) {
 		},
 	}
 
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 	profile := handler.getProfile("dev")
 	if profile == nil {
 		t.Fatal("expected non-nil profile")
@@ -889,7 +890,7 @@ func TestProfileList_EmptyProfiles(t *testing.T) {
 	cfg := &config.File{
 		Profiles: map[string]config.Profile{},
 	}
-	handler := NewToolHandler(cfg)
+	handler := NewToolHandler(cfg, stats.StatsConfig{})
 
 	result, _, err := handler.ProfileList(context.Background(), &mcp.CallToolRequest{}, struct{}{})
 	if err != nil {
