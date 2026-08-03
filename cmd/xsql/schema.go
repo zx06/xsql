@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/zx06/xsql/internal/app"
+	"github.com/zx06/xsql/internal/errors"
 	"github.com/zx06/xsql/internal/output"
 )
 
@@ -69,6 +70,7 @@ func runSchemaDump(flags *SchemaFlags, w *output.Writer) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
+	start := time.Now()
 	result, xe := app.DumpSchema(ctx, app.SchemaDumpRequest{
 		Profile:          p,
 		TablePattern:     flags.TablePattern,
@@ -76,6 +78,15 @@ func runSchemaDump(flags *SchemaFlags, w *output.Writer) error {
 		AllowPlaintext:   flags.AllowPlaintext,
 		SkipHostKeyCheck: flags.SSHSkipHostKey,
 	})
+
+	// Record stats
+	duration := time.Since(start)
+	var errCode errors.Code
+	if xe != nil {
+		errCode = xe.Code
+	}
+	recordCmdStats("schema dump", GlobalConfig.ProfileStr, xe == nil, duration, errCode, "")
+
 	if xe != nil {
 		return xe
 	}

@@ -10,6 +10,9 @@
 - `XSQL_MCP_HTTP_AUTH_TOKEN`：Streamable HTTP 鉴权 token
 - `XSQL_WEB_HTTP_ADDR`：Web 服务监听地址
 - `XSQL_WEB_HTTP_AUTH_TOKEN`：Web 鉴权 token
+- `XSQL_STATS_ENABLED`：是否启用使用统计（`true`/`false`）
+- `XSQL_STATS_LOG_SQL`：是否记录 SQL 内容（`true`/`false`）
+- `XSQL_ATTR`：统计属性（格式：`key1=val1,key2=val2`）
 
 ## 2. 连接参数（计划中，当前未实现）
 > 当前版本连接参数通过 config 文件的 profile 配置，ENV 支持计划在后续版本实现。

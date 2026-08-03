@@ -8,13 +8,14 @@ import (
 
 	"github.com/zx06/xsql/internal/config"
 	"github.com/zx06/xsql/internal/errors"
+	"github.com/zx06/xsql/internal/stats"
 )
 
 func TestStreamableHTTPAuthRequired(t *testing.T) {
 	server, err := CreateServer("test", &config.File{
 		Profiles:   map[string]config.Profile{},
 		SSHProxies: map[string]config.SSHProxy{},
-	})
+	}, stats.StatsConfig{})
 	if err != nil {
 		t.Fatalf("CreateServer error: %v", err)
 	}
@@ -77,7 +78,7 @@ func TestNewStreamableHTTPHandler_Validation(t *testing.T) {
 	server, err := CreateServer("test", &config.File{
 		Profiles:   map[string]config.Profile{},
 		SSHProxies: map[string]config.SSHProxy{},
-	})
+	}, stats.StatsConfig{})
 	if err != nil {
 		t.Fatalf("CreateServer error: %v", err)
 	}
