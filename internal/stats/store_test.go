@@ -209,3 +209,95 @@ func TestDefaultFilePath(t *testing.T) {
 		t.Errorf("expected .jsonl extension, got %s", filepath.Ext(path))
 	}
 }
+
+func TestNewStore_EmptyPath(t *testing.T) {
+	store := NewStore("")
+	if store.path == "" {
+		t.Error("expected default path when empty")
+	}
+	if filepath.Ext(store.path) != ".jsonl" {
+		t.Errorf("expected .jsonl extension, got %s", filepath.Ext(store.path))
+	}
+}
+
+func TestStore_Load_CorruptedLines(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "stats.jsonl")
+
+	// Write corrupted JSON lines
+	content := "not json\n{\"valid\": true}\n{broken json\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	store := NewStore(path)
+	records, err := store.Load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	// Should skip corrupted lines and load valid ones
+	if len(records) != 1 {
+		t.Errorf("expected 1 valid record, got %d", len(records))
+	}
+}
+
+func TestStore_Cleanup_NoOldRecords(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "stats.jsonl")
+	store := NewStore(path)
+
+	now := time.Now()
+	recent := &Record{Timestamp: now, Cmd: "query", Profile: "dev", OK: true, DurationMs: 100}
+	_ = store.Append(recent)
+
+	// All records are recent, nothing should be removed
+	removed, err := store.Cleanup(30)
+	if err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+	if removed != 0 {
+		t.Fatalf("expected 0 removed, got %d", removed)
+	}
+}
+
+func TestStore_Cleanup_AllOld(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "stats.jsonl")
+	store := NewStore(path)
+
+	now := time.Now()
+	old1 := &Record{Timestamp: now.AddDate(0, 0, -60), Cmd: "query", Profile: "dev", OK: true, DurationMs: 100}
+	old2 := &Record{Timestamp: now.AddDate(0, 0, -45), Cmd: "query", Profile: "dev", OK: true, DurationMs: 100}
+	_ = store.Append(old1)
+	_ = store.Append(old2)
+
+	removed, err := store.Cleanup(30)
+	if err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+	if removed != 2 {
+		t.Fatalf("expected 2 removed, got %d", removed)
+	}
+
+	records, err := store.Load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(records) != 0 {
+		t.Fatalf("expected 0 records after cleanup, got %d", len(records))
+	}
+}
+
+func TestStore_Append_MkdirError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping permission test on Windows")
+	}
+
+	// Try to write to a path where parent dir doesn't exist and can't be created
+	store := NewStore("/nonexistent/root/stats.jsonl")
+	r := &Record{Timestamp: time.Now(), Cmd: "query", Profile: "dev", OK: true, DurationMs: 100}
+	err := store.Append(r)
+	if err == nil {
+		t.Error("expected error for invalid path")
+	}
+}
