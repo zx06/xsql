@@ -105,3 +105,19 @@ xsql web
 ```
 
 Web UI 复用 xsql 的 profile、SSH、只读策略和结构化错误契约，但其 HTTP API 面向浏览器，不等同于 MCP 协议。
+
+## AI TUI 交互模式 (xsql-ai)
+xsql 提供了交互式 AI 终端模式 `xsql-ai`（也可通过 `xsql ai` 运行）。用户只需在终端以自然语言发问，AI 结合当前数据库 Schema 结构自动构建对应的 SQL 查询，并在 TUI 中提供交互预览与安全执行：
+
+```bash
+# 启动交互式 TUI
+xsql-ai --profile dev
+xsql ai --profile dev
+```
+
+### 快捷键操作
+- `Enter`: 提交自然语言需求给 AI
+- `Ctrl+E`: 确认并安全执行当前生成预览的 SQL
+- `Ctrl+R`: 切换到 SQL 文本手工微调模式
+- `Esc` / `Ctrl+C`: 退出 AI 模式
+
