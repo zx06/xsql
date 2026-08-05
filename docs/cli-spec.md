@@ -546,20 +546,18 @@ xsql mcp server --transport streamable_http --http-addr 127.0.0.1:8787 --http-au
 - 写操作需要显式设置 `unsafe_allow_write: true`
 - Streamable HTTP 传输要求鉴权，请在请求中提供 `Authorization: Bearer <token>` 头
 
-### `xsql ai` / `xsql-ai`
+### `xsql-ai` 独立程序
 
-启动交互式 AI 终端模式（TUI）或单次 AI SQL 查询能力。通过自然语言与 AI 对话，由 AI 基于当前数据库的 Schema 结构自动构建 SQL 查询，并在终端进行可视化预览与安全执行。
+`xsql-ai` 为独立的 CLI 可执行程序，提供类似 Chatbot 的交互终端（TUI）。通过自然语言与 AI 对话，由 AI 基于当前数据库的 Schema 结构自动构建 SQL 查询，并在终端进行可视化预览与安全执行。
 
 ```bash
 # 启动交互式 TUI 模式
-xsql ai --profile dev
-# 或者使用独立二进制程序
 xsql-ai --profile dev
 
 # 指定 AI 模型和服务地址
 xsql-ai --profile dev --model deepseek-coder --base-url https://api.deepseek.com/v1
 
-# 单次自然语言提问模式
+# 启动并直接传入初始 Prompt 自动分析执行
 xsql-ai --profile dev "查一下近7天注册的用户数量"
 ```
 
