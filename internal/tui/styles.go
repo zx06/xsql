@@ -10,6 +10,7 @@ var (
 	WarningColor   = lipgloss.Color("#FF9E3B")
 	ErrorColor     = lipgloss.Color("#FF5370")
 	MutedColor     = lipgloss.Color("#565F89")
+	CyanColor      = lipgloss.Color("#7AA2F7")
 	BgDark         = lipgloss.Color("#1A1B26")
 
 	// Header Styles
@@ -18,10 +19,6 @@ var (
 			Foreground(lipgloss.Color("#FFFFFF")).
 			Background(PrimaryColor).
 			Padding(0, 1)
-
-	SubHeaderStyle = lipgloss.NewStyle().
-			Foreground(SecondaryColor).
-			Bold(true)
 
 	BadgeReadOnly = lipgloss.NewStyle().
 			Bold(true).
@@ -39,6 +36,7 @@ var (
 	SQLBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(PrimaryColor).
+			Background(lipgloss.Color("#1F2335")).
 			Padding(0, 1).
 			MarginTop(1).
 			MarginBottom(1)
@@ -47,19 +45,44 @@ var (
 			Bold(true).
 			Foreground(AccentColor)
 
+	SQLCodeStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#7AA2F7"))
+
 	// Help / Footer
 	HelpStyle = lipgloss.NewStyle().
-			Foreground(MutedColor)
+			Foreground(MutedColor).
+			MarginTop(1)
 
 	// Chat Messages
-	UserPromptStyle = lipgloss.NewStyle().
+	UserTagStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(SecondaryColor)
+			Foreground(lipgloss.Color("#1A1B26")).
+			Background(SecondaryColor).
+			Padding(0, 1)
+
+	AITagStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#FFFFFF")).
+			Background(PrimaryColor).
+			Padding(0, 1)
+
+	ExecutingTagStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("#1A1B26")).
+				Background(WarningColor).
+				Padding(0, 1)
+
+	SuccessBadgeStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(SecondaryColor)
 
 	AIResponseStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#C0CAF5"))
+			Foreground(lipgloss.Color("#C0CAF5")).
+			PaddingLeft(1)
 
 	ErrorMsgStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(ErrorColor)
+			Foreground(ErrorColor).
+			PaddingLeft(1)
 )

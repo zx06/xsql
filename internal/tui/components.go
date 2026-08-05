@@ -4,55 +4,81 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
+
 	"github.com/zx06/xsql/internal/db"
 )
 
+var (
+	TableHeaderStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("#7D56F4")).
+				Padding(0, 1)
+
+	TableCellStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#C0CAF5")).
+			Padding(0, 1)
+
+	TableNilStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#565F89")).
+			Italic(true).
+			Padding(0, 1)
+
+	TableBorderStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#3B4261"))
+)
+
+// FormatTableResult renders a beautiful terminal box table for SQL query results.
 func FormatTableResult(result *db.QueryResult) string {
 	if result == nil || len(result.Columns) == 0 {
-		return "(No data returned)"
+		return lipgloss.NewStyle().Foreground(MutedColor).Italic(true).Render("(No columns or empty dataset returned)")
 	}
 
-	var sb strings.Builder
-	widths := make([]int, len(result.Columns))
-	for i, col := range result.Columns {
-		widths[i] = len(col)
+	if len(result.Rows) == 0 {
+		return lipgloss.NewStyle().Foreground(MutedColor).Italic(true).Render("(0 rows returned)")
 	}
 
-	for _, row := range result.Rows {
-		for i, col := range result.Columns {
-			val := fmt.Sprintf("%v", row[col])
-			if len(val) > widths[i] {
-				widths[i] = len(val)
-			}
+	t := table.New().
+		Border(lipgloss.RoundedBorder()).
+		BorderStyle(TableBorderStyle).
+		Headers(result.Columns...)
+
+	// Configure header styling
+	t.StyleFunc(func(row, col int) lipgloss.Style {
+		if row == table.HeaderRow {
+			return TableHeaderStyle
 		}
-	}
+		return TableCellStyle
+	})
 
-	// Print Headers
-	var headerRow []string
-	var lineRow []string
-	for i, col := range result.Columns {
-		headerRow = append(headerRow, fmt.Sprintf("%-*s", widths[i], col))
-		lineRow = append(lineRow, strings.Repeat("-", widths[i]))
-	}
-	sb.WriteString(strings.Join(headerRow, "  ") + "\n")
-	sb.WriteString(strings.Join(lineRow, "  ") + "\n")
-
-	// Print Rows (up to 50 rows)
+	// Add data rows (limit to 50 rows for viewport cleanliness)
 	maxRows := len(result.Rows)
 	if maxRows > 50 {
 		maxRows = 50
 	}
+
 	for i := 0; i < maxRows; i++ {
 		var rowValues []string
-		for j, col := range result.Columns {
-			val := fmt.Sprintf("%v", result.Rows[i][col])
-			rowValues = append(rowValues, fmt.Sprintf("%-*s", widths[j], val))
+		for _, col := range result.Columns {
+			val := result.Rows[i][col]
+			if val == nil {
+				rowValues = append(rowValues, TableNilStyle.Render("NULL"))
+			} else {
+				valStr := fmt.Sprintf("%v", val)
+				// Clean formatting for time string or long text
+				rowValues = append(rowValues, valStr)
+			}
 		}
-		sb.WriteString(strings.Join(rowValues, "  ") + "\n")
+		t.Row(rowValues...)
 	}
 
+	var sb strings.Builder
+	sb.WriteString(t.Render())
+
 	if len(result.Rows) > 50 {
-		sb.WriteString(fmt.Sprintf("\n... and %d more rows\n", len(result.Rows)-50))
+		moreStr := fmt.Sprintf("\n... and %d more rows (truncated for performance)", len(result.Rows)-50)
+		sb.WriteString(lipgloss.NewStyle().Foreground(MutedColor).Italic(true).Render(moreStr))
 	}
 
 	return sb.String()

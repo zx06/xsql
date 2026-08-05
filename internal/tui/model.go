@@ -56,7 +56,6 @@ type Model struct {
 	currentSQL  string
 	explanation string
 	messages    []string
-	err         error
 
 	textarea textarea.Model
 	viewport viewport.Model
@@ -69,11 +68,11 @@ type Model struct {
 
 func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Service, initialPrompt string, unsafeAllowWrite bool) Model {
 	ta := textarea.New()
-	ta.Placeholder = "Ask AI to generate a SQL query (e.g. 'Show top 10 users')..."
+	ta.Placeholder = "Ask AI to write a SQL query (e.g. 'Show top 10 users')..."
 	ta.Focus()
 	ta.CharLimit = 1000
 	ta.SetWidth(80)
-	ta.SetHeight(3)
+	ta.SetHeight(2)
 
 	vp := viewport.New(80, 15)
 
@@ -169,25 +168,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.currentSQL = msg.response.SQL
 			m.explanation = msg.response.Explanation
-			m.messages = append(m.messages, AIResponseStyle.Render("AI: "+msg.response.Explanation))
+			
+			aiMsg := AITagStyle.Render("🤖 AI") + " " + AIResponseStyle.Render(msg.response.Explanation)
+			m.messages = append(m.messages, aiMsg)
+			
 			if msg.response.SQL != "" {
 				m.state = StateSQLReady
 			} else {
 				m.state = StateIdle
 			}
 		}
-		m.viewport.SetContent(strings.Join(m.messages, "\n"))
+		m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 		m.viewport.GotoBottom()
 
 	case queryExecutedMsg:
 		if msg.err != nil {
 			m.messages = append(m.messages, ErrorMsgStyle.Render(fmt.Sprintf("SQL Exec Error [%s]: %s", msg.err.Code, msg.err.Message)))
 		} else if msg.result != nil {
-			m.messages = append(m.messages, SubHeaderStyle.Render(fmt.Sprintf("Execution Success (%d rows returned):", len(msg.result.Rows))))
+			statusLine := SuccessBadgeStyle.Render(fmt.Sprintf("✓ Execution Success (%d rows returned)", len(msg.result.Rows)))
+			m.messages = append(m.messages, statusLine)
 			m.messages = append(m.messages, FormatTableResult(msg.result))
 		}
 		m.state = StateIdle
-		m.viewport.SetContent(strings.Join(m.messages, "\n"))
+		m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 		m.viewport.GotoBottom()
 
 	case spinner.TickMsg:
@@ -203,8 +206,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlE: // Execute current SQL
 			if m.state == StateSQLReady && m.currentSQL != "" {
 				m.state = StateExecuting
-				m.messages = append(m.messages, SubHeaderStyle.Render("Executing: ")+m.currentSQL)
-				m.viewport.SetContent(strings.Join(m.messages, "\n"))
+				execLine := ExecutingTagStyle.Render("⚡ Executing") + " " + SQLCodeStyle.Render(m.currentSQL)
+				m.messages = append(m.messages, execLine)
+				m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 				m.viewport.GotoBottom()
 				return m, m.executeSQLCmd(m.currentSQL)
 			}
@@ -227,10 +231,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			prompt := strings.TrimSpace(m.textarea.Value())
 			if prompt != "" && (m.state == StateIdle || m.state == StateSQLReady) {
-				m.messages = append(m.messages, UserPromptStyle.Render("You: ")+prompt)
+				userLine := UserTagStyle.Render("👤 YOU") + " " + prompt
+				m.messages = append(m.messages, userLine)
 				m.textarea.Reset()
 				m.state = StateThinking
-				m.viewport.SetContent(strings.Join(m.messages, "\n"))
+				m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 				m.viewport.GotoBottom()
 				return m, m.generateSQLCmd(prompt)
 			}
@@ -253,7 +258,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	var sb strings.Builder
 
-	// 1. Header
+	// 1. Header Bar
 	modeBadge := BadgeReadOnly.Render("READ-ONLY")
 	if m.unsafeAllowWrite {
 		modeBadge = BadgeReadWrite.Render("READ-WRITE")
@@ -264,26 +269,26 @@ func (m Model) View() string {
 	// 2. Main Viewport (Messages & Results)
 	sb.WriteString(m.viewport.View() + "\n\n")
 
-	// 3. State & SQL Preview Box
+	// 3. State Status & SQL Preview Card
 	switch m.state {
 	case StateLoadingSchema:
 		sb.WriteString(m.spinner.View() + " Loading database schema...\n")
 	case StateThinking:
-		sb.WriteString(m.spinner.View() + " AI is generating SQL...\n")
+		sb.WriteString(m.spinner.View() + " AI is analyzing schema and generating SQL...\n")
 	case StateExecuting:
 		sb.WriteString(m.spinner.View() + " Executing SQL query...\n")
 	case StateSQLReady:
-		sqlContent := m.currentSQL
-		if sqlContent == "" {
-			sqlContent = "(No SQL generated)"
+		sqlContent := SQLCodeStyle.Render(m.currentSQL)
+		if m.currentSQL == "" {
+			sqlContent = lipgloss.NewStyle().Foreground(MutedColor).Italic(true).Render("(No SQL generated)")
 		}
-		preview := fmt.Sprintf("%s\n%s", SQLTitleStyle.Render("SQL Preview (Press Ctrl+E to Execute, Ctrl+R to Edit):"), sqlContent)
+		preview := fmt.Sprintf("%s\n%s", SQLTitleStyle.Render("✨ SQL Preview (Press Ctrl+E to Execute, Ctrl+R to Edit):"), sqlContent)
 		sb.WriteString(SQLBoxStyle.Width(m.width - 4).Render(preview) + "\n")
 	}
 
-	// 4. Input Area & Footer
+	// 4. Input Area & Footer Hints
 	if m.editingSQL {
-		sb.WriteString(SubHeaderStyle.Render("Edit SQL (Press Enter to Save):") + "\n")
+		sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(AccentColor).Render("✏️  Edit SQL (Press Enter to Apply Changes):") + "\n")
 	}
 	sb.WriteString(m.textarea.View() + "\n")
 
@@ -291,11 +296,4 @@ func (m Model) View() string {
 	sb.WriteString(HelpStyle.Render(help))
 
 	return sb.String()
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
