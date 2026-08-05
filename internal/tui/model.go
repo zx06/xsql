@@ -257,6 +257,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.renderLastResult()
 			}
 
+		case tea.KeyPgUp:
+			m.viewport.LineUp(6)
+			return m, nil
+
+		case tea.KeyPgDown:
+			m.viewport.LineDown(6)
+			return m, nil
+
+		case tea.KeyUp:
+			if !m.editingSQL {
+				m.viewport.LineUp(1)
+				return m, nil
+			}
+
+		case tea.KeyDown:
+			if !m.editingSQL {
+				m.viewport.LineDown(1)
+				return m, nil
+			}
+
 		case tea.KeyShiftTab: // Toggle Auto-Execute vs Manual-Approve mode
 			m.autoExecute = !m.autoExecute
 
@@ -363,7 +383,7 @@ func (m Model) View() string {
 	if m.autoExecute {
 		execModeHint = "AUTO"
 	}
-	help := fmt.Sprintf("Enter: Send | ←/→: Scroll Cols | Ctrl+E: Exec | Ctrl+R: Edit | Ctrl+V: Vertical View | Shift+Tab: Mode (%s) | Esc: Quit", execModeHint)
+	help := fmt.Sprintf("Enter: Send | ←/→: Cols | PgUp/PgDn: Scroll | Ctrl+E: Exec | Ctrl+R: Edit | Ctrl+V: Vertical | Shift+Tab: Mode (%s) | Esc: Quit", execModeHint)
 	sb.WriteString(HelpStyle.Render(help))
 
 	return sb.String()

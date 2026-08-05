@@ -148,10 +148,10 @@ func FormatTableResult(result *db.QueryResult, colOffset int, termWidth int) str
 		return TableCellStyle
 	})
 
-	// Add data rows (limit to 50 rows for viewport cleanliness)
+	// Add data rows (limit to 12 rows for optimal viewport visibility)
 	maxRows := len(result.Rows)
-	if maxRows > 50 {
-		maxRows = 50
+	if maxRows > 12 {
+		maxRows = 12
 	}
 
 	hasTruncatedCell := false
@@ -178,8 +178,8 @@ func FormatTableResult(result *db.QueryResult, colOffset int, termWidth int) str
 	sb.WriteString(t.Render())
 
 	var footerNotes []string
-	if len(result.Rows) > 50 {
-		footerNotes = append(footerNotes, fmt.Sprintf("... %d more rows", len(result.Rows)-50))
+	if len(result.Rows) > 12 {
+		footerNotes = append(footerNotes, fmt.Sprintf("showing 1-12 of %d rows (Press PgUp/PgDn to scroll, Ctrl+V for Full View)", len(result.Rows)))
 	}
 	if startCol > 0 || endCol < totalCols {
 		footerNotes = append(footerNotes, fmt.Sprintf("Showing cols %d-%d of %d (Use ←/→ keys to scroll columns)", startCol+1, endCol, totalCols))
