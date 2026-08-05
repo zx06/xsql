@@ -27,6 +27,17 @@ var (
 
 	TableBorderStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#3B4261"))
+
+	FieldKeyStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#7AA2F7"))
+
+	FieldValueStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#C0CAF5"))
+
+	RecordDividerStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(PrimaryColor)
 )
 
 const MaxColumnWidth = 28 // Max character width per cell to prevent border alignment breakage
@@ -101,12 +112,66 @@ func FormatTableResult(result *db.QueryResult) string {
 		footerNotes = append(footerNotes, fmt.Sprintf("... and %d more rows", len(result.Rows)-50))
 	}
 	if hasTruncatedCell {
-		footerNotes = append(footerNotes, "long text truncated with '...' for table alignment")
+		footerNotes = append(footerNotes, "long text truncated; press Ctrl+V for Full Vertical View")
 	}
 
 	if len(footerNotes) > 0 {
 		noteStr := "\n(" + strings.Join(footerNotes, " | ") + ")"
 		sb.WriteString(lipgloss.NewStyle().Foreground(MutedColor).Italic(true).Render(noteStr))
+	}
+
+	return sb.String()
+}
+
+// FormatVerticalResult renders SQL query results in full vertical (psql \x expanded) format with NO truncation.
+func FormatVerticalResult(result *db.QueryResult) string {
+	if result == nil || len(result.Columns) == 0 {
+		return lipgloss.NewStyle().Foreground(MutedColor).Italic(true).Render("(No columns or empty dataset returned)")
+	}
+
+	if len(result.Rows) == 0 {
+		return lipgloss.NewStyle().Foreground(MutedColor).Italic(true).Render("(0 rows returned)")
+	}
+
+	maxKeyLen := 0
+	for _, col := range result.Columns {
+		if len(col) > maxKeyLen {
+			maxKeyLen = len(col)
+		}
+	}
+
+	maxRows := len(result.Rows)
+	if maxRows > 50 {
+		maxRows = 50
+	}
+
+	var sb strings.Builder
+	for i := 0; i < maxRows; i++ {
+		divider := fmt.Sprintf("━ Record %d of %d ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", i+1, len(result.Rows))
+		sb.WriteString(RecordDividerStyle.Render(divider) + "\n")
+
+		for _, col := range result.Columns {
+			val := result.Rows[i][col]
+			keyStr := FieldKeyStyle.Render(fmt.Sprintf("%-*s", maxKeyLen, col))
+			
+			if val == nil {
+				sb.WriteString(fmt.Sprintf("  %s : %s\n", keyStr, TableNilStyle.Render("NULL")))
+			} else {
+				valStr := fmt.Sprintf("%v", val)
+				// Full display with indentation for multiline text
+				if strings.Contains(valStr, "\n") {
+					indented := strings.ReplaceAll(valStr, "\n", "\n    ")
+					sb.WriteString(fmt.Sprintf("  %s :\n    %s\n", keyStr, FieldValueStyle.Render(indented)))
+				} else {
+					sb.WriteString(fmt.Sprintf("  %s : %s\n", keyStr, FieldValueStyle.Render(valStr)))
+				}
+			}
+		}
+		sb.WriteString("\n")
+	}
+
+	if len(result.Rows) > 50 {
+		sb.WriteString(lipgloss.NewStyle().Foreground(MutedColor).Italic(true).Render(fmt.Sprintf("... and %d more rows truncated\n", len(result.Rows)-50)))
 	}
 
 	return sb.String()

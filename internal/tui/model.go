@@ -52,11 +52,13 @@ type Model struct {
 	unsafeAllowWrite bool
 	initialPrompt    string
 
-	state       State
-	schemaInfo  *db.SchemaInfo
-	currentSQL  string
-	explanation string
-	messages    []string
+	state        State
+	schemaInfo   *db.SchemaInfo
+	currentSQL   string
+	explanation  string
+	messages     []string
+	lastResult   *db.QueryResult
+	verticalView bool
 
 	textarea textarea.Model
 	viewport viewport.Model
@@ -193,9 +195,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.messages = append(m.messages, ErrorMsgStyle.Render(fmt.Sprintf("SQL Exec Error [%s]: %s", msg.err.Code, msg.err.Message)))
 		} else if msg.result != nil {
+			m.lastResult = msg.result
 			statusLine := SuccessBadgeStyle.Render(fmt.Sprintf("✓ Execution Success (%d rows returned)", len(msg.result.Rows)))
 			m.messages = append(m.messages, statusLine)
-			m.messages = append(m.messages, FormatTableResult(msg.result))
+			
+			formatted := FormatTableResult(msg.result)
+			if m.verticalView {
+				formatted = FormatVerticalResult(msg.result)
+			}
+			m.messages = append(m.messages, formatted)
 		}
 		m.state = StateIdle
 		m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
@@ -210,6 +218,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
 			return m, tea.Quit
+
+		case tea.KeyCtrlV: // Toggle Vertical (psql \x) full untruncated view
+			if m.lastResult != nil && len(m.messages) > 0 {
+				m.verticalView = !m.verticalView
+				formatted := FormatTableResult(m.lastResult)
+				if m.verticalView {
+					formatted = FormatVerticalResult(m.lastResult)
+				}
+				m.messages[len(m.messages)-1] = formatted
+				m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+				m.viewport.GotoBottom()
+			}
 
 		case tea.KeyCtrlE: // Execute current SQL
 			if m.state == StateSQLReady && m.currentSQL != "" {
@@ -300,7 +320,7 @@ func (m Model) View() string {
 	}
 	sb.WriteString(m.textarea.View() + "\n")
 
-	help := "Enter: Send Prompt | Ctrl+E: Execute SQL | Ctrl+R: Edit SQL | Esc/Ctrl+C: Quit"
+	help := "Enter: Send Prompt | Ctrl+E: Execute SQL | Ctrl+R: Edit SQL | Ctrl+V: Toggle Full Vertical View (\\x) | Esc: Quit"
 	sb.WriteString(HelpStyle.Render(help))
 
 	return sb.String()

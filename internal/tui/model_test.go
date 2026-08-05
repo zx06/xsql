@@ -110,6 +110,14 @@ func TestFormatTableResult(t *testing.T) {
 	if strings.Contains(formatted, "\n  \"key\"") {
 		t.Errorf("expected newlines inside cells to be sanitized, got:\n%s", formatted)
 	}
+
+	vertFormatted := FormatVerticalResult(res)
+	if !strings.Contains(vertFormatted, "Record 1 of 2") {
+		t.Errorf("expected vertical view header, got:\n%s", vertFormatted)
+	}
+	if !strings.Contains(vertFormatted, "very long value that exceeds column limit") {
+		t.Errorf("expected vertical view to display untruncated multiline text, got:\n%s", vertFormatted)
+	}
 }
 
 func TestTUI_Model_InitialPromptAutoExecute(t *testing.T) {
