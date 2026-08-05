@@ -271,13 +271,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.editingSQL {
 			switch msg.Type {
 			case tea.KeyEnter:
-				m.currentSQL = strings.TrimSpace(m.textarea.Value())
+				editedVal := strings.TrimSpace(m.textarea.Value())
+				if editedVal != "" {
+					m.currentSQL = editedVal
+				}
 				m.editingSQL = false
 				m.textarea.Reset()
+				m.textarea.Blur() // Blur textarea to avoid capturing next Enter key
+				m.state = StateSQLReady
 				return m, nil
+
 			case tea.KeyEsc:
 				m.editingSQL = false
 				m.textarea.Reset()
+				m.textarea.Focus()
 				return m, nil
 			}
 			var taCmd tea.Cmd
@@ -290,6 +297,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch {
 			case msg.Type == tea.KeyEnter: // Enter to Execute SQL
 				m.state = StateExecuting
+				m.textarea.Focus() // Restore focus for next prompt input
 				execLine := ExecutingTagStyle.Render("⚡ Executing") + " " + SQLCodeStyle.Render(m.currentSQL)
 				m.messages = append(m.messages, execLine)
 				m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
@@ -298,11 +306,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			case msg.String() == "e" || msg.String() == "E": // 'e' key to Edit SQL
 				m.editingSQL = true
+				m.textarea.Focus()
 				m.textarea.SetValue(m.currentSQL)
+				m.textarea.CursorEnd()
 				return m, nil
 
 			case msg.Type == tea.KeyEsc: // Esc to Cancel SQL preview
 				m.state = StateIdle
+				m.textarea.Focus()
 				return m, nil
 			}
 		}

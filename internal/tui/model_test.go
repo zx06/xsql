@@ -176,3 +176,48 @@ func TestTUI_Model_ShiftTabAutoExecuteToggle(t *testing.T) {
 		t.Fatal("expected non-nil executeSQLCmd for auto-execution")
 	}
 }
+
+func TestTUI_Model_EditSQLExecutionFlow(t *testing.T) {
+	resolved := config.Resolved{
+		ProfileName: "dev",
+		Profile:     config.Profile{DB: "mysql"},
+	}
+	aiService := ai.NewService(config.AIConfig{}, nil)
+	m := NewModel(config.Options{}, resolved, aiService, "", false)
+	m.state = StateSQLReady
+	m.currentSQL = "SELECT * FROM users LIMIT 10;"
+
+	// 1. Press 'e' -> enters editingSQL mode
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	m = updated.(Model)
+	if !m.editingSQL {
+		t.Fatal("expected editingSQL to be true after pressing 'e'")
+	}
+	if m.textarea.Value() != "SELECT * FROM users LIMIT 10;" {
+		t.Fatalf("expected textarea value to be populated, got %q", m.textarea.Value())
+	}
+
+	// 2. Modify textarea and press Enter -> applies change and exits editingSQL
+	m.textarea.SetValue("SELECT id, name FROM users LIMIT 5;")
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if m.editingSQL {
+		t.Fatal("expected editingSQL to be false after pressing Enter")
+	}
+	if m.currentSQL != "SELECT id, name FROM users LIMIT 5;" {
+		t.Fatalf("expected currentSQL to be updated, got %q", m.currentSQL)
+	}
+	if m.state != StateSQLReady {
+		t.Fatalf("expected state StateSQLReady after editing, got %v", m.state)
+	}
+
+	// 3. Press Enter in StateSQLReady -> transitions to StateExecuting with modified SQL
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if m.state != StateExecuting {
+		t.Fatalf("expected state StateExecuting after pressing Enter, got %v", m.state)
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil executeSQLCmd for executing modified SQL")
+	}
+}
