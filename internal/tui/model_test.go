@@ -105,3 +105,25 @@ func TestFormatTableResult(t *testing.T) {
 		t.Errorf("formatted table result missing row data:\n%s", formatted)
 	}
 }
+
+func TestTUI_Model_InitialPromptAutoExecute(t *testing.T) {
+	resolved := config.Resolved{
+		ProfileName: "dev",
+		Profile:     config.Profile{DB: "mysql"},
+	}
+	aiService := ai.NewService(config.AIConfig{}, nil)
+	m := NewModel(config.Options{}, resolved, aiService, "Show total users", false)
+
+	// When schemaLoadedMsg arrives, initialPrompt should automatically trigger StateThinking
+	updated, cmd := m.Update(schemaLoadedMsg{
+		schema: &db.SchemaInfo{Database: "testdb"},
+	})
+	m = updated.(Model)
+
+	if m.state != StateThinking {
+		t.Fatalf("expected state StateThinking when initialPrompt provided, got %v", m.state)
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil Cmd for generateSQLCmd from initial prompt")
+	}
+}

@@ -50,6 +50,7 @@ type Model struct {
 	profile          config.Profile
 	profileName      string
 	unsafeAllowWrite bool
+	initialPrompt    string
 
 	state       State
 	schemaInfo  *db.SchemaInfo
@@ -80,16 +81,13 @@ func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Servi
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(PrimaryColor)
 
-	if initialPrompt != "" {
-		ta.SetValue(initialPrompt)
-	}
-
 	return Model{
 		opts:             opts,
 		aiService:        aiService,
 		profile:          resolved.Profile,
 		profileName:      resolved.ProfileName,
 		unsafeAllowWrite: unsafeAllowWrite || resolved.Profile.UnsafeAllowWrite,
+		initialPrompt:    strings.TrimSpace(initialPrompt),
 		state:            StateLoadingSchema,
 		textarea:         ta,
 		viewport:         vp,
@@ -158,8 +156,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.schemaInfo = msg.schema
 		}
+		if m.initialPrompt != "" {
+			prompt := m.initialPrompt
+			m.initialPrompt = ""
+			userLine := UserTagStyle.Render("👤 YOU") + " " + prompt
+			m.messages = append(m.messages, userLine)
+			m.state = StateThinking
+			m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+			m.viewport.GotoBottom()
+			return m, m.generateSQLCmd(prompt)
+		}
 		m.state = StateIdle
-		m.viewport.SetContent(strings.Join(m.messages, "\n"))
+		m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 
 	case sqlGeneratedMsg:
 		if msg.err != nil {
