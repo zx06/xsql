@@ -93,16 +93,22 @@ func TestTUI_Model_StateTransitions(t *testing.T) {
 
 func TestFormatTableResult(t *testing.T) {
 	res := &db.QueryResult{
-		Columns: []string{"id", "username"},
+		Columns: []string{"id", "username", "extra_json"},
 		Rows: []map[string]any{
-			{"id": 1, "username": "admin"},
-			{"id": 2, "username": "guest"},
+			{"id": 1, "username": "admin", "extra_json": "{\n  \"key\": \"very long value that exceeds column limit\"\n}"},
+			{"id": 2, "username": "guest", "extra_json": nil},
 		},
 	}
 
 	formatted := FormatTableResult(res)
 	if !strings.Contains(formatted, "admin") || !strings.Contains(formatted, "guest") {
 		t.Errorf("formatted table result missing row data:\n%s", formatted)
+	}
+	if !strings.Contains(formatted, "NULL") {
+		t.Errorf("expected NULL representation for nil value, got:\n%s", formatted)
+	}
+	if strings.Contains(formatted, "\n  \"key\"") {
+		t.Errorf("expected newlines inside cells to be sanitized, got:\n%s", formatted)
 	}
 }
 
