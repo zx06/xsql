@@ -102,5 +102,40 @@ func Resolve(opts Options) (Resolved, *errors.XError) {
 		format = opts.CLIFormat
 	}
 
-	return Resolved{ConfigPath: cfgPath, ProfileName: profile, Format: format, Profile: selectedProfile}, nil
+	// 5) Merge AI Config: CLI > ENV > Config > Default
+	aiConfig := cfg.AI
+	if aiConfig.Provider == "" {
+		aiConfig.Provider = "openai"
+	}
+	if aiConfig.BaseURL == "" {
+		aiConfig.BaseURL = "https://api.openai.com/v1"
+	}
+	if aiConfig.Model == "" {
+		aiConfig.Model = "gpt-4o"
+	}
+	if aiConfig.MaxTokens == 0 {
+		aiConfig.MaxTokens = 2048
+	}
+
+	if opts.EnvAIBaseURL != "" {
+		aiConfig.BaseURL = opts.EnvAIBaseURL
+	}
+	if opts.EnvAIModel != "" {
+		aiConfig.Model = opts.EnvAIModel
+	}
+	if opts.EnvAIAPIKey != "" {
+		aiConfig.APIKey = opts.EnvAIAPIKey
+	}
+
+	if opts.CLIAIBaseURLSet && opts.CLIAIBaseURL != "" {
+		aiConfig.BaseURL = opts.CLIAIBaseURL
+	}
+	if opts.CLIAIModelSet && opts.CLIAIModel != "" {
+		aiConfig.Model = opts.CLIAIModel
+	}
+	if opts.CLIAIAPIKeySet && opts.CLIAIAPIKey != "" {
+		aiConfig.APIKey = opts.CLIAIAPIKey
+	}
+
+	return Resolved{ConfigPath: cfgPath, ProfileName: profile, Format: format, Profile: selectedProfile, AI: aiConfig}, nil
 }

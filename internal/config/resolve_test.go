@@ -216,3 +216,61 @@ func TestResolve_Port_PreservedWhenSpecified(t *testing.T) {
 		t.Errorf("expected port 13306 to be preserved, got %d", got.Profile.Port)
 	}
 }
+
+func TestResolve_AIConfigPrecedence(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := []byte(`ai:
+  base_url: "https://config.api.com"
+  model: "config-model"
+  api_key: "config-key"
+`)
+	path := filepath.Join(tmp, "xsql.yaml")
+	if err := os.WriteFile(path, cfg, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Config values
+	got, xe := Resolve(Options{WorkDir: tmp, HomeDir: tmp})
+	if xe != nil {
+		t.Fatal(xe)
+	}
+	if got.AI.BaseURL != "https://config.api.com" || got.AI.Model != "config-model" || got.AI.APIKey != "config-key" {
+		t.Fatalf("unexpected AI config from yaml: %+v", got.AI)
+	}
+
+	// 2. ENV overrides config
+	got, xe = Resolve(Options{
+		WorkDir:      tmp,
+		HomeDir:      tmp,
+		EnvAIBaseURL: "https://env.api.com",
+		EnvAIModel:   "env-model",
+		EnvAIAPIKey:  "env-key",
+	})
+	if xe != nil {
+		t.Fatal(xe)
+	}
+	if got.AI.BaseURL != "https://env.api.com" || got.AI.Model != "env-model" || got.AI.APIKey != "env-key" {
+		t.Fatalf("unexpected AI config from env: %+v", got.AI)
+	}
+
+	// 3. CLI overrides ENV & Config
+	got, xe = Resolve(Options{
+		WorkDir:         tmp,
+		HomeDir:         tmp,
+		EnvAIBaseURL:    "https://env.api.com",
+		EnvAIModel:      "env-model",
+		EnvAIAPIKey:     "env-key",
+		CLIAIBaseURL:    "https://cli.api.com",
+		CLIAIBaseURLSet: true,
+		CLIAIModel:      "cli-model",
+		CLIAIModelSet:   true,
+		CLIAIAPIKey:     "cli-key",
+		CLIAIAPIKeySet:  true,
+	})
+	if xe != nil {
+		t.Fatal(xe)
+	}
+	if got.AI.BaseURL != "https://cli.api.com" || got.AI.Model != "cli-model" || got.AI.APIKey != "cli-key" {
+		t.Fatalf("unexpected AI config from cli: %+v", got.AI)
+	}
+}
