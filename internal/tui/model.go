@@ -61,6 +61,7 @@ type Model struct {
 	lastResult   *db.QueryResult
 	verticalView bool
 	colOffset    int
+	rowOffset    int
 
 	textarea textarea.Model
 	viewport viewport.Model
@@ -94,6 +95,7 @@ func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Servi
 		initialPrompt:    strings.TrimSpace(initialPrompt),
 		autoExecute:      false,
 		colOffset:        0,
+		rowOffset:        0,
 		state:            StateLoadingSchema,
 		textarea:         ta,
 		viewport:         vp,
@@ -149,7 +151,7 @@ func (m *Model) renderLastResult() {
 	if m.lastResult == nil || len(m.messages) == 0 {
 		return
 	}
-	formatted := FormatTableResult(m.lastResult, m.colOffset, m.width)
+	formatted := FormatTableResult(m.lastResult, m.colOffset, m.rowOffset, m.width)
 	if m.verticalView {
 		formatted = FormatVerticalResult(m.lastResult)
 	}
@@ -222,10 +224,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if msg.result != nil {
 			m.lastResult = msg.result
 			m.colOffset = 0
+			m.rowOffset = 0
 			statusLine := SuccessBadgeStyle.Render(fmt.Sprintf("✓ Execution Success (%d rows returned)", len(msg.result.Rows)))
 			m.messages = append(m.messages, statusLine)
 			
-			formatted := FormatTableResult(msg.result, m.colOffset, m.width)
+			formatted := FormatTableResult(msg.result, m.colOffset, m.rowOffset, m.width)
 			if m.verticalView {
 				formatted = FormatVerticalResult(msg.result)
 			}
@@ -258,10 +261,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case tea.KeyPgUp:
+			if m.lastResult != nil && m.rowOffset >= PageRowSize {
+				m.rowOffset -= PageRowSize
+				m.renderLastResult()
+				return m, nil
+			}
 			m.viewport.LineUp(6)
 			return m, nil
 
 		case tea.KeyPgDown:
+			if m.lastResult != nil && m.rowOffset+PageRowSize < len(m.lastResult.Rows) {
+				m.rowOffset += PageRowSize
+				m.renderLastResult()
+				return m, nil
+			}
 			m.viewport.LineDown(6)
 			return m, nil
 
@@ -383,7 +396,7 @@ func (m Model) View() string {
 	if m.autoExecute {
 		execModeHint = "AUTO"
 	}
-	help := fmt.Sprintf("Enter: Send | ←/→: Cols | PgUp/PgDn: Scroll | Ctrl+E: Exec | Ctrl+R: Edit | Ctrl+V: Vertical | Shift+Tab: Mode (%s) | Esc: Quit", execModeHint)
+	help := fmt.Sprintf("Enter: Send | ←/→: Cols | PgUp/PgDn: Page Rows | Ctrl+E: Exec | Ctrl+R: Edit | Ctrl+V: Vertical | Shift+Tab: Mode (%s) | Esc: Quit", execModeHint)
 	sb.WriteString(HelpStyle.Render(help))
 
 	return sb.String()

@@ -44,10 +44,13 @@ var (
 				Foreground(lipgloss.Color("#FF75B5"))
 )
 
-const MaxColumnWidth = 24 // Max character width per cell to keep grid compact
+const (
+	MaxColumnWidth = 24 // Max character width per cell to keep grid compact
+	PageRowSize    = 12 // Rows per page
+)
 
-// FormatTableResult renders a beautiful terminal box table for SQL query results with horizontal column scrolling.
-func FormatTableResult(result *db.QueryResult, colOffset int, termWidth int) string {
+// FormatTableResult renders a beautiful terminal box table for SQL query results with column scrolling and row pagination.
+func FormatTableResult(result *db.QueryResult, colOffset int, rowOffset int, termWidth int) string {
 	if result == nil || len(result.Columns) == 0 {
 		return lipgloss.NewStyle().Foreground(MutedColor).Italic(true).Render("(No columns or empty dataset returned)")
 	}
@@ -58,6 +61,14 @@ func FormatTableResult(result *db.QueryResult, colOffset int, termWidth int) str
 
 	if termWidth <= 20 {
 		termWidth = 80
+	}
+
+	totalRows := len(result.Rows)
+	if rowOffset >= totalRows {
+		rowOffset = (totalRows - 1) / PageRowSize * PageRowSize
+	}
+	if rowOffset < 0 {
+		rowOffset = 0
 	}
 
 	// Calculate maximum width needed for each column
@@ -75,12 +86,12 @@ func FormatTableResult(result *db.QueryResult, colOffset int, termWidth int) str
 		if w > MaxColumnWidth {
 			w = MaxColumnWidth
 		}
-		// Inspect sample rows for width calculation
-		sampleCount := len(result.Rows)
-		if sampleCount > 20 {
-			sampleCount = 20
+		// Inspect current page rows for width calculation
+		endR := rowOffset + PageRowSize
+		if endR > totalRows {
+			endR = totalRows
 		}
-		for r := 0; r < sampleCount; r++ {
+		for r := rowOffset; r < endR; r++ {
 			val := result.Rows[r][col]
 			if val != nil {
 				cellStr := fmt.Sprintf("%v", val)
@@ -97,11 +108,10 @@ func FormatTableResult(result *db.QueryResult, colOffset int, termWidth int) str
 		if w < 6 {
 			w = 6
 		}
-		// Add padding (2 chars) + border (1 char)
 		colWidths[i] = w + 3
 	}
 
-	// Determine visible column range [startCol, endCol) that fits within termWidth - 6
+	// Determine visible column range [startCol, endCol) that fits within termWidth - 8
 	availWidth := termWidth - 8
 	if availWidth < 30 {
 		availWidth = 30
@@ -148,15 +158,15 @@ func FormatTableResult(result *db.QueryResult, colOffset int, termWidth int) str
 		return TableCellStyle
 	})
 
-	// Add data rows (limit to 12 rows for optimal viewport visibility)
-	maxRows := len(result.Rows)
-	if maxRows > 12 {
-		maxRows = 12
+	// Add page rows [rowOffset, min(totalRows, rowOffset+PageRowSize))
+	endRow := rowOffset + PageRowSize
+	if endRow > totalRows {
+		endRow = totalRows
 	}
 
 	hasTruncatedCell := false
 
-	for i := 0; i < maxRows; i++ {
+	for i := rowOffset; i < endRow; i++ {
 		var rowValues []string
 		for idx, col := range visibleCols {
 			colIdx := startCol + idx
@@ -178,14 +188,14 @@ func FormatTableResult(result *db.QueryResult, colOffset int, termWidth int) str
 	sb.WriteString(t.Render())
 
 	var footerNotes []string
-	if len(result.Rows) > 12 {
-		footerNotes = append(footerNotes, fmt.Sprintf("showing 1-12 of %d rows (Press PgUp/PgDn to scroll, Ctrl+V for Full View)", len(result.Rows)))
+	if totalRows > PageRowSize {
+		footerNotes = append(footerNotes, fmt.Sprintf("rows %d-%d of %d (Press n/p for Next/Prev Page)", rowOffset+1, endRow, totalRows))
 	}
 	if startCol > 0 || endCol < totalCols {
-		footerNotes = append(footerNotes, fmt.Sprintf("Showing cols %d-%d of %d (Use ←/→ keys to scroll columns)", startCol+1, endCol, totalCols))
+		footerNotes = append(footerNotes, fmt.Sprintf("cols %d-%d of %d (Use ←/→ keys to scroll cols)", startCol+1, endCol, totalCols))
 	}
 	if hasTruncatedCell {
-		footerNotes = append(footerNotes, "press Ctrl+V for Full Vertical View")
+		footerNotes = append(footerNotes, "press Ctrl+V for Full View")
 	}
 
 	if len(footerNotes) > 0 {
