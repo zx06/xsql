@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
+	"github.com/mattn/go-runewidth"
 
 	"github.com/zx06/xsql/internal/db"
 )
@@ -74,7 +75,7 @@ func FormatTableResult(result *db.QueryResult, colOffset int, rowOffset int, ter
 		rowOffset = 0
 	}
 
-	// Calculate maximum width needed for each column
+	// Calculate maximum display width needed for each column using runewidth for CJK support
 	totalCols := len(result.Columns)
 	if colOffset >= totalCols {
 		colOffset = totalCols - 1
@@ -85,7 +86,7 @@ func FormatTableResult(result *db.QueryResult, colOffset int, rowOffset int, ter
 
 	colWidths := make([]int, totalCols)
 	for i, col := range result.Columns {
-		w := len(col)
+		w := runewidth.StringWidth(col)
 		if w > MaxColumnWidth {
 			w = MaxColumnWidth
 		}
@@ -99,9 +100,9 @@ func FormatTableResult(result *db.QueryResult, colOffset int, rowOffset int, ter
 			if val != nil {
 				cellStr := fmt.Sprintf("%v", val)
 				cellStr = strings.ReplaceAll(cellStr, "\n", " ")
-				runesLen := len([]rune(cellStr))
-				if runesLen > w {
-					w = runesLen
+				dispLen := runewidth.StringWidth(cellStr)
+				if dispLen > w {
+					w = dispLen
 				}
 			}
 		}
@@ -111,6 +112,7 @@ func FormatTableResult(result *db.QueryResult, colOffset int, rowOffset int, ter
 		if w < 6 {
 			w = 6
 		}
+		// Add padding (2 chars) + border (1 char)
 		colWidths[i] = w + 3
 	}
 
@@ -233,13 +235,13 @@ func FormatVerticalResult(result *db.QueryResult) string {
 
 	maxKeyLen := 0
 	for _, col := range result.Columns {
-		if len(col) > maxKeyLen {
-			maxKeyLen = len(col)
+		w := runewidth.StringWidth(col)
+		if w > maxKeyLen {
+			maxKeyLen = w
 		}
 	}
 
 	maxRows := len(result.Rows)
-	// Allow up to 500 rows in full vertical expansion view
 	if maxRows > 500 {
 		maxRows = 500
 	}
@@ -251,7 +253,9 @@ func FormatVerticalResult(result *db.QueryResult) string {
 
 		for _, col := range result.Columns {
 			val := result.Rows[i][col]
-			keyStr := FieldKeyStyle.Render(fmt.Sprintf("%-*s", maxKeyLen, col))
+			keyWidth := runewidth.StringWidth(col)
+			padding := strings.Repeat(" ", max(0, maxKeyLen-keyWidth))
+			keyStr := FieldKeyStyle.Render(col + padding)
 
 			if val == nil {
 				sb.WriteString(fmt.Sprintf("  %s : %s\n", keyStr, TableNilStyle.Render("NULL")))
@@ -292,12 +296,12 @@ func sanitizeCellWithStatus(val any, maxLen int) (string, bool) {
 	s = strings.ReplaceAll(s, "\r", " ")
 	s = strings.TrimSpace(s)
 
-	runes := []rune(s)
-	if len(runes) > maxLen {
+	dispLen := runewidth.StringWidth(s)
+	if dispLen > maxLen {
 		if maxLen <= 3 {
-			return string(runes[:maxLen]), true
+			return runewidth.Truncate(s, maxLen, ""), true
 		}
-		return string(runes[:maxLen-3]) + "...", true
+		return runewidth.Truncate(s, maxLen, "..."), true
 	}
 	return s, false
 }
