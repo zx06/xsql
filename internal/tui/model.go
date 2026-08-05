@@ -44,6 +44,14 @@ type queryExecutedMsg struct {
 	err    *errors.XError
 }
 
+type TableState struct {
+	Result       *db.QueryResult
+	MsgIndex     int
+	ColOffset    int
+	RowOffset    int
+	VerticalView bool
+}
+
 type Model struct {
 	opts             config.Options
 	aiService        *ai.Service
@@ -58,10 +66,8 @@ type Model struct {
 	currentSQL   string
 	explanation  string
 	messages     []string
-	lastResult   *db.QueryResult
-	verticalView bool
-	colOffset    int
-	rowOffset    int
+	tableStates  []TableState
+	activeTable  int
 
 	textarea textarea.Model
 	viewport viewport.Model
@@ -74,7 +80,7 @@ type Model struct {
 
 func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Service, initialPrompt string, unsafeAllowWrite bool) Model {
 	ta := textarea.New()
-	ta.Placeholder = "Ask AI to write a SQL query (e.g. 'Show top 10 users')..."
+	ta.Placeholder = "Ask AI to write a SQL query (e.g. 'Show top 10 users')...."
 	ta.Focus()
 	ta.CharLimit = 1000
 	ta.SetWidth(80)
@@ -94,8 +100,8 @@ func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Servi
 		unsafeAllowWrite: unsafeAllowWrite || resolved.Profile.UnsafeAllowWrite,
 		initialPrompt:    strings.TrimSpace(initialPrompt),
 		autoExecute:      false,
-		colOffset:        0,
-		rowOffset:        0,
+		tableStates:      []TableState{},
+		activeTable:      -1,
 		state:            StateLoadingSchema,
 		textarea:         ta,
 		viewport:         vp,
@@ -147,17 +153,20 @@ func (m Model) executeSQLCmd(sqlStr string) tea.Cmd {
 	}
 }
 
-func (m *Model) renderLastResult() {
-	if m.lastResult == nil || len(m.messages) == 0 {
+func (m *Model) renderTableState(idx int, isActive bool) {
+	if idx < 0 || idx >= len(m.tableStates) {
 		return
 	}
-	formatted := FormatTableResult(m.lastResult, m.colOffset, m.rowOffset, m.width)
-	if m.verticalView {
-		formatted = FormatVerticalResult(m.lastResult)
+	ts := &m.tableStates[idx]
+	if ts.MsgIndex < 0 || ts.MsgIndex >= len(m.messages) {
+		return
 	}
-	m.messages[len(m.messages)-1] = formatted
+	formatted := FormatTableResult(ts.Result, ts.ColOffset, ts.RowOffset, m.width, isActive)
+	if ts.VerticalView {
+		formatted = FormatVerticalResult(ts.Result)
+	}
+	m.messages[ts.MsgIndex] = formatted
 	m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
-	m.viewport.GotoBottom()
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -222,16 +231,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.messages = append(m.messages, ErrorMsgStyle.Render(fmt.Sprintf("SQL Exec Error [%s]: %s", msg.err.Code, msg.err.Message)))
 		} else if msg.result != nil {
-			m.lastResult = msg.result
-			m.colOffset = 0
-			m.rowOffset = 0
 			statusLine := SuccessBadgeStyle.Render(fmt.Sprintf("✓ Execution Success (%d rows returned)", len(msg.result.Rows)))
 			m.messages = append(m.messages, statusLine)
 			
-			formatted := FormatTableResult(msg.result, m.colOffset, m.rowOffset, m.width)
-			if m.verticalView {
-				formatted = FormatVerticalResult(msg.result)
+			// Remove focus from previous active table
+			if m.activeTable >= 0 && m.activeTable < len(m.tableStates) {
+				m.renderTableState(m.activeTable, false)
 			}
+
+			ts := TableState{
+				Result:       msg.result,
+				MsgIndex:     len(m.messages),
+				ColOffset:    0,
+				RowOffset:    0,
+				VerticalView: false,
+			}
+			m.tableStates = append(m.tableStates, ts)
+			m.activeTable = len(m.tableStates) - 1
+
+			formatted := FormatTableResult(msg.result, 0, 0, m.width, true)
 			m.messages = append(m.messages, formatted)
 		}
 		m.state = StateIdle
@@ -248,32 +266,53 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlC, tea.KeyEsc:
 			return m, tea.Quit
 
+		case tea.KeyTab: // Toggle focus between tables in history
+			if len(m.tableStates) > 1 && !m.editingSQL {
+				oldIdx := m.activeTable
+				m.activeTable = (m.activeTable + 1) % len(m.tableStates)
+				m.renderTableState(oldIdx, false)
+				m.renderTableState(m.activeTable, true)
+				return m, nil
+			}
+
 		case tea.KeyLeft:
-			if m.lastResult != nil && m.colOffset > 0 {
-				m.colOffset--
-				m.renderLastResult()
+			if m.activeTable >= 0 && m.activeTable < len(m.tableStates) {
+				ts := &m.tableStates[m.activeTable]
+				if ts.ColOffset > 0 {
+					ts.ColOffset--
+					m.renderTableState(m.activeTable, true)
+				}
 			}
 
 		case tea.KeyRight:
-			if m.lastResult != nil && m.colOffset < len(m.lastResult.Columns)-1 {
-				m.colOffset++
-				m.renderLastResult()
+			if m.activeTable >= 0 && m.activeTable < len(m.tableStates) {
+				ts := &m.tableStates[m.activeTable]
+				if ts.ColOffset < len(ts.Result.Columns)-1 {
+					ts.ColOffset++
+					m.renderTableState(m.activeTable, true)
+				}
 			}
 
 		case tea.KeyPgUp:
-			if m.lastResult != nil && m.rowOffset >= PageRowSize {
-				m.rowOffset -= PageRowSize
-				m.renderLastResult()
-				return m, nil
+			if m.activeTable >= 0 && m.activeTable < len(m.tableStates) {
+				ts := &m.tableStates[m.activeTable]
+				if ts.RowOffset >= PageRowSize {
+					ts.RowOffset -= PageRowSize
+					m.renderTableState(m.activeTable, true)
+					return m, nil
+				}
 			}
 			m.viewport.LineUp(6)
 			return m, nil
 
 		case tea.KeyPgDown:
-			if m.lastResult != nil && m.rowOffset+PageRowSize < len(m.lastResult.Rows) {
-				m.rowOffset += PageRowSize
-				m.renderLastResult()
-				return m, nil
+			if m.activeTable >= 0 && m.activeTable < len(m.tableStates) {
+				ts := &m.tableStates[m.activeTable]
+				if ts.RowOffset+PageRowSize < len(ts.Result.Rows) {
+					ts.RowOffset += PageRowSize
+					m.renderTableState(m.activeTable, true)
+					return m, nil
+				}
 			}
 			m.viewport.LineDown(6)
 			return m, nil
@@ -294,9 +333,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.autoExecute = !m.autoExecute
 
 		case tea.KeyCtrlV: // Toggle Vertical (psql \x) full untruncated view
-			if m.lastResult != nil && len(m.messages) > 0 {
-				m.verticalView = !m.verticalView
-				m.renderLastResult()
+			if m.activeTable >= 0 && m.activeTable < len(m.tableStates) {
+				ts := &m.tableStates[m.activeTable]
+				ts.VerticalView = !ts.VerticalView
+				m.renderTableState(m.activeTable, true)
 			}
 
 		case tea.KeyCtrlE: // Execute current SQL
@@ -396,7 +436,7 @@ func (m Model) View() string {
 	if m.autoExecute {
 		execModeHint = "AUTO"
 	}
-	help := fmt.Sprintf("Enter: Send | ←/→: Cols | PgUp/PgDn: Page Rows | Ctrl+E: Exec | Ctrl+R: Edit | Ctrl+V: Vertical | Shift+Tab: Mode (%s) | Esc: Quit", execModeHint)
+	help := fmt.Sprintf("Enter: Send | Tab: Focus Table | ←/→: Cols | PgUp/PgDn: Page Rows | Ctrl+E: Exec | Ctrl+R: Edit | Ctrl+V: Vertical | Shift+Tab: Mode (%s) | Esc: Quit", execModeHint)
 	sb.WriteString(HelpStyle.Render(help))
 
 	return sb.String()

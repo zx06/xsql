@@ -28,6 +28,9 @@ var (
 	TableBorderStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#3B4261"))
 
+	ActiveTableBorderStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#7AA2F7"))
+
 	FieldKeyStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("#7AA2F7"))
@@ -50,7 +53,7 @@ const (
 )
 
 // FormatTableResult renders a beautiful terminal box table for SQL query results with column scrolling and row pagination.
-func FormatTableResult(result *db.QueryResult, colOffset int, rowOffset int, termWidth int) string {
+func FormatTableResult(result *db.QueryResult, colOffset int, rowOffset int, termWidth int, isActive bool) string {
 	if result == nil || len(result.Columns) == 0 {
 		return lipgloss.NewStyle().Foreground(MutedColor).Italic(true).Render("(No columns or empty dataset returned)")
 	}
@@ -145,9 +148,14 @@ func FormatTableResult(result *db.QueryResult, colOffset int, rowOffset int, ter
 		headers[i] = headerText
 	}
 
+	borderStyle := TableBorderStyle
+	if isActive {
+		borderStyle = ActiveTableBorderStyle
+	}
+
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
-		BorderStyle(TableBorderStyle).
+		BorderStyle(borderStyle).
 		Headers(headers...)
 
 	// Configure header styling
@@ -188,11 +196,14 @@ func FormatTableResult(result *db.QueryResult, colOffset int, rowOffset int, ter
 	sb.WriteString(t.Render())
 
 	var footerNotes []string
+	if isActive {
+		footerNotes = append(footerNotes, "[FOCUSED]")
+	}
 	if totalRows > PageRowSize {
-		footerNotes = append(footerNotes, fmt.Sprintf("rows %d-%d of %d (Press n/p for Next/Prev Page)", rowOffset+1, endRow, totalRows))
+		footerNotes = append(footerNotes, fmt.Sprintf("rows %d-%d of %d (Press PgUp/PgDn for Page)", rowOffset+1, endRow, totalRows))
 	}
 	if startCol > 0 || endCol < totalCols {
-		footerNotes = append(footerNotes, fmt.Sprintf("cols %d-%d of %d (Use ←/→ keys to scroll cols)", startCol+1, endCol, totalCols))
+		footerNotes = append(footerNotes, fmt.Sprintf("cols %d-%d of %d (Use ←/→ keys for Cols)", startCol+1, endCol, totalCols))
 	}
 	if hasTruncatedCell {
 		footerNotes = append(footerNotes, "press Ctrl+V for Full View")
@@ -200,7 +211,11 @@ func FormatTableResult(result *db.QueryResult, colOffset int, rowOffset int, ter
 
 	if len(footerNotes) > 0 {
 		noteStr := "\n(" + strings.Join(footerNotes, " | ") + ")"
-		sb.WriteString(lipgloss.NewStyle().Foreground(MutedColor).Italic(true).Render(noteStr))
+		if isActive {
+			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#7AA2F7")).Bold(true).Render(noteStr))
+		} else {
+			sb.WriteString(lipgloss.NewStyle().Foreground(MutedColor).Italic(true).Render(noteStr))
+		}
 	}
 
 	return sb.String()

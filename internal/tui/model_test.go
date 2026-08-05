@@ -100,7 +100,7 @@ func TestFormatTableResult(t *testing.T) {
 		},
 	}
 
-	formatted := FormatTableResult(res, 0, 0, 80)
+	formatted := FormatTableResult(res, 0, 0, 80, true)
 	if !strings.Contains(formatted, "admin") || !strings.Contains(formatted, "guest") {
 		t.Errorf("formatted table result missing row data:\n%s", formatted)
 	}
