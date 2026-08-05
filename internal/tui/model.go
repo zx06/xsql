@@ -51,6 +51,7 @@ type Model struct {
 	profileName      string
 	unsafeAllowWrite bool
 	initialPrompt    string
+	autoExecute      bool
 
 	state        State
 	schemaInfo   *db.SchemaInfo
@@ -90,6 +91,7 @@ func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Servi
 		profileName:      resolved.ProfileName,
 		unsafeAllowWrite: unsafeAllowWrite || resolved.Profile.UnsafeAllowWrite,
 		initialPrompt:    strings.TrimSpace(initialPrompt),
+		autoExecute:      false,
 		state:            StateLoadingSchema,
 		textarea:         ta,
 		viewport:         vp,
@@ -183,6 +185,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.messages = append(m.messages, aiMsg)
 			
 			if msg.response.SQL != "" {
+				if m.autoExecute {
+					m.state = StateExecuting
+					execLine := ExecutingTagStyle.Render("⚡ Auto-Executing") + " " + SQLCodeStyle.Render(m.currentSQL)
+					m.messages = append(m.messages, execLine)
+					m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+					m.viewport.GotoBottom()
+					return m, m.executeSQLCmd(m.currentSQL)
+				}
 				m.state = StateSQLReady
 			} else {
 				m.state = StateIdle
@@ -218,6 +228,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
 			return m, tea.Quit
+
+		case tea.KeyShiftTab: // Toggle Auto-Execute vs Manual-Approve mode
+			m.autoExecute = !m.autoExecute
 
 		case tea.KeyCtrlV: // Toggle Vertical (psql \x) full untruncated view
 			if m.lastResult != nil && len(m.messages) > 0 {
@@ -291,7 +304,11 @@ func (m Model) View() string {
 	if m.unsafeAllowWrite {
 		modeBadge = BadgeReadWrite.Render("READ-WRITE")
 	}
-	header := fmt.Sprintf(" xsql AI | Profile: %s (%s) | %s ", m.profileName, m.profile.DB, modeBadge)
+	execModeBadge := BadgeManualApprove.Render("MANUAL-APPROVE")
+	if m.autoExecute {
+		execModeBadge = BadgeAutoExec.Render("AUTO-EXECUTE")
+	}
+	header := fmt.Sprintf(" xsql AI | Profile: %s (%s) | %s | Mode: %s ", m.profileName, m.profile.DB, modeBadge, execModeBadge)
 	sb.WriteString(HeaderStyle.Width(m.width).Render(header) + "\n\n")
 
 	// 2. Main Viewport (Messages & Results)
@@ -320,7 +337,11 @@ func (m Model) View() string {
 	}
 	sb.WriteString(m.textarea.View() + "\n")
 
-	help := "Enter: Send Prompt | Ctrl+E: Execute SQL | Ctrl+R: Edit SQL | Ctrl+V: Toggle Full Vertical View (\\x) | Esc: Quit"
+	execModeHint := "MANUAL"
+	if m.autoExecute {
+		execModeHint = "AUTO"
+	}
+	help := fmt.Sprintf("Enter: Send | Ctrl+E: Exec SQL | Ctrl+R: Edit | Ctrl+V: Vertical View | Shift+Tab: Mode (%s) | Esc: Quit", execModeHint)
 	sb.WriteString(HelpStyle.Render(help))
 
 	return sb.String()

@@ -32,6 +32,18 @@ var (
 			Background(WarningColor).
 			Padding(0, 1)
 
+	BadgeAutoExec = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#FFFFFF")).
+			Background(PrimaryColor).
+			Padding(0, 1)
+
+	BadgeManualApprove = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("#C0CAF5")).
+				Background(lipgloss.Color("#3B4261")).
+				Padding(0, 1)
+
 	// SQL Preview Box
 	SQLBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).

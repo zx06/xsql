@@ -141,3 +141,38 @@ func TestTUI_Model_InitialPromptAutoExecute(t *testing.T) {
 		t.Fatal("expected non-nil Cmd for generateSQLCmd from initial prompt")
 	}
 }
+
+func TestTUI_Model_ShiftTabAutoExecuteToggle(t *testing.T) {
+	resolved := config.Resolved{
+		ProfileName: "dev",
+		Profile:     config.Profile{DB: "mysql"},
+	}
+	aiService := ai.NewService(config.AIConfig{}, nil)
+	m := NewModel(config.Options{}, resolved, aiService, "", false)
+
+	if m.autoExecute {
+		t.Fatal("expected autoExecute to be false by default")
+	}
+
+	// Press Shift+Tab -> toggle to autoExecute = true
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	m = updated.(Model)
+	if !m.autoExecute {
+		t.Fatal("expected autoExecute to be true after Shift+Tab")
+	}
+
+	// Send sqlGeneratedMsg -> should automatically transition to StateExecuting
+	updated, cmd := m.Update(sqlGeneratedMsg{
+		response: &ai.SQLResponse{
+			SQL:         "SELECT * FROM users;",
+			Explanation: "Returns users.",
+		},
+	})
+	m = updated.(Model)
+	if m.state != StateExecuting {
+		t.Fatalf("expected state StateExecuting when autoExecute is true, got %v", m.state)
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil executeSQLCmd for auto-execution")
+	}
+}
