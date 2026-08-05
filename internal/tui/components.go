@@ -206,7 +206,7 @@ func FormatTableResult(result *db.QueryResult, colOffset int, rowOffset int, ter
 		footerNotes = append(footerNotes, fmt.Sprintf("cols %d-%d of %d (Use ←/→ keys for Cols)", startCol+1, endCol, totalCols))
 	}
 	if hasTruncatedCell {
-		footerNotes = append(footerNotes, "press Ctrl+V for Full View")
+		footerNotes = append(footerNotes, "press Ctrl+E for Full View (Expand/Collapse)")
 	}
 
 	if len(footerNotes) > 0 {
@@ -239,8 +239,9 @@ func FormatVerticalResult(result *db.QueryResult) string {
 	}
 
 	maxRows := len(result.Rows)
-	if maxRows > 50 {
-		maxRows = 50
+	// Allow up to 500 rows in full vertical expansion view
+	if maxRows > 500 {
+		maxRows = 500
 	}
 
 	var sb strings.Builder
@@ -268,8 +269,8 @@ func FormatVerticalResult(result *db.QueryResult) string {
 		sb.WriteString("\n")
 	}
 
-	if len(result.Rows) > 50 {
-		sb.WriteString(lipgloss.NewStyle().Foreground(MutedColor).Italic(true).Render(fmt.Sprintf("... and %d more rows truncated\n", len(result.Rows)-50)))
+	if len(result.Rows) > 500 {
+		sb.WriteString(lipgloss.NewStyle().Foreground(MutedColor).Italic(true).Render(fmt.Sprintf("... and %d more rows (truncated for performance)\n", len(result.Rows)-500)))
 	}
 
 	return sb.String()

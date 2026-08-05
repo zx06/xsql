@@ -262,12 +262,68 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 
 	case tea.KeyMsg:
+		// 1. Ctrl+C always quits
+		if msg.Type == tea.KeyCtrlC {
+			return m, tea.Quit
+		}
+
+		// 2. When editing SQL in text area
+		if m.editingSQL {
+			switch msg.Type {
+			case tea.KeyEnter:
+				m.currentSQL = strings.TrimSpace(m.textarea.Value())
+				m.editingSQL = false
+				m.textarea.Reset()
+				return m, nil
+			case tea.KeyEsc:
+				m.editingSQL = false
+				m.textarea.Reset()
+				return m, nil
+			}
+			var taCmd tea.Cmd
+			m.textarea, taCmd = m.textarea.Update(msg)
+			return m, taCmd
+		}
+
+		// 3. When in SQLReady state (SQL preview pending approval)
+		if m.state == StateSQLReady {
+			switch {
+			case msg.Type == tea.KeyEnter: // Enter to Execute SQL
+				m.state = StateExecuting
+				execLine := ExecutingTagStyle.Render("⚡ Executing") + " " + SQLCodeStyle.Render(m.currentSQL)
+				m.messages = append(m.messages, execLine)
+				m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+				m.viewport.GotoBottom()
+				return m, m.executeSQLCmd(m.currentSQL)
+
+			case msg.String() == "e" || msg.String() == "E": // 'e' key to Edit SQL
+				m.editingSQL = true
+				m.textarea.SetValue(m.currentSQL)
+				return m, nil
+
+			case msg.Type == tea.KeyEsc: // Esc to Cancel SQL preview
+				m.state = StateIdle
+				return m, nil
+			}
+		}
+
+		// 4. General TUI keyhandlers
 		switch msg.Type {
-		case tea.KeyCtrlC, tea.KeyEsc:
+		case tea.KeyEsc:
 			return m, tea.Quit
 
+		case tea.KeyCtrlE: // Ctrl+E to Expand/Collapse full vertical view
+			if m.activeTable >= 0 && m.activeTable < len(m.tableStates) {
+				ts := &m.tableStates[m.activeTable]
+				ts.VerticalView = !ts.VerticalView
+				m.renderTableState(m.activeTable, true)
+			}
+
+		case tea.KeyShiftTab: // Toggle Auto-Execute vs Manual-Approve mode
+			m.autoExecute = !m.autoExecute
+
 		case tea.KeyTab: // Toggle focus between tables in history
-			if len(m.tableStates) > 1 && !m.editingSQL {
+			if len(m.tableStates) > 1 {
 				oldIdx := m.activeTable
 				m.activeTable = (m.activeTable + 1) % len(m.tableStates)
 				m.renderTableState(oldIdx, false)
@@ -318,55 +374,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case tea.KeyUp:
-			if !m.editingSQL {
-				m.viewport.LineUp(1)
-				return m, nil
-			}
+			m.viewport.LineUp(1)
+			return m, nil
 
 		case tea.KeyDown:
-			if !m.editingSQL {
-				m.viewport.LineDown(1)
-				return m, nil
-			}
+			m.viewport.LineDown(1)
+			return m, nil
 
-		case tea.KeyShiftTab: // Toggle Auto-Execute vs Manual-Approve mode
-			m.autoExecute = !m.autoExecute
-
-		case tea.KeyCtrlV: // Toggle Vertical (psql \x) full untruncated view
-			if m.activeTable >= 0 && m.activeTable < len(m.tableStates) {
-				ts := &m.tableStates[m.activeTable]
-				ts.VerticalView = !ts.VerticalView
-				m.renderTableState(m.activeTable, true)
-			}
-
-		case tea.KeyCtrlE: // Execute current SQL
-			if m.state == StateSQLReady && m.currentSQL != "" {
-				m.state = StateExecuting
-				execLine := ExecutingTagStyle.Render("⚡ Executing") + " " + SQLCodeStyle.Render(m.currentSQL)
-				m.messages = append(m.messages, execLine)
-				m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
-				m.viewport.GotoBottom()
-				return m, m.executeSQLCmd(m.currentSQL)
-			}
-
-		case tea.KeyCtrlR: // Toggle Edit SQL mode
-			if m.state == StateSQLReady {
-				m.editingSQL = !m.editingSQL
-				if m.editingSQL {
-					m.textarea.SetValue(m.currentSQL)
-				}
-			}
-
-		case tea.KeyEnter: // Send prompt or confirm edited SQL
-			if m.editingSQL {
-				m.currentSQL = m.textarea.Value()
-				m.editingSQL = false
-				m.textarea.Reset()
-				return m, nil
-			}
-
+		case tea.KeyEnter:
 			prompt := strings.TrimSpace(m.textarea.Value())
-			if prompt != "" && (m.state == StateIdle || m.state == StateSQLReady) {
+			if prompt != "" && m.state == StateIdle {
 				userLine := UserTagStyle.Render("👤 YOU") + " " + prompt
 				m.messages = append(m.messages, userLine)
 				m.textarea.Reset()
@@ -378,11 +395,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	if !m.editingSQL {
-		var taCmd tea.Cmd
-		m.textarea, taCmd = m.textarea.Update(msg)
-		cmds = append(cmds, taCmd)
-	}
+	var taCmd tea.Cmd
+	m.textarea, taCmd = m.textarea.Update(msg)
+	cmds = append(cmds, taCmd)
 
 	var vpCmd tea.Cmd
 	m.viewport, vpCmd = m.viewport.Update(msg)
@@ -422,13 +437,13 @@ func (m Model) View() string {
 		if m.currentSQL == "" {
 			sqlContent = lipgloss.NewStyle().Foreground(MutedColor).Italic(true).Render("(No SQL generated)")
 		}
-		preview := fmt.Sprintf("%s\n%s", SQLTitleStyle.Render("✨ SQL Preview (Press Ctrl+E to Execute, Ctrl+R to Edit):"), sqlContent)
+		preview := fmt.Sprintf("%s\n%s", SQLTitleStyle.Render("✨ SQL Preview (Enter: Execute | e: Edit SQL | Esc: Cancel):"), sqlContent)
 		sb.WriteString(SQLBoxStyle.Width(m.width - 4).Render(preview) + "\n")
 	}
 
 	// 4. Input Area & Footer Hints
 	if m.editingSQL {
-		sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(AccentColor).Render("✏️  Edit SQL (Press Enter to Apply Changes):") + "\n")
+		sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(AccentColor).Render("✏️  Edit SQL (Enter: Apply | Esc: Cancel):") + "\n")
 	}
 	sb.WriteString(m.textarea.View() + "\n")
 
@@ -436,7 +451,11 @@ func (m Model) View() string {
 	if m.autoExecute {
 		execModeHint = "AUTO"
 	}
-	help := fmt.Sprintf("Enter: Send | Tab: Focus Table | ←/→: Cols | PgUp/PgDn: Page Rows | Ctrl+E: Exec | Ctrl+R: Edit | Ctrl+V: Vertical | Shift+Tab: Mode (%s) | Esc: Quit", execModeHint)
+	
+	help := fmt.Sprintf("Enter: Send Prompt | Tab: Focus Table | ←/→: Cols | PgUp/PgDn: Rows | Ctrl+E: Expand/Collapse | Shift+Tab: Mode (%s) | Esc: Quit", execModeHint)
+	if m.state == StateSQLReady {
+		help = fmt.Sprintf("Enter: Execute SQL | e: Edit SQL | Esc: Cancel | Ctrl+E: Expand/Collapse | Shift+Tab: Mode (%s)", execModeHint)
+	}
 	sb.WriteString(HelpStyle.Render(help))
 
 	return sb.String()

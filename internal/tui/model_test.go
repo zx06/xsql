@@ -62,11 +62,11 @@ func TestTUI_Model_StateTransitions(t *testing.T) {
 		t.Errorf("expected view to contain SQL Preview, got:\n%s", viewStr)
 	}
 
-	// 4. Test KeyMsg Ctrl+E -> transition to StateExecuting
-	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlE})
+	// 4. Test KeyMsg KeyEnter in StateSQLReady -> transition to StateExecuting
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
 	if m.state != StateExecuting {
-		t.Fatalf("expected state StateExecuting after Ctrl+E, got %v", m.state)
+		t.Fatalf("expected state StateExecuting after KeyEnter, got %v", m.state)
 	}
 	if cmd == nil {
 		t.Fatal("expected non-nil Cmd for executeSQLCmd")
