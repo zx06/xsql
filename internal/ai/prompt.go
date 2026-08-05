@@ -23,7 +23,8 @@ IMPORTANT RULES:
      "explanation": "Retrieves all active users from the users table."
    }
 4. Do NOT wrap JSON in code block ticks if possible, or wrap in standard JSON.
-5. If the request cannot be answered by the schema, set "sql": "" and explain in "explanation".`
+5. If the request asks for general database metadata or listing tables/columns (e.g. 'show tables', 'what tables exist'), generate standard SQL (e.g. 'SHOW TABLES;' for MySQL, or 'SELECT table_name FROM information_schema.tables WHERE table_schema = \'public\';' for PostgreSQL) even if the provided schema is empty.
+6. If the request genuinely cannot be answered by the schema, set "sql": "" and explain in "explanation".`
 
 func BuildSystemPrompt(dbType string, schemaInfo *db.SchemaInfo) string {
 	schemaJSON := "{}"

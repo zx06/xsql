@@ -10,6 +10,8 @@ import (
 
 	"github.com/zx06/xsql/internal/ai"
 	"github.com/zx06/xsql/internal/config"
+	_ "github.com/zx06/xsql/internal/db/mysql"
+	_ "github.com/zx06/xsql/internal/db/pg"
 	"github.com/zx06/xsql/internal/secret"
 	"github.com/zx06/xsql/internal/tui"
 )
