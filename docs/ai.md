@@ -116,13 +116,18 @@ xsql ai --profile dev
 ```
 
 ### 快捷键操作
+
+#### SQL 待确认状态 (SQL Preview Mode)
+- `Enter`: 确认并安全执行当前生成预览的 SQL
+- `e`: 切换到 SQL 文本手工编辑/微调模式
+- `Esc`: 取消当前 SQL 生成建议，返回 Prompt 输入模式
+
+#### 通用与表格操作 (General & Table Operations)
 - `Enter`: 提交自然语言需求给 AI
+- `Ctrl+E`: 展开/收起折叠全量内容 (Toggle Expanded Full View，无 50 行截断)
 - `Tab`: 在历史多个查询结果表格之间无缝切换焦点 (`[FOCUSED]`)
 - `←` / `→`: 横向平滑滚动查看当前焦点表格的隐藏列
 - `PgUp` / `PgDn`: 向上/向下翻页查看当前焦点表格的第 13-N 行数据
 - `Shift+Tab`: 一键切换 **自动执行 (AUTO-EXECUTE)** 与 **手动批准 (MANUAL-APPROVE)** 模式
-- `Ctrl+E`: 确认并安全执行当前生成预览的 SQL
-- `Ctrl+R`: 切换到 SQL 文本手工微调模式
-- `Ctrl+V`: 一键切换全量垂直展开查看模式 (`psql \x` 全字段无截断展示)
 - `Esc` / `Ctrl+C`: 退出 AI 模式
 
