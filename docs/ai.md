@@ -117,6 +117,7 @@ xsql ai --profile dev
 
 ### 快捷键操作
 - `Enter`: 提交自然语言需求给 AI
+- `←` / `→`: 横向平滑滚动查看宽表隐藏的列
 - `Shift+Tab`: 一键切换 **自动执行 (AUTO-EXECUTE)** 与 **手动批准 (MANUAL-APPROVE)** 模式
 - `Ctrl+E`: 确认并安全执行当前生成预览的 SQL
 - `Ctrl+R`: 切换到 SQL 文本手工微调模式
