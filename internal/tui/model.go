@@ -60,6 +60,7 @@ type Model struct {
 	messages     []string
 	lastResult   *db.QueryResult
 	verticalView bool
+	colOffset    int
 
 	textarea textarea.Model
 	viewport viewport.Model
@@ -92,6 +93,7 @@ func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Servi
 		unsafeAllowWrite: unsafeAllowWrite || resolved.Profile.UnsafeAllowWrite,
 		initialPrompt:    strings.TrimSpace(initialPrompt),
 		autoExecute:      false,
+		colOffset:        0,
 		state:            StateLoadingSchema,
 		textarea:         ta,
 		viewport:         vp,
@@ -141,6 +143,19 @@ func (m Model) executeSQLCmd(sqlStr string) tea.Cmd {
 		})
 		return queryExecutedMsg{result: res, err: xe}
 	}
+}
+
+func (m *Model) renderLastResult() {
+	if m.lastResult == nil || len(m.messages) == 0 {
+		return
+	}
+	formatted := FormatTableResult(m.lastResult, m.colOffset, m.width)
+	if m.verticalView {
+		formatted = FormatVerticalResult(m.lastResult)
+	}
+	m.messages[len(m.messages)-1] = formatted
+	m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+	m.viewport.GotoBottom()
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -206,10 +221,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.messages = append(m.messages, ErrorMsgStyle.Render(fmt.Sprintf("SQL Exec Error [%s]: %s", msg.err.Code, msg.err.Message)))
 		} else if msg.result != nil {
 			m.lastResult = msg.result
+			m.colOffset = 0
 			statusLine := SuccessBadgeStyle.Render(fmt.Sprintf("✓ Execution Success (%d rows returned)", len(msg.result.Rows)))
 			m.messages = append(m.messages, statusLine)
 			
-			formatted := FormatTableResult(msg.result)
+			formatted := FormatTableResult(msg.result, m.colOffset, m.width)
 			if m.verticalView {
 				formatted = FormatVerticalResult(msg.result)
 			}
@@ -229,19 +245,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlC, tea.KeyEsc:
 			return m, tea.Quit
 
+		case tea.KeyLeft:
+			if m.lastResult != nil && m.colOffset > 0 {
+				m.colOffset--
+				m.renderLastResult()
+			}
+
+		case tea.KeyRight:
+			if m.lastResult != nil && m.colOffset < len(m.lastResult.Columns)-1 {
+				m.colOffset++
+				m.renderLastResult()
+			}
+
 		case tea.KeyShiftTab: // Toggle Auto-Execute vs Manual-Approve mode
 			m.autoExecute = !m.autoExecute
 
 		case tea.KeyCtrlV: // Toggle Vertical (psql \x) full untruncated view
 			if m.lastResult != nil && len(m.messages) > 0 {
 				m.verticalView = !m.verticalView
-				formatted := FormatTableResult(m.lastResult)
-				if m.verticalView {
-					formatted = FormatVerticalResult(m.lastResult)
-				}
-				m.messages[len(m.messages)-1] = formatted
-				m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
-				m.viewport.GotoBottom()
+				m.renderLastResult()
 			}
 
 		case tea.KeyCtrlE: // Execute current SQL
@@ -341,7 +363,7 @@ func (m Model) View() string {
 	if m.autoExecute {
 		execModeHint = "AUTO"
 	}
-	help := fmt.Sprintf("Enter: Send | Ctrl+E: Exec SQL | Ctrl+R: Edit | Ctrl+V: Vertical View | Shift+Tab: Mode (%s) | Esc: Quit", execModeHint)
+	help := fmt.Sprintf("Enter: Send | ←/→: Scroll Cols | Ctrl+E: Exec | Ctrl+R: Edit | Ctrl+V: Vertical View | Shift+Tab: Mode (%s) | Esc: Quit", execModeHint)
 	sb.WriteString(HelpStyle.Render(help))
 
 	return sb.String()
