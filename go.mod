@@ -3,6 +3,9 @@ module github.com/zx06/xsql
 go 1.25.0
 
 require (
+	github.com/charmbracelet/bubbles v0.20.0
+	github.com/charmbracelet/bubbletea v1.3.4
+	github.com/charmbracelet/lipgloss v1.0.0
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/google/jsonschema-go v0.4.3
 	github.com/jackc/pgx/v5 v5.9.2
@@ -17,10 +20,8 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
+	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
-	github.com/charmbracelet/bubbles v0.20.0 // indirect
-	github.com/charmbracelet/bubbletea v1.3.4 // indirect
-	github.com/charmbracelet/lipgloss v1.0.0 // indirect
 	github.com/charmbracelet/x/ansi v0.8.0 // indirect
 	github.com/charmbracelet/x/term v0.2.1 // indirect
 	github.com/danieljoos/wincred v1.2.3 // indirect
