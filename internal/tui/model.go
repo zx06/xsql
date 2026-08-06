@@ -288,7 +288,6 @@ func (m *Model) renderToolCall(idx int) {
 		sb.WriteString(fmt.Sprintf("%s %s", badge, summary))
 	} else {
 		badge := ToolExpandedBadge.Render("▼ 🛠️ Tool: " + tc.Name + activeMarker)
-		summary := SQLCodeStyle.Render(tc.Summary)
 
 		detailCode := tc.Detail
 		if tc.Name == "execute_sql" {
@@ -299,7 +298,7 @@ func (m *Model) renderToolCall(idx int) {
 
 		detail := ToolDetailStyle.Render(detailCode)
 		resText := MetricsStyle.Render(tc.Result)
-		sb.WriteString(fmt.Sprintf("%s %s\n%s\n%s", badge, summary, detail, resText))
+		sb.WriteString(fmt.Sprintf("%s\n%s\n%s", badge, detail, resText))
 
 		// Render embedded Table Result inside container when unfolded
 		if tc.TableStateIndex >= 0 && tc.TableStateIndex < len(m.tableStates) {
