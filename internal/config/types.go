@@ -93,7 +93,8 @@ type Resolved struct {
 	ConfigPath  string
 	ProfileName string
 	Format      string
-	Profile     Profile // full profile for query use
+	Profile     Profile            // full profile for query use
+	AllProfiles map[string]Profile // all configured profiles
 	AI          AIConfig
 }
 

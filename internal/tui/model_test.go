@@ -230,3 +230,64 @@ func TestTUI_Model_ActionOptionsCardFlow(t *testing.T) {
 		t.Fatal("expected non-nil executeSQLCmd for executing SQL")
 	}
 }
+
+func TestTUI_Model_CtrlCTwiceToQuit(t *testing.T) {
+	resolved := config.Resolved{ProfileName: "dev", Profile: config.Profile{DB: "mysql"}}
+	aiService := ai.NewService(config.AIConfig{}, nil)
+	m := NewModel(config.Options{}, resolved, aiService, "", false)
+
+	// 1st Ctrl+C -> should NOT quit, but set warning line
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	m = updated.(Model)
+	if cmd != nil {
+		t.Fatal("expected 1st Ctrl+C to NOT return quit cmd")
+	}
+
+	// 2nd Ctrl+C immediately -> returns tea.Quit
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if cmd == nil {
+		t.Fatal("expected 2nd Ctrl+C to return tea.Quit")
+	}
+}
+
+func TestTUI_Model_EscClearsTextarea(t *testing.T) {
+	resolved := config.Resolved{ProfileName: "dev", Profile: config.Profile{DB: "mysql"}}
+	aiService := ai.NewService(config.AIConfig{}, nil)
+	m := NewModel(config.Options{}, resolved, aiService, "", false)
+	m.state = StateIdle
+	m.textarea.SetValue("draft prompt to clear")
+
+	// Press Esc in StateIdle -> clears prompt
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updated.(Model)
+	if m.textarea.Value() != "" {
+		t.Fatalf("expected textarea to be cleared after Esc, got %q", m.textarea.Value())
+	}
+}
+
+func TestTUI_Model_CtrlPProfileSwitching(t *testing.T) {
+	allProfiles := map[string]config.Profile{
+		"dev":  {DB: "mysql"},
+		"prod": {DB: "pg"},
+	}
+	resolved := config.Resolved{
+		ProfileName: "dev",
+		Profile:     allProfiles["dev"],
+		AllProfiles: allProfiles,
+	}
+	aiService := ai.NewService(config.AIConfig{}, nil)
+	m := NewModel(config.Options{}, resolved, aiService, "", false)
+
+	// Press Ctrl+P -> switches profile to 'prod'
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+	m = updated.(Model)
+	if m.profileName != "prod" {
+		t.Fatalf("expected profileName to switch to 'prod', got %q", m.profileName)
+	}
+	if m.profile.DB != "pg" {
+		t.Fatalf("expected profile DB to be 'pg', got %q", m.profile.DB)
+	}
+	if cmd == nil {
+		t.Fatal("expected loadSchemaCmd after switching profile")
+	}
+}

@@ -137,5 +137,12 @@ func Resolve(opts Options) (Resolved, *errors.XError) {
 		aiConfig.APIKey = opts.CLIAIAPIKey
 	}
 
-	return Resolved{ConfigPath: cfgPath, ProfileName: profile, Format: format, Profile: selectedProfile, AI: aiConfig}, nil
+	return Resolved{
+		ConfigPath:  cfgPath,
+		ProfileName: profile,
+		Format:      format,
+		Profile:     selectedProfile,
+		AllProfiles: cfg.Profiles,
+		AI:          aiConfig,
+	}, nil
 }

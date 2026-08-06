@@ -104,6 +104,10 @@ var (
 				Bold(true).
 				Foreground(SecondaryColor)
 
+	WarningBadgeStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(WarningColor)
+
 	MetricsStyle = lipgloss.NewStyle().
 			Foreground(MutedColor).
 			Italic(true)

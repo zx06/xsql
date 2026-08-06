@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -84,6 +85,8 @@ type Model struct {
 	aiService        *ai.Service
 	profile          config.Profile
 	profileName      string
+	allProfiles      map[string]config.Profile
+	profileList      []string
 	unsafeAllowWrite bool
 	initialPrompt    string
 	autoExecute      bool
@@ -94,6 +97,7 @@ type Model struct {
 	pendingExport *PendingExport
 	jsRetryCount  int
 	maxJSRetries  int
+	lastCtrlCTime time.Time
 
 	confirmOption int // 0: Confirm/Execute, 1: Adjust Prompt, 2: Cancel/Deny
 
@@ -134,11 +138,23 @@ func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Servi
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(PrimaryColor)
 
+	var pList []string
+	if len(resolved.AllProfiles) > 0 {
+		for name := range resolved.AllProfiles {
+			pList = append(pList, name)
+		}
+		sort.Strings(pList)
+	} else if resolved.ProfileName != "" {
+		pList = []string{resolved.ProfileName}
+	}
+
 	return Model{
 		opts:             opts,
 		aiService:        aiService,
 		profile:          resolved.Profile,
 		profileName:      resolved.ProfileName,
+		allProfiles:      resolved.AllProfiles,
+		profileList:      pList,
 		unsafeAllowWrite: unsafeAllowWrite || resolved.Profile.UnsafeAllowWrite,
 		initialPrompt:    strings.TrimSpace(initialPrompt),
 		autoExecute:      false,
@@ -338,7 +354,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case schemaLoadedMsg:
 		if msg.err != nil {
-			m.messages = append(m.messages, ErrorMsgStyle.Render(fmt.Sprintf("Failed to load schema: %v", msg.err)))
+			m.messages = append(m.messages, ErrorMsgStyle.Render(fmt.Sprintf("Failed to load schema for profile '%s': %v", m.profileName, msg.err)))
 		} else {
 			m.schemaInfo = msg.schema
 		}
@@ -591,8 +607,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 
 	case tea.KeyMsg:
+		// CTRL+C TWICE TO QUIT MECHANISM (Like Claude Code / Aider)
 		if msg.Type == tea.KeyCtrlC {
-			return m, tea.Quit
+			if time.Since(m.lastCtrlCTime) < 2*time.Second {
+				return m, tea.Quit
+			}
+			m.lastCtrlCTime = time.Now()
+			warnMsg := WarningBadgeStyle.Render("⚠️ Press Ctrl+C again to exit xsql AI")
+			m.messages = append(m.messages, warnMsg)
+			m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+			m.viewport.GotoBottom()
+			return m, nil
 		}
 
 		// UNIFIED HUMAN-IN-THE-LOOP INTERACTION FOR BOTH StateExportReady AND StateSQLReady!
@@ -733,7 +758,55 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.Type {
 		case tea.KeyEsc:
-			return m, tea.Quit
+			// ESC CLEARS PROMPT INPUT BOX (No longer quits application)
+			if m.state == StateIdle {
+				m.textarea.Reset()
+				return m, nil
+			}
+
+		case tea.KeyCtrlP:
+			// PROFILE SWITCHING FEATURE: Cycle active profile & synchronize with AI agent context!
+			if len(m.profileList) > 1 {
+				currIdx := -1
+				for i, name := range m.profileList {
+					if name == m.profileName {
+						currIdx = i
+						break
+					}
+				}
+				nextIdx := (currIdx + 1) % len(m.profileList)
+				nextProfileName := m.profileList[nextIdx]
+
+				newP, ok := m.allProfiles[nextProfileName]
+				if ok {
+					if newP.Port == 0 {
+						switch newP.DB {
+						case "mysql":
+							newP.Port = 3306
+						case "pg":
+							newP.Port = 5432
+						}
+					}
+
+					m.profileName = nextProfileName
+					m.profile = newP
+					m.unsafeAllowWrite = newP.UnsafeAllowWrite
+					m.schemaInfo = nil
+					m.state = StateLoadingSchema
+
+					switchLine := SuccessBadgeStyle.Render(fmt.Sprintf("✓ Switched active profile to '%s' (%s)", m.profileName, m.profile.DB))
+					m.messages = append(m.messages, switchLine)
+
+					m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+						Role:    "user",
+						Content: fmt.Sprintf("System Notice: Switched active database profile to '%s' (Database: %s). New database schema metadata is being loaded.", m.profileName, m.profile.DB),
+					})
+
+					m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+					m.viewport.GotoBottom()
+					return m, m.loadSchemaCmd()
+				}
+			}
 
 		case tea.KeyCtrlO:
 			// Toggle folding/unfolding of currently active/focused ToolCallItem
@@ -901,7 +974,7 @@ func (m Model) View() string {
 	// 3. State Status & Unified SQL / Export Action Selection Card
 	switch m.state {
 	case StateLoadingSchema:
-		sb.WriteString(m.spinner.View() + " Loading database schema...\n")
+		sb.WriteString(m.spinner.View() + fmt.Sprintf(" Loading database schema for profile '%s'...\n", m.profileName))
 	case StateThinking:
 		sb.WriteString(m.spinner.View() + " AI is analyzing schema and executing tools...\n")
 	case StateExecuting:
@@ -968,16 +1041,22 @@ func (m Model) View() string {
 			{"Esc", "Cancel"},
 		})
 	} else {
+		profileBadge := ""
+		if len(m.profileList) > 1 {
+			profileBadge = fmt.Sprintf(" (%s)", m.profileName)
+		}
 		keybindings = renderKeybindingBadges([][2]string{
 			{"Enter", "Send"},
 			{"Alt+Enter", "Newline"},
+			{"Ctrl+P", "Profile" + profileBadge},
 			{"Tab", "Focus Tool" + toolNavHint},
 			{"Ctrl+O", "Tools (" + toolFoldState + ")"},
 			{"←/→", "Cols"},
 			{"PgUp/PgDn", "Rows"},
 			{"Ctrl+E", "Expand Table"},
 			{"Shift+Tab", "Mode (" + execModeHint + ")"},
-			{"Esc", "Quit"},
+			{"Esc", "Clear"},
+			{"Ctrl+C", "Quit (x2)"},
 		})
 	}
 
