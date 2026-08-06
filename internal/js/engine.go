@@ -65,40 +65,6 @@ func (e *JSEngine) Execute(ctx context.Context, jsCode string, store *session.Se
 	})
 	_ = vm.Set("console", console)
 
-	// Inject Common ES6 Polyfills (String.prototype.repeat, Object.entries, Object.values, Object.assign)
-	polyfills := `
-		if (!String.prototype.repeat) {
-			String.prototype.repeat = function(count) {
-				var str = '' + this;
-				count = +count;
-				if (count != count) count = 0;
-				if (count < 0) return '';
-				var r = '';
-				while (count > 0) {
-					if (count & 1) r += str;
-					count >>>= 1;
-					str += str;
-				}
-				return r;
-			};
-		}
-		if (!Object.entries) {
-			Object.entries = function(obj) {
-				var ownProps = Object.keys(obj), i = ownProps.length, resArray = new Array(i);
-				while (i--) resArray[i] = [ownProps[i], obj[ownProps[i]]];
-				return resArray;
-			};
-		}
-		if (!Object.values) {
-			Object.values = function(obj) {
-				var ownProps = Object.keys(obj), i = ownProps.length, resArray = new Array(i);
-				while (i--) resArray[i] = obj[ownProps[i]];
-				return resArray;
-			};
-		}
-	`
-	_, _ = vm.RunString(polyfills)
-
 	// Inject all active datasets from store
 	if store != nil {
 		allData := store.GetAll()

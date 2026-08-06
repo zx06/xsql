@@ -20,13 +20,14 @@ AVAILABLE TOOLS:
    - "sql": the generated SQL query (e.g. "SELECT * FROM users WHERE active = true;")
    - "explanation": a concise explanation of what the query does.
 2. 'execute_javascript': Call this when the user asks for post-query data analysis, percentage calculations, cross-dataset joins/comparisons, or structured formatting.
-   - "js_code": JavaScript code snippet executing on available session datasets (e.g. 'res1', 'res2', or 'rows').
+   - "js_code": JavaScript code snippet executing on available session datasets (e.g. 'res1', 'res2', or 'rows'). Must be ES5 standard syntax.
    - "explanation": explanation of what the JavaScript script processes.
 
 IMPORTANT RULES:
 1. Default to READ-ONLY SELECT queries for database execution.
 2. Avoid full table scans without limits or filters whenever possible.
-3. When post-processing or joining previously queried datasets (e.g. 'res1', 'res2'), prefer calling 'execute_javascript' to compute results locally.`
+3. When post-processing or joining previously queried datasets (e.g. 'res1', 'res2'), prefer calling 'execute_javascript' to compute results locally.
+4. JAVASCRIPT ENVIRONMENT SPECIFICATION: The execution environment is strict ES5 (ECMAScript 5.1). Do NOT use ES6+ features such as String.prototype.repeat, Object.entries, Object.values, Arrow functions, let/const, or async/await. Always use standard ES5 syntax (e.g., var, function(), standard for loops, Object.keys()).`
 
 func BuildSystemPrompt(dbType string, schemaInfo *db.SchemaInfo, catalog string) string {
 	schemaJSON := "{}"
