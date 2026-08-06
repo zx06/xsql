@@ -26,7 +26,7 @@ type AIFlags struct {
 	Prompt           string
 }
 
-func main() {
+func newRootCmd() *cobra.Command {
 	flags := &AIFlags{}
 
 	rootCmd := &cobra.Command{
@@ -48,6 +48,11 @@ func main() {
 	rootCmd.Flags().BoolVar(&flags.UnsafeAllowWrite, "unsafe-allow-write", false, "Allow write operations (bypasses read-only protection)")
 	rootCmd.Flags().StringVar(&flags.Prompt, "prompt", "", "Initial prompt for AI query")
 
+	return rootCmd
+}
+
+func main() {
+	rootCmd := newRootCmd()
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}

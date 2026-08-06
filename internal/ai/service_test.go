@@ -232,3 +232,48 @@ func TestGenerateSQL_MockHTTP_APIError(t *testing.T) {
 		t.Fatal("expected error for HTTP 500")
 	}
 }
+
+func TestService_ChatCompletion(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		respBody := `{
+			"id": "chatcmpl-999",
+			"object": "chat.completion",
+			"created": 1677652288,
+			"model": "gpt-4o",
+			"choices": [
+				{
+					"index": 0,
+					"message": {
+						"role": "assistant",
+						"content": "Hello from ChatCompletion"
+					},
+					"finish_reason": "stop"
+				}
+			]
+		}`
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(respBody))
+	}))
+	defer mockServer.Close()
+
+	cfg := config.AIConfig{
+		Provider: "openai",
+		BaseURL:  mockServer.URL,
+		APIKey:   "test-key",
+	}
+
+	client := NewClient(cfg, mockServer.Client())
+	service := NewService(cfg, client)
+
+	msgs := []ChatMessage{
+		{Role: "user", Content: "Hello"},
+	}
+
+	res, xe := service.ChatCompletion(context.Background(), msgs)
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+	if res.Explanation != "Hello from ChatCompletion" {
+		t.Errorf("expected explanation 'Hello from ChatCompletion', got %q", res.Explanation)
+	}
+}

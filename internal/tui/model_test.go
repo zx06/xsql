@@ -291,3 +291,76 @@ func TestTUI_Model_CtrlPProfileSwitching(t *testing.T) {
 		t.Fatal("expected loadSchemaCmd after switching profile")
 	}
 }
+
+func TestTUI_Model_ToolCallsAndTableRendering(t *testing.T) {
+	resolved := config.Resolved{ProfileName: "dev", Profile: config.Profile{DB: "mysql"}}
+	aiService := ai.NewService(config.AIConfig{}, nil)
+	m := NewModel(config.Options{}, resolved, aiService, "", false)
+	m.state = StateIdle
+	m.messages = append(m.messages, "", "")
+
+	tc := ToolCallItem{
+		ID:              "tc_1",
+		Name:            "execute_sql",
+		Summary:         "SELECT * FROM users",
+		Detail:          "SELECT * FROM users",
+		Result:          "✓ Execution Success",
+		TableStateIndex: -1,
+		MsgIndex:        0,
+		IsExpanded:      false,
+	}
+	m.toolCalls = append(m.toolCalls, tc)
+
+	// Test focusToolCall & renderToolCall
+	m.focusToolCall(0)
+	if m.activeToolIdx != 0 {
+		t.Fatalf("expected activeToolIdx 0, got %d", m.activeToolIdx)
+	}
+
+	// Toggle expanded via Ctrl+O
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlO})
+	m = updated.(Model)
+	if !m.toolCalls[0].IsExpanded {
+		t.Fatal("expected toolCall to be expanded after Ctrl+O")
+	}
+
+	// Test WindowSizeMsg
+	updated, _ = m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m = updated.(Model)
+	if m.width != 100 || m.height != 40 {
+		t.Fatalf("expected width 100, height 40, got %d, %d", m.width, m.height)
+	}
+}
+
+func TestTUI_Model_ExportFlow(t *testing.T) {
+	resolved := config.Resolved{ProfileName: "dev", Profile: config.Profile{DB: "mysql"}}
+	aiService := ai.NewService(config.AIConfig{}, nil)
+	m := NewModel(config.Options{}, resolved, aiService, "", false)
+
+	// Simulate aiResponseMsg returning TypeExport
+	updated, _ := m.Update(aiResponseMsg{
+		response: &ai.AIResponse{
+			Type:      ai.TypeExport,
+			DatasetID: "res1",
+			Format:    "csv",
+			FilePath:  "test.csv",
+		},
+	})
+	m = updated.(Model)
+	if m.state != StateExportReady {
+		t.Fatalf("expected StateExportReady, got %v", m.state)
+	}
+	if m.pendingExport == nil {
+		t.Fatal("expected pendingExport to be non-nil")
+	}
+
+	// Select option 3 (Deny / Cancel Export) via Key '3'
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	m = updated.(Model)
+	if m.state != StateThinking {
+		t.Fatalf("expected StateThinking after denying export, got %v", m.state)
+	}
+	if cmd == nil {
+		t.Fatal("expected runAgentStepCmd after export feedback")
+	}
+}
