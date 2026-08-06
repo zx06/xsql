@@ -61,13 +61,14 @@ type TableState struct {
 }
 
 type ToolCallItem struct {
-	ID         string
-	Name       string
-	Summary    string
-	Detail     string
-	Result     string
-	MsgIndex   int
-	IsExpanded bool
+	ID              string
+	Name            string
+	Summary         string
+	Detail          string
+	Result          string
+	TableStateIndex int // -1 if no table attached
+	MsgIndex        int
+	IsExpanded      bool
 }
 
 type PendingExport struct {
@@ -93,14 +94,15 @@ type Model struct {
 	jsRetryCount  int
 	maxJSRetries  int
 
-	state       State
-	schemaInfo  *db.SchemaInfo
-	currentSQL  string
-	explanation string
-	messages    []string
-	tableStates []TableState
-	toolCalls   []ToolCallItem
-	activeTable int
+	state         State
+	schemaInfo    *db.SchemaInfo
+	currentSQL    string
+	explanation   string
+	messages      []string
+	tableStates   []TableState
+	toolCalls     []ToolCallItem
+	activeTable   int
+	activeToolIdx int
 
 	textarea textarea.Model
 	viewport viewport.Model
@@ -143,6 +145,7 @@ func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Servi
 		tableStates:      []TableState{},
 		toolCalls:        []ToolCallItem{},
 		activeTable:      -1,
+		activeToolIdx:    -1,
 		state:            StateLoadingSchema,
 		textarea:         ta,
 		viewport:         vp,
@@ -216,6 +219,15 @@ func (m *Model) renderTableState(idx int, isActive bool) {
 		return
 	}
 	ts := &m.tableStates[idx]
+
+	// Find associated ToolCallItem if embedded
+	for i := range m.toolCalls {
+		if m.toolCalls[i].TableStateIndex == idx {
+			m.renderToolCall(i)
+			return
+		}
+	}
+
 	if ts.MsgIndex < 0 || ts.MsgIndex >= len(m.messages) {
 		return
 	}
@@ -236,17 +248,33 @@ func (m *Model) renderToolCall(idx int) {
 		return
 	}
 
+	isActiveTool := (idx == m.activeToolIdx)
+	activeMarker := ""
+	if isActiveTool && len(m.toolCalls) > 1 {
+		activeMarker = fmt.Sprintf(" 🎯[Tool %d/%d]", idx+1, len(m.toolCalls))
+	}
+
 	var sb strings.Builder
 	if !tc.IsExpanded {
-		badge := ToolCollapsedBadge.Render("▶ 🛠️ Tool: " + tc.Name)
+		badge := ToolCollapsedBadge.Render("▶ 🛠️ Tool: " + tc.Name + activeMarker)
 		summary := MetricsStyle.Render(fmt.Sprintf("%s (Folded - Press Ctrl+O to unfold)", tc.Summary))
 		sb.WriteString(fmt.Sprintf("%s %s", badge, summary))
 	} else {
-		badge := ToolExpandedBadge.Render("▼ 🛠️ Tool: " + tc.Name)
+		badge := ToolExpandedBadge.Render("▼ 🛠️ Tool: " + tc.Name + activeMarker)
 		summary := SQLCodeStyle.Render(tc.Summary)
 		detail := ToolDetailStyle.Render(tc.Detail)
 		resText := MetricsStyle.Render(tc.Result)
 		sb.WriteString(fmt.Sprintf("%s %s\n%s\n%s", badge, summary, detail, resText))
+
+		// Render embedded Table Result inside container when unfolded
+		if tc.TableStateIndex >= 0 && tc.TableStateIndex < len(m.tableStates) {
+			ts := &m.tableStates[tc.TableStateIndex]
+			tableStr := FormatTableResult(ts.Result, ts.ColOffset, ts.RowOffset, m.width, tc.TableStateIndex == m.activeTable)
+			if ts.VerticalView {
+				tableStr = FormatVerticalResult(ts.Result)
+			}
+			sb.WriteString("\n\n" + tableStr)
+		}
 	}
 
 	m.messages[tc.MsgIndex] = sb.String()
@@ -299,17 +327,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				lineCount := len(strings.Split(msg.response.JSCode, "\n"))
 				tc := ToolCallItem{
-					ID:         fmt.Sprintf("tc_%d", len(m.toolCalls)+1),
-					Name:       "execute_javascript",
-					Summary:    fmt.Sprintf("Executing %d lines of JS data analysis", lineCount),
-					Detail:     msg.response.JSCode,
-					MsgIndex:   len(m.messages),
-					IsExpanded: false,
+					ID:              fmt.Sprintf("tc_%d", len(m.toolCalls)+1),
+					Name:            "execute_javascript",
+					Summary:         fmt.Sprintf("Executing %d lines of JS data analysis", lineCount),
+					Detail:          msg.response.JSCode,
+					TableStateIndex: -1,
+					MsgIndex:        len(m.messages),
+					IsExpanded:      false,
 				}
 
 				m.messages = append(m.messages, "")
 				m.toolCalls = append(m.toolCalls, tc)
 				toolIdx := len(m.toolCalls) - 1
+				m.activeToolIdx = toolIdx
 
 				ctx := context.Background()
 				jsRes, jsErr := m.jsEngine.Execute(ctx, msg.response.JSCode, m.sessionStore)
@@ -369,36 +399,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, m.runAgentStepCmd()
 				}
 
-				tc := ToolCallItem{
-					ID:         fmt.Sprintf("tc_%d", len(m.toolCalls)+1),
-					Name:       "render_table",
-					Summary:    fmt.Sprintf("Rendered interactive table view for %s (%d rows)", msg.response.DatasetID, len(datasetRes.Rows)),
-					Detail:     fmt.Sprintf("Dataset: %s | Title: %s", msg.response.DatasetID, msg.response.Title),
-					Result:     fmt.Sprintf("✓ Table rendered (%d rows)", len(datasetRes.Rows)),
-					MsgIndex:   len(m.messages),
-					IsExpanded: false,
-				}
-				m.messages = append(m.messages, "")
-				m.toolCalls = append(m.toolCalls, tc)
-				toolIdx := len(m.toolCalls) - 1
-				m.renderToolCall(toolIdx)
-
-				if m.activeTable >= 0 && m.activeTable < len(m.tableStates) {
-					m.renderTableState(m.activeTable, false)
-				}
-
 				ts := TableState{
 					Result:       datasetRes,
-					MsgIndex:     len(m.messages),
+					MsgIndex:     -1,
 					ColOffset:    0,
 					RowOffset:    0,
 					VerticalView: false,
 				}
 				m.tableStates = append(m.tableStates, ts)
-				m.activeTable = len(m.tableStates) - 1
+				tableIdx := len(m.tableStates) - 1
+				m.activeTable = tableIdx
 
-				formatted := FormatTableResult(datasetRes, 0, 0, m.width, true)
-				m.messages = append(m.messages, formatted)
+				tc := ToolCallItem{
+					ID:              fmt.Sprintf("tc_%d", len(m.toolCalls)+1),
+					Name:            "render_table",
+					Summary:         fmt.Sprintf("Rendered interactive table view for %s (%d rows)", msg.response.DatasetID, len(datasetRes.Rows)),
+					Detail:          fmt.Sprintf("Dataset: %s | Title: %s", msg.response.DatasetID, msg.response.Title),
+					Result:          fmt.Sprintf("✓ Table rendered (%d rows)", len(datasetRes.Rows)),
+					TableStateIndex: tableIdx,
+					MsgIndex:        len(m.messages),
+					IsExpanded:      false,
+				}
+				m.messages = append(m.messages, "")
+				m.toolCalls = append(m.toolCalls, tc)
+				toolIdx := len(m.toolCalls) - 1
+				m.activeToolIdx = toolIdx
+				m.renderToolCall(toolIdx)
 
 				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
 					Role:    "user",
@@ -416,17 +442,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				})
 
 				tc := ToolCallItem{
-					ID:         fmt.Sprintf("tc_%d", len(m.toolCalls)+1),
-					Name:       "export_data",
-					Summary:    fmt.Sprintf("Export %s to %s (%s) [Pending User Confirmation]", msg.response.DatasetID, msg.response.FilePath, strings.ToUpper(msg.response.Format)),
-					Detail:     fmt.Sprintf("Dataset: %s | FilePath: %s | Format: %s", msg.response.DatasetID, msg.response.FilePath, msg.response.Format),
-					Result:     "⏳ Pending Human Confirmation",
-					MsgIndex:   len(m.messages),
-					IsExpanded: false,
+					ID:              fmt.Sprintf("tc_%d", len(m.toolCalls)+1),
+					Name:            "export_data",
+					Summary:         fmt.Sprintf("Export %s to %s (%s) [Pending User Confirmation]", msg.response.DatasetID, msg.response.FilePath, strings.ToUpper(msg.response.Format)),
+					Detail:          fmt.Sprintf("Dataset: %s | FilePath: %s | Format: %s", msg.response.DatasetID, msg.response.FilePath, msg.response.Format),
+					Result:          "⏳ Pending Human Confirmation",
+					TableStateIndex: -1,
+					MsgIndex:        len(m.messages),
+					IsExpanded:      false,
 				}
 				m.messages = append(m.messages, "")
 				m.toolCalls = append(m.toolCalls, tc)
 				toolIdx := len(m.toolCalls) - 1
+				m.activeToolIdx = toolIdx
 				m.renderToolCall(toolIdx)
 
 				m.pendingExport = &PendingExport{
@@ -445,16 +473,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.currentSQL = msg.response.SQL
 
 				tc := ToolCallItem{
-					ID:         fmt.Sprintf("tc_%d", len(m.toolCalls)+1),
-					Name:       "execute_sql",
-					Summary:    m.currentSQL,
-					Detail:     m.currentSQL,
-					MsgIndex:   len(m.messages),
-					IsExpanded: false,
+					ID:              fmt.Sprintf("tc_%d", len(m.toolCalls)+1),
+					Name:            "execute_sql",
+					Summary:         m.currentSQL,
+					Detail:          m.currentSQL,
+					TableStateIndex: -1,
+					MsgIndex:        len(m.messages),
+					IsExpanded:      false,
 				}
 				m.messages = append(m.messages, "")
 				m.toolCalls = append(m.toolCalls, tc)
 				toolIdx := len(m.toolCalls) - 1
+				m.activeToolIdx = toolIdx
 				m.renderToolCall(toolIdx)
 
 				if m.autoExecute {
@@ -509,32 +539,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			metricsStr := fmt.Sprintf("⏱️ %s | 📊 %d rows | 🤖 %s | 💾 %s", durStr, len(msg.result.Rows), modelName, datasetID)
 			statusLine := SuccessBadgeStyle.Render("✓ Execution Success") + " " + MetricsStyle.Render(metricsStr)
 
-			// Update existing execute_sql ToolCallItem result with execution metrics (NO duplicate text line appended!)
-			if len(m.toolCalls) > 0 {
-				lastIdx := len(m.toolCalls) - 1
-				if m.toolCalls[lastIdx].Name == "execute_sql" {
-					m.toolCalls[lastIdx].Result = statusLine
-					m.renderToolCall(lastIdx)
-				}
-			}
-
-			// Render interactive table widget directly below the tool call item
-			if m.activeTable >= 0 && m.activeTable < len(m.tableStates) {
-				m.renderTableState(m.activeTable, false)
-			}
-
 			ts := TableState{
 				Result:       msg.result,
-				MsgIndex:     len(m.messages),
+				MsgIndex:     -1,
 				ColOffset:    0,
 				RowOffset:    0,
 				VerticalView: false,
 			}
 			m.tableStates = append(m.tableStates, ts)
-			m.activeTable = len(m.tableStates) - 1
+			tableIdx := len(m.tableStates) - 1
+			m.activeTable = tableIdx
 
-			formatted := FormatTableResult(msg.result, 0, 0, m.width, true)
-			m.messages = append(m.messages, formatted)
+			// Attach TableStateIndex directly inside execute_sql ToolCallItem
+			if len(m.toolCalls) > 0 {
+				lastIdx := len(m.toolCalls) - 1
+				if m.toolCalls[lastIdx].Name == "execute_sql" {
+					m.toolCalls[lastIdx].Result = statusLine
+					m.toolCalls[lastIdx].TableStateIndex = tableIdx
+					m.renderToolCall(lastIdx)
+				}
+			}
 
 			m.chatHistory = append(m.chatHistory, ai.ChatMessage{
 				Role:    "user",
@@ -668,10 +692,41 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case tea.KeyCtrlO:
+			// Toggle folding/unfolding of currently active/focused ToolCallItem
 			if len(m.toolCalls) > 0 {
-				lastIdx := len(m.toolCalls) - 1
-				m.toolCalls[lastIdx].IsExpanded = !m.toolCalls[lastIdx].IsExpanded
-				m.renderToolCall(lastIdx)
+				if m.activeToolIdx < 0 || m.activeToolIdx >= len(m.toolCalls) {
+					m.activeToolIdx = len(m.toolCalls) - 1
+				}
+				m.toolCalls[m.activeToolIdx].IsExpanded = !m.toolCalls[m.activeToolIdx].IsExpanded
+				m.renderToolCall(m.activeToolIdx)
+				return m, nil
+			}
+
+		case tea.KeyCtrlP:
+			// Cycle active tool call focus to PREVIOUS tool call
+			if len(m.toolCalls) > 0 {
+				oldIdx := m.activeToolIdx
+				if m.activeToolIdx <= 0 {
+					m.activeToolIdx = len(m.toolCalls) - 1
+				} else {
+					m.activeToolIdx--
+				}
+				if oldIdx >= 0 && oldIdx < len(m.toolCalls) {
+					m.renderToolCall(oldIdx)
+				}
+				m.renderToolCall(m.activeToolIdx)
+				return m, nil
+			}
+
+		case tea.KeyCtrlN:
+			// Cycle active tool call focus to NEXT tool call
+			if len(m.toolCalls) > 0 {
+				oldIdx := m.activeToolIdx
+				m.activeToolIdx = (m.activeToolIdx + 1) % len(m.toolCalls)
+				if oldIdx >= 0 && oldIdx < len(m.toolCalls) {
+					m.renderToolCall(oldIdx)
+				}
+				m.renderToolCall(m.activeToolIdx)
 				return m, nil
 			}
 
@@ -841,8 +896,13 @@ func (m Model) View() string {
 	}
 
 	toolFoldState := "Folded"
-	if len(m.toolCalls) > 0 && m.toolCalls[len(m.toolCalls)-1].IsExpanded {
+	if m.activeToolIdx >= 0 && m.activeToolIdx < len(m.toolCalls) && m.toolCalls[m.activeToolIdx].IsExpanded {
 		toolFoldState = "Unfolded"
+	}
+
+	toolNavHint := ""
+	if len(m.toolCalls) > 1 {
+		toolNavHint = fmt.Sprintf(" [%d/%d]", m.activeToolIdx+1, len(m.toolCalls))
 	}
 
 	var keybindings string
@@ -857,7 +917,8 @@ func (m Model) View() string {
 			{"e", "Edit SQL"},
 			{"Esc", "Cancel"},
 			{"Shift+Tab", "Mode (" + execModeHint + ")"},
-			{"Ctrl+O", "Tool Details (" + toolFoldState + ")"},
+			{"Ctrl+O", "Tool Details (" + toolFoldState + toolNavHint + ")"},
+			{"Ctrl+P/N", "Nav Tools"},
 		})
 	} else {
 		keybindings = renderKeybindingBadges([][2]string{
@@ -866,7 +927,8 @@ func (m Model) View() string {
 			{"←/→", "Cols"},
 			{"PgUp/PgDn", "Rows"},
 			{"Ctrl+E", "Expand Table"},
-			{"Ctrl+O", "Tools (" + toolFoldState + ")"},
+			{"Ctrl+O", "Tools (" + toolFoldState + toolNavHint + ")"},
+			{"Ctrl+P/N", "Nav Tools"},
 			{"Shift+Tab", "Mode (" + execModeHint + ")"},
 			{"Esc", "Quit"},
 		})
