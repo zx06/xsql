@@ -116,17 +116,37 @@ func (e *JSEngine) Execute(ctx context.Context, jsCode string, store *session.Se
 	}
 
 	exported := val.Export()
-	jsonBytes, jsonErr := json.MarshalIndent(exported, "", "  ")
-	jsonStr := ""
-	if jsonErr == nil {
-		jsonStr = string(jsonBytes)
-	} else {
-		jsonStr = fmt.Sprintf("%v", exported)
+	var jsonStr string
+	var summaryText string
+
+	if str, ok := exported.(string); ok {
+		var parsed any
+		if json.Unmarshal([]byte(str), &parsed) == nil {
+			if b, err := json.MarshalIndent(parsed, "", "  "); err == nil {
+				jsonStr = string(b)
+			} else {
+				jsonStr = str
+			}
+		} else {
+			jsonStr = str
+		}
+		summaryText = jsonStr
+	} else if exported != nil {
+		if b, err := json.MarshalIndent(exported, "", "  "); err == nil {
+			jsonStr = string(b)
+		} else {
+			jsonStr = fmt.Sprintf("%v", exported)
+		}
+		summaryText = jsonStr
 	}
 
-	summaryText := jsonStr
 	if len(logs) > 0 {
-		summaryText = strings.Join(logs, "\n") + "\n\nReturn Value:\n" + jsonStr
+		consoleLogs := strings.Join(logs, "\n")
+		if summaryText == "" || summaryText == "(null)" {
+			summaryText = consoleLogs
+		} else {
+			summaryText = consoleLogs + "\n\n" + summaryText
+		}
 	}
 
 	return &ExecutionResult{

@@ -20,7 +20,7 @@ AVAILABLE TOOLS:
    - "sql": the generated SQL query (e.g. "SELECT * FROM users WHERE active = true;")
    - "explanation": a concise explanation of what the query does.
 2. 'execute_javascript': Call this when the user asks for post-query data analysis, percentage calculations, cross-dataset joins/comparisons, or structured formatting.
-   - "js_code": JavaScript code snippet executing on available session datasets (e.g. 'res1', 'res2', or 'rows'). Must be ES5 standard syntax.
+   - "js_code": JavaScript code snippet executing on available session datasets (e.g. 'res1', 'res2', or 'rows'). Must be ES5 standard syntax. Return a clean JS object or formatted string. Do NOT wrap return values in JSON.stringify() with string escaping.
    - "explanation": explanation of what the JavaScript script processes.
 
 IMPORTANT RULES:

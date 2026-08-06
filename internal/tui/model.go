@@ -244,7 +244,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			if msg.response.Type == ai.TypeJS && msg.response.JSCode != "" {
 				// Execute JS script using goja on active session datasets
-				jsExecLine := ExecutingTagStyle.Render("⚡ JS Analysis") + " " + SQLCodeStyle.Render(msg.response.JSCode)
+				lineCount := len(strings.Split(msg.response.JSCode, "\n"))
+				jsExecLine := ExecutingTagStyle.Render("⚡ JS Analysis") + " " + MetricsStyle.Render(fmt.Sprintf("Executing %d lines of JavaScript data processing script...", lineCount))
 				m.messages = append(m.messages, jsExecLine)
 
 				ctx := context.Background()
@@ -265,7 +266,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.jsRetryCount = 0
 				} else {
 					m.jsRetryCount = 0
-					resultMsg := SuccessBadgeStyle.Render("📊 JS Result:") + "\n" + AIResponseStyle.Render(jsRes.SummaryText)
+					resultMsg := SuccessBadgeStyle.Render("📊 Analysis Report:") + "\n" + AIResponseStyle.Render(jsRes.SummaryText)
 					m.messages = append(m.messages, resultMsg)
 				}
 				m.state = StateIdle
