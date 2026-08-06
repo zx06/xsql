@@ -25,10 +25,9 @@ Status: Proposed
 - JS 仅负责数据计算与转换；由外层 Go 宿主层统一执行安全的磁盘文件写入（CSV / JSON / Markdown），并强制人机交互二次确认（Human-in-the-loop）。
 
 ### 4. ReAct Tool Agent Loop 架构 (`internal/ai` & `internal/tui`)
-AI 具备 4 大解耦工具：
-1. `execute_sql`: 数据库 SQL 查询
+AI 具备 3 大解耦工具：
+1. `execute_sql`: 数据库 SQL 查询（执行完由宿主层自动渲染内嵌交互表格）
 2. `execute_javascript`: ES5 沙箱数据二次清洗与聚合
-3. `render_table`: 交互式 TUI 表格组件渲染
-4. `export_data`: 文件导出（含人机交互确认卡片）
+3. `export_data`: 文件导出（含人机交互确认卡片）
 
 所有 Tool Calls 默认在 TUI 容器中折叠内嵌呈现（`Ctrl+O` 展开/折叠，`Ctrl+P`/`Ctrl+N` 切换焦点），且交互末尾必定以 LLM 自然语言 Markdown 分析报告总结收尾。

@@ -115,11 +115,10 @@ xsql-ai --profile dev
 ```
 
 ### LLM 集成与 Tool Call 机制
-`xsql` 使用 OpenAI 官方 SDK (`github.com/openai/openai-go`) 与大模型交互，基于标准的 **ReAct Agent Loop 循环推理**，支持 4 大核心 Tools 调度：
-1. **`execute_sql(sql: string, explanation: string)`**: 数据库 SQL 查询工具。
+`xsql` 使用 OpenAI 官方 SDK (`github.com/openai/openai-go`) 与大模型交互，基于标准的 **ReAct Agent Loop 循环推理**，支持 3 大核心 Tools 调度：
+1. **`execute_sql(sql: string, explanation: string)`**: 数据库 SQL 查询工具（执行成功后宿主自动渲染内嵌交互表格）。
 2. **`execute_javascript(js_code: string, explanation: string)`**: 基于 `goja` 沙箱的本地 JS 数据聚合计算工具（必须遵循 ES5 语法）。
-3. **`render_table(dataset_id: string, title: string, explanation: string)`**: 会话数据集 TUI 交互表格渲染工具。
-4. **`export_data(dataset_id: string, format: string, filepath: string, explanation: string)`**: 会话数据集文件导出工具（触发人机交互二次确认）。
+3. **`export_data(dataset_id: string, format: string, filepath: string, explanation: string)`**: 会话数据集文件导出工具（触发人机交互二次确认）。
 
 #### ReAct Agent Loop 准则
 - **循环驱动**：Agent 会在单次交互中循环执行 Tools，直到不再产生 Tool Call。

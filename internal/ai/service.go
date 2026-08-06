@@ -13,7 +13,6 @@ type ResponseType string
 const (
 	TypeSQL    ResponseType = "sql"
 	TypeJS     ResponseType = "js"
-	TypeTable  ResponseType = "table"
 	TypeExport ResponseType = "export"
 	TypeText   ResponseType = "text"
 )
@@ -25,7 +24,6 @@ type AIResponse struct {
 	DatasetID   string       `json:"dataset_id,omitempty"`
 	Format      string       `json:"format,omitempty"`
 	FilePath    string       `json:"filepath,omitempty"`
-	Title       string       `json:"title,omitempty"`
 	Explanation string       `json:"explanation"`
 }
 
