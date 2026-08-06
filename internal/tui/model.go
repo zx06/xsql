@@ -84,7 +84,7 @@ func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Servi
 	ta := textarea.New()
 	ta.Placeholder = "Ask AI to generate a SQL query (e.g. 'Show top 10 servers')...."
 	ta.ShowLineNumbers = false
-	ta.Prompt = PromptPrefixStyle.Render("✦ ")
+	ta.Prompt = ""
 	ta.Focus()
 	ta.CharLimit = 1000
 	ta.SetWidth(80)
@@ -480,9 +480,11 @@ func (m Model) View() string {
 	}
 
 	// 4. Input Area & Footer Keybindings
+	promptTitle := lipgloss.NewStyle().Bold(true).Foreground(PrimaryColor).Render("✦ Ask AI:")
 	if m.editingSQL {
-		sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(AccentColor).Render("✏️  Edit SQL (Enter: Apply | Esc: Cancel):") + "\n")
+		promptTitle = lipgloss.NewStyle().Bold(true).Foreground(AccentColor).Render("✏️  Edit SQL (Enter: Apply | Esc: Cancel):")
 	}
+	sb.WriteString(promptTitle + "\n")
 	sb.WriteString(m.textarea.View() + "\n\n")
 
 	execModeHint := "MANUAL"
