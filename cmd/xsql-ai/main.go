@@ -41,14 +41,12 @@ func main() {
 	}
 
 	rootCmd.Flags().StringVar(&flags.ConfigPath, "config", "", "Config file path (YAML)")
-	rootCmd.Flags().StringVarP(&flags.Profile, "profile", "p", "", "Profile name (required)")
+	rootCmd.Flags().StringVarP(&flags.Profile, "profile", "p", "", "Profile name (default: 'default')")
 	rootCmd.Flags().StringVar(&flags.Model, "model", "", "AI model name (default: gpt-4o)")
 	rootCmd.Flags().StringVar(&flags.BaseURL, "base-url", "", "AI service base URL")
 	rootCmd.Flags().StringVar(&flags.APIKey, "api-key", "", "AI service API key")
 	rootCmd.Flags().BoolVar(&flags.UnsafeAllowWrite, "unsafe-allow-write", false, "Allow write operations (bypasses read-only protection)")
 	rootCmd.Flags().StringVar(&flags.Prompt, "prompt", "", "Initial prompt for AI query")
-
-	_ = rootCmd.MarkFlagRequired("profile")
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -71,6 +69,9 @@ func runAI(cmd *cobra.Command, flags *AIFlags) error {
 	resolved, xe := config.Resolve(opts)
 	if xe != nil {
 		return fmt.Errorf("config error [%s]: %s", xe.Code, xe.Message)
+	}
+	if resolved.ProfileName == "" || resolved.Profile.DB == "" {
+		return fmt.Errorf("config error [XSQL_CFG_INVALID]: no profile specified and no 'default' profile found in config")
 	}
 
 	// Resolve API key if keyring reference or plaintext
