@@ -117,13 +117,13 @@ type Model struct {
 
 func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Service, initialPrompt string, unsafeAllowWrite bool) Model {
 	ta := textarea.New()
-	ta.Placeholder = "Ask AI to generate SQL or analyze datasets (e.g. 'Show top 10 servers')...."
+	ta.Placeholder = "Ask AI to query or analyze database..."
 	ta.ShowLineNumbers = false
-	ta.Prompt = ""
+	ta.Prompt = "❯ "
 	ta.Focus()
 	ta.CharLimit = 1000
 	ta.SetWidth(80)
-	ta.SetHeight(2)
+	ta.SetHeight(1)
 
 	vp := viewport.New(80, 15)
 
@@ -927,13 +927,11 @@ func (m Model) View() string {
 		sb.WriteString(card + "\n")
 	}
 
-	// 4. Input Area & Footer Keybindings
-	promptTitle := lipgloss.NewStyle().Bold(true).Foreground(PrimaryColor).Render("✦ Ask AI:")
-	if m.editingSQL {
-		promptTitle = lipgloss.NewStyle().Bold(true).Foreground(AccentColor).Render("✏️  Edit SQL (Enter: Apply | Esc: Cancel):")
-	}
-	sb.WriteString(promptTitle + "\n")
-	sb.WriteString(m.textarea.View() + "\n\n")
+	// 4. Ultra-Minimal Prompt Input Area & Footer Keybindings
+	separator := lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#CBD5E1", Dark: "#334155"}).Render(strings.Repeat("─", m.width-4))
+	sb.WriteString(separator + "\n")
+	sb.WriteString(m.textarea.View() + "\n")
+	sb.WriteString(separator + "\n\n")
 
 	execModeHint := "MANUAL"
 	if m.autoExecute {
