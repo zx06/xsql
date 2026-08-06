@@ -101,6 +101,31 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*A
 		},
 	}
 
+	tableToolDef := openai.ChatCompletionToolParam{
+		Function: shared.FunctionDefinitionParam{
+			Name:        "render_table",
+			Description: openai.String("Render a cached session dataset (e.g. res1, res2) as an interactive TUI table widget for the user."),
+			Parameters: shared.FunctionParameters{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"dataset_id": map[string]interface{}{
+						"type":        "string",
+						"description": "The session dataset ID to render as interactive TUI table (e.g., 'res1').",
+					},
+					"title": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional title for the table component.",
+					},
+					"explanation": map[string]interface{}{
+						"type":        "string",
+						"description": "Explanation of the table being rendered.",
+					},
+				},
+				"required": []string{"dataset_id", "explanation"},
+			},
+		},
+	}
+
 	model := c.cfg.Model
 	if model == "" {
 		model = "gpt-4o"
@@ -109,7 +134,7 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*A
 	params := openai.ChatCompletionNewParams{
 		Model:    shared.ChatModel(model),
 		Messages: sdkMessages,
-		Tools:    []openai.ChatCompletionToolParam{sqlToolDef, jsToolDef},
+		Tools:    []openai.ChatCompletionToolParam{sqlToolDef, jsToolDef, tableToolDef},
 	}
 	if c.cfg.MaxTokens > 0 {
 		params.MaxTokens = openai.Int(int64(c.cfg.MaxTokens))
@@ -151,6 +176,20 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*A
 				return &AIResponse{
 					Type:        TypeJS,
 					JSCode:      strings.TrimSpace(raw.JSCode),
+					Explanation: strings.TrimSpace(raw.Explanation),
+				}, nil
+			}
+		} else if toolCall.Function.Name == "render_table" {
+			var raw struct {
+				DatasetID   string `json:"dataset_id"`
+				Title       string `json:"title"`
+				Explanation string `json:"explanation"`
+			}
+			if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &raw); err == nil {
+				return &AIResponse{
+					Type:        TypeTable,
+					DatasetID:   strings.TrimSpace(raw.DatasetID),
+					Title:       strings.TrimSpace(raw.Title),
 					Explanation: strings.TrimSpace(raw.Explanation),
 				}, nil
 			}

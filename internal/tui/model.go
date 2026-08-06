@@ -341,6 +341,68 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.viewport.GotoBottom()
 					return m, m.runAgentStepCmd()
 				}
+			} else if msg.response.Type == ai.TypeTable && msg.response.DatasetID != "" {
+				// Record Assistant Tool Call into chat history
+				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+					Role:    "assistant",
+					Content: fmt.Sprintf("Call tool 'render_table': dataset_id=%s, title=%s", msg.response.DatasetID, msg.response.Title),
+				})
+
+				datasetRes, exists := m.sessionStore.Get(msg.response.DatasetID)
+				if !exists || datasetRes == nil {
+					m.messages = append(m.messages, ErrorMsgStyle.Render(fmt.Sprintf("❌ Tool render_table failed: dataset '%s' not found", msg.response.DatasetID)))
+					m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+						Role:    "user",
+						Content: fmt.Sprintf("Tool 'render_table' failed: dataset '%s' not found in session catalog.", msg.response.DatasetID),
+					})
+					m.state = StateThinking
+					m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+					m.viewport.GotoBottom()
+					return m, m.runAgentStepCmd()
+				}
+
+				// Render table component in TUI
+				tc := ToolCallItem{
+					ID:         fmt.Sprintf("tc_%d", len(m.toolCalls)+1),
+					Name:       "render_table",
+					Summary:    fmt.Sprintf("Rendered interactive table view for %s (%d rows)", msg.response.DatasetID, len(datasetRes.Rows)),
+					Detail:     fmt.Sprintf("Dataset: %s | Title: %s", msg.response.DatasetID, msg.response.Title),
+					Result:     fmt.Sprintf("✓ Table rendered (%d rows)", len(datasetRes.Rows)),
+					MsgIndex:   len(m.messages),
+					IsExpanded: false,
+				}
+				m.messages = append(m.messages, "")
+				m.toolCalls = append(m.toolCalls, tc)
+				toolIdx := len(m.toolCalls) - 1
+				m.renderToolCall(toolIdx)
+
+				// Remove focus from previous active table
+				if m.activeTable >= 0 && m.activeTable < len(m.tableStates) {
+					m.renderTableState(m.activeTable, false)
+				}
+
+				ts := TableState{
+					Result:       datasetRes,
+					MsgIndex:     len(m.messages),
+					ColOffset:    0,
+					RowOffset:    0,
+					VerticalView: false,
+				}
+				m.tableStates = append(m.tableStates, ts)
+				m.activeTable = len(m.tableStates) - 1
+
+				formatted := FormatTableResult(datasetRes, 0, 0, m.width, true)
+				m.messages = append(m.messages, formatted)
+
+				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+					Role:    "user",
+					Content: fmt.Sprintf("Tool 'render_table' executed successfully. Interactive table view for dataset '%s' rendered for user.", msg.response.DatasetID),
+				})
+
+				m.state = StateThinking
+				m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+				m.viewport.GotoBottom()
+				return m, m.runAgentStepCmd()
 			} else if msg.response.Type == ai.TypeSQL && msg.response.SQL != "" {
 				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
 					Role:    "assistant",
@@ -426,7 +488,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-			// Remove focus from previous active table
+			// Auto-render interactive table widget for the dataset
 			if m.activeTable >= 0 && m.activeTable < len(m.tableStates) {
 				m.renderTableState(m.activeTable, false)
 			}
@@ -522,7 +584,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case tea.KeyCtrlO:
-			// Toggle folding/unfolding of all tool calls or the latest tool call
 			if len(m.toolCalls) > 0 {
 				lastIdx := len(m.toolCalls) - 1
 				m.toolCalls[lastIdx].IsExpanded = !m.toolCalls[lastIdx].IsExpanded
