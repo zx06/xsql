@@ -684,25 +684,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if m.state == StateSQLReady {
-			switch {
-			case msg.Type == tea.KeyEnter:
+			switch msg.Type {
+			case tea.KeyEnter:
 				m.state = StateExecuting
 				m.textarea.Focus()
 				m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 				m.viewport.GotoBottom()
 				return m, m.executeSQLCmd(m.currentSQL)
 
-			case msg.String() == "e" || msg.String() == "E":
-				m.editingSQL = true
-				m.textarea.Focus()
-				m.textarea.SetValue(m.currentSQL)
-				m.textarea.CursorEnd()
-				return m, nil
-
-			case msg.Type == tea.KeyEsc:
+			case tea.KeyEsc:
 				m.state = StateIdle
 				m.textarea.Focus()
 				return m, nil
+			default:
+				if msg.String() == "e" || msg.String() == "E" {
+					m.editingSQL = true
+					m.textarea.Focus()
+					m.textarea.SetValue(m.currentSQL)
+					m.textarea.CursorEnd()
+					return m, nil
+				}
 			}
 		}
 
@@ -721,26 +722,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-		case tea.KeyTab, tea.KeyCtrlN:
-			// Tab / Ctrl+N: Navigate focus to NEXT Tool Call Container
+		case tea.KeyTab:
+			// Tab: Cycle focus between Tool Call Containers
 			if len(m.toolCalls) > 0 {
 				m.focusToolCall((m.activeToolIdx + 1) % len(m.toolCalls))
 				return m, nil
 			}
 
-		case tea.KeyShiftTab, tea.KeyCtrlP:
-			// Shift+Tab / Ctrl+P: Navigate focus to PREVIOUS Tool Call Container
-			if len(m.toolCalls) > 0 {
-				if m.activeToolIdx <= 0 {
-					m.focusToolCall(len(m.toolCalls) - 1)
-				} else {
-					m.focusToolCall(m.activeToolIdx - 1)
-				}
-				return m, nil
-			}
-
-		case tea.KeyCtrlA:
-			// Ctrl+A: Toggle Auto-Execute / Manual approval mode
+		case tea.KeyShiftTab:
+			// Shift+Tab: Restored keybinding for toggling AUTO-EXECUTE / MANUAL approval mode!
 			m.autoExecute = !m.autoExecute
 
 		case tea.KeyCtrlE:
@@ -917,19 +907,18 @@ func (m Model) View() string {
 			{"Enter", "Execute"},
 			{"e", "Edit SQL"},
 			{"Esc", "Cancel"},
-			{"Ctrl+A", "Mode (" + execModeHint + ")"},
-			{"Ctrl+O", "Tool Details (" + toolFoldState + toolNavHint + ")"},
-			{"Tab/Shift+Tab", "Nav Tools"},
+			{"Shift+Tab", "Mode (" + execModeHint + ")"},
+			{"Ctrl+O", "Tool (" + toolFoldState + toolNavHint + ")"},
 		})
 	} else {
 		keybindings = renderKeybindingBadges([][2]string{
 			{"Enter", "Send"},
-			{"Tab/Shift+Tab", "Focus Tool" + toolNavHint},
+			{"Tab", "Focus Tool" + toolNavHint},
+			{"Ctrl+O", "Fold/Unfold Tool"},
 			{"←/→", "Cols"},
 			{"PgUp/PgDn", "Rows"},
-			{"Ctrl+O", "Tools (" + toolFoldState + ")"},
 			{"Ctrl+E", "Expand Table"},
-			{"Ctrl+A", "Mode (" + execModeHint + ")"},
+			{"Shift+Tab", "Mode (" + execModeHint + ")"},
 			{"Esc", "Quit"},
 		})
 	}

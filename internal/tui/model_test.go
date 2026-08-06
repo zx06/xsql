@@ -170,11 +170,11 @@ func TestTUI_Model_ShiftTabAutoExecuteToggle(t *testing.T) {
 		t.Fatal("expected autoExecute to be false by default")
 	}
 
-	// Press Ctrl+A -> toggle to autoExecute = true
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	// Press Shift+Tab -> toggle to autoExecute = true
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
 	m = updated.(Model)
 	if !m.autoExecute {
-		t.Fatal("expected autoExecute to be true after Ctrl+A")
+		t.Fatal("expected autoExecute to be true after Shift+Tab")
 	}
 
 	// Send sqlGeneratedMsg -> should automatically transition to StateExecuting
