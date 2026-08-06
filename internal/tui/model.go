@@ -298,26 +298,27 @@ func (m *Model) renderToolCall(idx int) {
 	if !tc.IsExpanded {
 		badge := ToolCollapsedBadge.Render("▶ 🛠️ Tool: " + tc.Name + activeMarker)
 		summary := MetricsStyle.Render(fmt.Sprintf("%s (Folded - Press Ctrl+O to unfold)", tc.Summary))
-		sb.WriteString(fmt.Sprintf("%s %s", badge, summary))
+		fmt.Fprintf(&sb, "%s %s", badge, summary)
 	} else {
 		badge := ToolExpandedBadge.Render("▼ 🛠️ Tool: " + tc.Name + activeMarker)
 
 		detailCode := tc.Detail
-		if tc.Name == "execute_sql" {
+		switch tc.Name {
+		case "execute_sql":
 			detailCode = HighlightSQL(tc.Detail)
-		} else if tc.Name == "execute_javascript" {
+		case "execute_javascript":
 			detailCode = HighlightJS(tc.Detail)
 		}
 
 		detail := ToolDetailStyle.Render(detailCode)
 		resText := MetricsStyle.Render(tc.Result)
-		sb.WriteString(fmt.Sprintf("%s\n%s\n%s", badge, detail, resText))
+		fmt.Fprintf(&sb, "%s\n%s\n%s", badge, detail, resText)
 
 		// Render Raw Output / Calculation Results if present (Never hide tool output!)
 		if tc.RawOutput != "" {
 			outTitle := lipgloss.NewStyle().Bold(true).Foreground(SecondaryColor).Render("📊 Raw Execution Output:")
 			outBox := ToolDetailStyle.Render(tc.RawOutput)
-			sb.WriteString(fmt.Sprintf("\n%s\n%s", outTitle, outBox))
+			fmt.Fprintf(&sb, "\n%s\n%s", outTitle, outBox)
 		}
 
 		// Render embedded Table Result inside container when unfolded

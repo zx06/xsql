@@ -47,7 +47,7 @@ func ExportQueryResult(result *db.QueryResult, format ExportFormat, filePath str
 			"err":  err.Error(),
 		})
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	switch format {
 	case FormatJSON:

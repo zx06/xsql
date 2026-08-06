@@ -159,7 +159,8 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*A
 	msg := choice.Message
 
 	for _, toolCall := range msg.ToolCalls {
-		if toolCall.Function.Name == "execute_sql" {
+		switch toolCall.Function.Name {
+		case "execute_sql":
 			var raw struct {
 				SQL         string `json:"sql"`
 				Explanation string `json:"explanation"`
@@ -171,7 +172,7 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*A
 					Explanation: strings.TrimSpace(raw.Explanation),
 				}, nil
 			}
-		} else if toolCall.Function.Name == "execute_javascript" {
+		case "execute_javascript":
 			var raw struct {
 				JSCode      string `json:"js_code"`
 				Explanation string `json:"explanation"`
@@ -183,7 +184,7 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*A
 					Explanation: strings.TrimSpace(raw.Explanation),
 				}, nil
 			}
-		} else if toolCall.Function.Name == "export_data" {
+		case "export_data":
 			var raw struct {
 				DatasetID   string `json:"dataset_id"`
 				Format      string `json:"format"`

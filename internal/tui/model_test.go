@@ -245,7 +245,7 @@ func TestTUI_Model_CtrlCTwiceToQuit(t *testing.T) {
 	}
 
 	// 2nd Ctrl+C immediately -> returns tea.Quit
-	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	_, cmd = m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
 	if cmd == nil {
 		t.Fatal("expected 2nd Ctrl+C to return tea.Quit")
 	}
