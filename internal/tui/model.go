@@ -264,12 +264,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					m.messages = append(m.messages, ErrorMsgStyle.Render(fmt.Sprintf("❌ JS Execution Error (after %d retries): %v", m.maxJSRetries, jsErr.Message)))
 					m.jsRetryCount = 0
+					m.state = StateIdle
 				} else {
 					m.jsRetryCount = 0
-					resultMsg := SuccessBadgeStyle.Render("📊 Analysis Report:") + "\n" + AIResponseStyle.Render(jsRes.SummaryText)
-					m.messages = append(m.messages, resultMsg)
+					// Automatically ask AI to format the computed JS summary into a clean, human-readable Markdown analysis report
+					if jsRes != nil && jsRes.SummaryText != "" {
+						m.state = StateThinking
+						m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+						m.viewport.GotoBottom()
+
+						reportPrompt := fmt.Sprintf("The JavaScript data calculation produced the following computed result:\n%s\n\nPlease synthesize this computed result into a clear, professional, beautifully formatted Markdown analysis report for the user.", jsRes.SummaryText)
+						return m, m.generateSQLCmd(reportPrompt)
+					}
+					m.state = StateIdle
 				}
-				m.state = StateIdle
 			} else if msg.response.Type == ai.TypeSQL && msg.response.SQL != "" {
 				m.currentSQL = msg.response.SQL
 				if m.autoExecute {
