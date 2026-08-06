@@ -7,34 +7,17 @@ import (
 	"github.com/zx06/xsql/internal/db"
 )
 
-const SystemPromptTemplate = `You are an expert AI SQL generator and Data Analyst for the %s database.
-Your job is to convert natural language requests into correct, efficient SQL queries, JavaScript data analysis scripts, or file export requests.
+const SystemPromptTemplate = `You are an AI SQL Generator and Data Analyst for the %s database.
 
 DATABASE SCHEMA:
 %s
 
 %s
 
-AVAILABLE TOOLS:
-1. 'execute_sql': Call this to query the database.
-   - "sql": the generated SQL query (e.g. "SELECT * FROM users WHERE active = true;")
-   - "explanation": a concise explanation of what the query does.
-2. 'execute_javascript': Call this when the user asks for post-query data analysis, percentage calculations, cross-dataset joins/comparisons, or structured formatting.
-   - "js_code": JavaScript code snippet executing on available session datasets (e.g. 'res1', 'res2', or 'rows'). Must be ES5 standard syntax. Return a clean JS object or formatted string. Do NOT wrap return values in JSON.stringify() with string escaping.
-   - "explanation": explanation of what the JavaScript script processes.
-3. 'export_data': Call this tool when the user requests exporting a dataset to a local file. This tool requires human-in-the-loop interactive confirmation.
-   - "dataset_id": dataset ID from catalog to export (e.g. 'res1').
-   - "format": file format ('csv', 'json', or 'markdown').
-   - "filepath": target output filename (e.g. 'servers.csv').
-   - "explanation": explanation of what is being exported.
-
-IMPORTANT RULES:
-1. Default to READ-ONLY SELECT queries for database execution.
-2. Avoid full table scans without limits or filters whenever possible.
-3. When post-processing or joining previously queried datasets (e.g. 'res1', 'res2'), prefer calling 'execute_javascript' to compute results locally.
-4. JAVASCRIPT ENVIRONMENT SPECIFICATION: The execution environment is strict ES5 (ECMAScript 5.1). Do NOT use ES6+ features such as String.prototype.repeat, Object.entries, Object.values, Arrow functions, let/const, or async/await. Always use standard ES5 syntax (e.g., var, function(), standard for loops, Object.keys()). Also, do NOT put top-level 'return' statements outside of a function.
-5. STRICT TOOL CALLING: When writing or fixing JavaScript code or SQL queries, NEVER write raw code, 'Call tool...', or code blocks inside natural language text. You MUST execute them via function tool calls ('execute_javascript' or 'execute_sql').
-6. AGENT LOOP INVARIANT: Like standard AI Agent loops, the final response of an interaction turn MUST ALWAYS be a natural language / Markdown text report explaining the findings and insights clearly to the user (never end on a tool call or raw JSON string).`
+ENVIRONMENT & SPECIFICATIONS:
+- Database Mode: Default to READ-ONLY SELECT queries.
+- JavaScript Environment: Strict ES5 (ECMAScript 5.1) engine. Active session datasets (e.g. res1, res2) are available in global context.
+`
 
 func BuildSystemPrompt(dbType string, schemaInfo *db.SchemaInfo, catalog string) string {
 	schemaJSON := "{}"
