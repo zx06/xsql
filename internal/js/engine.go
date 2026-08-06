@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/dop251/goja"
@@ -13,9 +14,10 @@ import (
 )
 
 type ExecutionResult struct {
-	Value       any    `json:"value"`
-	JSONString  string `json:"json_string"`
-	SummaryText string `json:"summary_text"`
+	Value       any      `json:"value"`
+	JSONString  string   `json:"json_string"`
+	SummaryText string   `json:"summary_text"`
+	Logs        []string `json:"logs"`
 }
 
 type JSEngine struct {
@@ -41,6 +43,61 @@ func (e *JSEngine) Execute(ctx context.Context, jsCode string, store *session.Se
 
 	vm := goja.New()
 	vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
+
+	// Inject console.log / console.error capture
+	var logs []string
+	console := vm.NewObject()
+	_ = console.Set("log", func(call goja.FunctionCall) goja.Value {
+		var args []string
+		for _, arg := range call.Arguments {
+			args = append(args, fmt.Sprintf("%v", arg.Export()))
+		}
+		logs = append(logs, strings.Join(args, " "))
+		return goja.Undefined()
+	})
+	_ = console.Set("error", func(call goja.FunctionCall) goja.Value {
+		var args []string
+		for _, arg := range call.Arguments {
+			args = append(args, fmt.Sprintf("%v", arg.Export()))
+		}
+		logs = append(logs, "[ERROR] "+strings.Join(args, " "))
+		return goja.Undefined()
+	})
+	_ = vm.Set("console", console)
+
+	// Inject Common ES6 Polyfills (String.prototype.repeat, Object.entries, Object.values, Object.assign)
+	polyfills := `
+		if (!String.prototype.repeat) {
+			String.prototype.repeat = function(count) {
+				var str = '' + this;
+				count = +count;
+				if (count != count) count = 0;
+				if (count < 0) return '';
+				var r = '';
+				while (count > 0) {
+					if (count & 1) r += str;
+					count >>>= 1;
+					str += str;
+				}
+				return r;
+			};
+		}
+		if (!Object.entries) {
+			Object.entries = function(obj) {
+				var ownProps = Object.keys(obj), i = ownProps.length, resArray = new Array(i);
+				while (i--) resArray[i] = [ownProps[i], obj[ownProps[i]]];
+				return resArray;
+			};
+		}
+		if (!Object.values) {
+			Object.values = function(obj) {
+				var ownProps = Object.keys(obj), i = ownProps.length, resArray = new Array(i);
+				while (i--) resArray[i] = obj[ownProps[i]];
+				return resArray;
+			};
+		}
+	`
+	_, _ = vm.RunString(polyfills)
 
 	// Inject all active datasets from store
 	if store != nil {
@@ -74,16 +131,21 @@ func (e *JSEngine) Execute(ctx context.Context, jsCode string, store *session.Se
 	// Execute JS script
 	val, err := vm.RunString(jsCode)
 	if err != nil {
-		return nil, errors.New(errors.CodeDBExecFailed, "JavaScript execution error", map[string]any{
+		return nil, errors.New(errors.CodeDBExecFailed, fmt.Sprintf("JavaScript execution error: %v", err), map[string]any{
 			"err": err.Error(),
 		})
 	}
 
 	if val == nil || goja.IsUndefined(val) || goja.IsNull(val) {
+		summary := "(null)"
+		if len(logs) > 0 {
+			summary = strings.Join(logs, "\n")
+		}
 		return &ExecutionResult{
 			Value:       nil,
 			JSONString:  "null",
-			SummaryText: "(null)",
+			SummaryText: summary,
+			Logs:        logs,
 		}, nil
 	}
 
@@ -96,9 +158,15 @@ func (e *JSEngine) Execute(ctx context.Context, jsCode string, store *session.Se
 		jsonStr = fmt.Sprintf("%v", exported)
 	}
 
+	summaryText := jsonStr
+	if len(logs) > 0 {
+		summaryText = strings.Join(logs, "\n") + "\n\nReturn Value:\n" + jsonStr
+	}
+
 	return &ExecutionResult{
 		Value:       exported,
 		JSONString:  jsonStr,
-		SummaryText: jsonStr,
+		SummaryText: summaryText,
+		Logs:        logs,
 	}, nil
 }

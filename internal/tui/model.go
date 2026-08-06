@@ -69,6 +69,8 @@ type Model struct {
 
 	sessionStore *session.SessionDataStore
 	jsEngine     *js.JSEngine
+	jsRetryCount int
+	maxJSRetries int
 
 	state       State
 	schemaInfo  *db.SchemaInfo
@@ -113,6 +115,8 @@ func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Servi
 		autoExecute:      false,
 		sessionStore:     session.NewSessionDataStore(),
 		jsEngine:         js.NewJSEngine(1 * time.Minute),
+		jsRetryCount:     0,
+		maxJSRetries:     3,
 		tableStates:      []TableState{},
 		activeTable:      -1,
 		state:            StateLoadingSchema,
@@ -232,8 +236,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				ctx := context.Background()
 				jsRes, jsErr := m.jsEngine.Execute(ctx, msg.response.JSCode, m.sessionStore)
 				if jsErr != nil {
-					m.messages = append(m.messages, ErrorMsgStyle.Render(fmt.Sprintf("JS Execution Error: %v", jsErr)))
+					m.jsRetryCount++
+					if m.jsRetryCount <= m.maxJSRetries {
+						retryWarn := ErrorMsgStyle.Render(fmt.Sprintf("⚠️ JS Execution Failed (Attempt %d/%d): %v", m.jsRetryCount, m.maxJSRetries, jsErr.Message))
+						m.messages = append(m.messages, retryWarn)
+						m.state = StateThinking
+						m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+						m.viewport.GotoBottom()
+
+						retryPrompt := fmt.Sprintf("The previous JavaScript code execution failed with error:\n%s\n\nPlease analyze the error, fix your JavaScript code, and call 'execute_javascript' again.", jsErr.Message)
+						return m, m.generateSQLCmd(retryPrompt)
+					}
+					m.messages = append(m.messages, ErrorMsgStyle.Render(fmt.Sprintf("❌ JS Execution Error (after %d retries): %v", m.maxJSRetries, jsErr.Message)))
+					m.jsRetryCount = 0
 				} else {
+					m.jsRetryCount = 0
 					resultMsg := SuccessBadgeStyle.Render("📊 JS Result:") + "\n" + AIResponseStyle.Render(jsRes.SummaryText)
 					m.messages = append(m.messages, resultMsg)
 				}
