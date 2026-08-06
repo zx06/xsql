@@ -119,7 +119,7 @@ func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Servi
 	ta := textarea.New()
 	ta.Placeholder = "Ask AI to query database or perform data analysis..."
 	ta.ShowLineNumbers = false
-	ta.Prompt = "❯ "
+	ta.Prompt = ""
 	ta.Focus()
 	ta.CharLimit = 4000
 	ta.SetWidth(80)
@@ -127,7 +127,6 @@ func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Servi
 
 	// Custom crisp styles for textarea
 	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
-	ta.FocusedStyle.Prompt = lipgloss.NewStyle().Bold(true).Foreground(PrimaryColor)
 
 	vp := viewport.New(80, 15)
 
@@ -726,8 +725,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// MULTI-LINE PROMPT INPUT SHORTCUT: Alt+Enter or Ctrl+J to insert soft newline into textarea
-		if m.state == StateIdle && (msg.Type == tea.KeyCtrlJ || (msg.Alt && msg.Type == tea.KeyEnter)) {
+		// MULTI-LINE PROMPT INPUT SHORTCUT: Alt+Enter to insert soft newline into textarea
+		if m.state == StateIdle && ((msg.Alt && msg.Type == tea.KeyEnter) || msg.String() == "alt+enter") {
 			m.textarea.InsertString("\n")
 			return m, nil
 		}
@@ -971,7 +970,7 @@ func (m Model) View() string {
 	} else {
 		keybindings = renderKeybindingBadges([][2]string{
 			{"Enter", "Send"},
-			{"Ctrl+J", "Newline"},
+			{"Alt+Enter", "Newline"},
 			{"Tab", "Focus Tool" + toolNavHint},
 			{"Ctrl+O", "Tools (" + toolFoldState + ")"},
 			{"←/→", "Cols"},
