@@ -3,22 +3,39 @@ package tui
 import "github.com/charmbracelet/lipgloss"
 
 var (
-	// Palette Colors
-	PrimaryColor   = lipgloss.Color("#7D56F4")
-	SecondaryColor = lipgloss.Color("#04B575")
-	AccentColor    = lipgloss.Color("#E03177")
-	WarningColor   = lipgloss.Color("#D97706")
-	ErrorColor     = lipgloss.Color("#E11D48")
-	MutedColor     = lipgloss.AdaptiveColor{Light: "#475569", Dark: "#94A3B8"}
-	CyanColor      = lipgloss.AdaptiveColor{Light: "#0284C7", Dark: "#7AA2F7"}
-	BgBox          = lipgloss.AdaptiveColor{Light: "#F1F5F9", Dark: "#1F2335"}
+	// Palette Colors (Adaptive Catppuccin / Tokyo Night Theme)
+	PrimaryColor   = lipgloss.AdaptiveColor{Light: "#7C3AED", Dark: "#A78BFA"}
+	SecondaryColor = lipgloss.AdaptiveColor{Light: "#059669", Dark: "#34D399"}
+	AccentColor    = lipgloss.AdaptiveColor{Light: "#DB2777", Dark: "#F472B6"}
+	WarningColor   = lipgloss.AdaptiveColor{Light: "#D97706", Dark: "#FBBF24"}
+	ErrorColor     = lipgloss.AdaptiveColor{Light: "#E11D48", Dark: "#F87171"}
+	InfoColor      = lipgloss.AdaptiveColor{Light: "#0284C7", Dark: "#38BDF8"}
+	MutedColor     = lipgloss.AdaptiveColor{Light: "#64748B", Dark: "#94A3B8"}
+	TextNormal     = lipgloss.AdaptiveColor{Light: "#0F172A", Dark: "#F8FAFC"}
+	BgSubtle       = lipgloss.AdaptiveColor{Light: "#F1F5F9", Dark: "#1E293B"}
 
-	// Header Styles
-	HeaderStyle = lipgloss.NewStyle().
+	// Keybinding Badge Styles
+	KeyBadgeStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("#FFFFFF")).
-			Background(PrimaryColor).
+			Foreground(lipgloss.AdaptiveColor{Light: "#1E293B", Dark: "#F8FAFC"}).
+			Background(lipgloss.AdaptiveColor{Light: "#E2E8F0", Dark: "#334155"}).
 			Padding(0, 1)
+
+	KeyLabelStyle = lipgloss.NewStyle().
+			Foreground(MutedColor)
+
+	// Header Pill Badges
+	HeaderTitleBadge = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("#FFFFFF")).
+				Background(PrimaryColor).
+				Padding(0, 1)
+
+	HeaderProfileBadge = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("#FFFFFF")).
+				Background(InfoColor).
+				Padding(0, 1)
 
 	BadgeReadOnly = lipgloss.NewStyle().
 			Bold(true).
@@ -35,13 +52,13 @@ var (
 	BadgeAutoExec = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("#FFFFFF")).
-			Background(PrimaryColor).
+			Background(AccentColor).
 			Padding(0, 1)
 
 	BadgeManualApprove = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.AdaptiveColor{Light: "#1E293B", Dark: "#C0CAF5"}).
-				Background(lipgloss.AdaptiveColor{Light: "#E2E8F0", Dark: "#3B4261"}).
+				Foreground(lipgloss.AdaptiveColor{Light: "#1E293B", Dark: "#E2E8F0"}).
+				Background(lipgloss.AdaptiveColor{Light: "#CBD5E1", Dark: "#475569"}).
 				Padding(0, 1)
 
 	// SQL Preview Box
@@ -54,18 +71,13 @@ var (
 
 	SQLTitleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.AdaptiveColor{Light: "#9D174D", Dark: "#FF75B5"})
+			Foreground(AccentColor)
 
 	SQLCodeStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.AdaptiveColor{Light: "#0369A1", Dark: "#7AA2F7"})
+			Foreground(InfoColor)
 
-	// Help / Footer
-	HelpStyle = lipgloss.NewStyle().
-			Foreground(MutedColor).
-			MarginTop(1)
-
-	// Chat Messages
+	// User & AI Chat Tags
 	UserTagStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("#FFFFFF")).
@@ -88,12 +100,20 @@ var (
 				Bold(true).
 				Foreground(SecondaryColor)
 
+	MetricsStyle = lipgloss.NewStyle().
+			Foreground(MutedColor).
+			Italic(true)
+
 	AIResponseStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.AdaptiveColor{Light: "#0F172A", Dark: "#E2E8F0"}).
+			Foreground(TextNormal).
 			PaddingLeft(1)
 
 	ErrorMsgStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(ErrorColor).
 			PaddingLeft(1)
+
+	PromptPrefixStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(PrimaryColor)
 )

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
@@ -40,8 +41,9 @@ type sqlGeneratedMsg struct {
 }
 
 type queryExecutedMsg struct {
-	result *db.QueryResult
-	err    *errors.XError
+	result   *db.QueryResult
+	err      *errors.XError
+	duration time.Duration
 }
 
 type TableState struct {
@@ -81,6 +83,7 @@ type Model struct {
 func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Service, initialPrompt string, unsafeAllowWrite bool) Model {
 	ta := textarea.New()
 	ta.Placeholder = "Ask AI to write a SQL query (e.g. 'Show top 10 users')...."
+	ta.Prompt = PromptPrefixStyle.Render("✦ ")
 	ta.Focus()
 	ta.CharLimit = 1000
 	ta.SetWidth(80)
@@ -141,6 +144,7 @@ func (m Model) generateSQLCmd(prompt string) tea.Cmd {
 
 func (m Model) executeSQLCmd(sqlStr string) tea.Cmd {
 	return func() tea.Msg {
+		start := time.Now()
 		ctx := context.Background()
 		res, xe := app.Query(ctx, app.QueryRequest{
 			Profile:          m.profile,
@@ -149,7 +153,8 @@ func (m Model) executeSQLCmd(sqlStr string) tea.Cmd {
 			SkipHostKeyCheck: m.profile.SSHConfig != nil && m.profile.SSHConfig.SkipHostKey,
 			UnsafeAllowWrite: m.unsafeAllowWrite,
 		})
-		return queryExecutedMsg{result: res, err: xe}
+		elapsed := time.Since(start)
+		return queryExecutedMsg{result: res, err: xe, duration: elapsed}
 	}
 }
 
@@ -231,7 +236,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.messages = append(m.messages, ErrorMsgStyle.Render(fmt.Sprintf("SQL Exec Error [%s]: %s", msg.err.Code, msg.err.Message)))
 		} else if msg.result != nil {
-			statusLine := SuccessBadgeStyle.Render(fmt.Sprintf("✓ Execution Success (%d rows returned)", len(msg.result.Rows)))
+			modelName := m.opts.CLIAIModel
+			if modelName == "" {
+				modelName = "gpt-4o"
+			}
+			durStr := msg.duration.Round(time.Millisecond).String()
+			if msg.duration < time.Millisecond {
+				durStr = fmt.Sprintf("%.2fms", float64(msg.duration.Microseconds())/1000.0)
+			}
+			metricsStr := fmt.Sprintf("⏱️ %s | 📊 %d rows | 🤖 %s", durStr, len(msg.result.Rows), modelName)
+			statusLine := SuccessBadgeStyle.Render("✓ Execution Success") + " " + MetricsStyle.Render(metricsStr)
 			m.messages = append(m.messages, statusLine)
 
 			// Remove focus from previous active table
@@ -262,12 +276,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 
 	case tea.KeyMsg:
-		// 1. Ctrl+C always quits
 		if msg.Type == tea.KeyCtrlC {
 			return m, tea.Quit
 		}
 
-		// 2. When editing SQL in text area
 		if m.editingSQL {
 			switch msg.Type {
 			case tea.KeyEnter:
@@ -277,7 +289,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.editingSQL = false
 				m.textarea.Reset()
-				m.textarea.Blur() // Blur textarea to avoid capturing next Enter key
+				m.textarea.Blur()
 				m.state = StateSQLReady
 				return m, nil
 
@@ -292,48 +304,46 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, taCmd
 		}
 
-		// 3. When in SQLReady state (SQL preview pending approval)
 		if m.state == StateSQLReady {
 			switch {
-			case msg.Type == tea.KeyEnter: // Enter to Execute SQL
+			case msg.Type == tea.KeyEnter:
 				m.state = StateExecuting
-				m.textarea.Focus() // Restore focus for next prompt input
+				m.textarea.Focus()
 				execLine := ExecutingTagStyle.Render("⚡ Executing") + " " + SQLCodeStyle.Render(m.currentSQL)
 				m.messages = append(m.messages, execLine)
 				m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 				m.viewport.GotoBottom()
 				return m, m.executeSQLCmd(m.currentSQL)
 
-			case msg.String() == "e" || msg.String() == "E": // 'e' key to Edit SQL
+			case msg.String() == "e" || msg.String() == "E":
 				m.editingSQL = true
 				m.textarea.Focus()
 				m.textarea.SetValue(m.currentSQL)
 				m.textarea.CursorEnd()
 				return m, nil
 
-			case msg.Type == tea.KeyEsc: // Esc to Cancel SQL preview
+			case msg.Type == tea.KeyEsc:
 				m.state = StateIdle
 				m.textarea.Focus()
 				return m, nil
 			}
 		}
 
-		// 4. General TUI keyhandlers
 		switch msg.Type {
 		case tea.KeyEsc:
 			return m, tea.Quit
 
-		case tea.KeyCtrlE: // Ctrl+E to Expand/Collapse full vertical view
+		case tea.KeyCtrlE:
 			if m.activeTable >= 0 && m.activeTable < len(m.tableStates) {
 				ts := &m.tableStates[m.activeTable]
 				ts.VerticalView = !ts.VerticalView
 				m.renderTableState(m.activeTable, true)
 			}
 
-		case tea.KeyShiftTab: // Toggle Auto-Execute vs Manual-Approve mode
+		case tea.KeyShiftTab:
 			m.autoExecute = !m.autoExecute
 
-		case tea.KeyTab: // Toggle focus between tables in history
+		case tea.KeyTab:
 			if len(m.tableStates) > 1 {
 				oldIdx := m.activeTable
 				m.activeTable = (m.activeTable + 1) % len(m.tableStates)
@@ -417,25 +427,40 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+func renderKeybindingBadges(items [][2]string) string {
+	var parts []string
+	for _, item := range items {
+		keyBadge := KeyBadgeStyle.Render(item[0])
+		label := KeyLabelStyle.Render(item[1])
+		parts = append(parts, fmt.Sprintf("%s %s", keyBadge, label))
+	}
+	return strings.Join(parts, "  ")
+}
+
 func (m Model) View() string {
 	var sb strings.Builder
 
-	// 1. Header Bar
-	modeBadge := BadgeReadOnly.Render("READ-ONLY")
-	if m.unsafeAllowWrite {
-		modeBadge = BadgeReadWrite.Render("READ-WRITE")
-	}
-	execModeBadge := BadgeManualApprove.Render("MANUAL-APPROVE")
-	if m.autoExecute {
-		execModeBadge = BadgeAutoExec.Render("AUTO-EXECUTE")
-	}
-	header := fmt.Sprintf(" xsql AI | Profile: %s (%s) | %s | Mode: %s ", m.profileName, m.profile.DB, modeBadge, execModeBadge)
-	sb.WriteString(HeaderStyle.Width(m.width).Render(header) + "\n\n")
+	// 1. Header Pill Badges
+	titlePill := HeaderTitleBadge.Render("xsql AI")
+	profilePill := HeaderProfileBadge.Render(fmt.Sprintf("%s (%s)", m.profileName, m.profile.DB))
 
-	// 2. Main Viewport (Messages & Results)
+	modePill := BadgeReadOnly.Render("READ-ONLY")
+	if m.unsafeAllowWrite {
+		modePill = BadgeReadWrite.Render("READ-WRITE")
+	}
+
+	execPill := BadgeManualApprove.Render("MANUAL")
+	if m.autoExecute {
+		execPill = BadgeAutoExec.Render("AUTO-EXEC")
+	}
+
+	header := fmt.Sprintf(" %s %s %s %s", titlePill, profilePill, modePill, execPill)
+	sb.WriteString(header + "\n\n")
+
+	// 2. Main Viewport
 	sb.WriteString(m.viewport.View() + "\n\n")
 
-	// 3. State Status & SQL Preview Card
+	// 3. State Status & SQL Preview Box
 	switch m.state {
 	case StateLoadingSchema:
 		sb.WriteString(m.spinner.View() + " Loading database schema...\n")
@@ -448,11 +473,11 @@ func (m Model) View() string {
 		if m.currentSQL == "" {
 			sqlContent = lipgloss.NewStyle().Foreground(MutedColor).Italic(true).Render("(No SQL generated)")
 		}
-		preview := fmt.Sprintf("%s\n%s", SQLTitleStyle.Render("✨ SQL Preview (Enter: Execute | e: Edit SQL | Esc: Cancel):"), sqlContent)
+		preview := fmt.Sprintf("%s\n%s", SQLTitleStyle.Render("✨ SQL Preview (Enter: Execute | e: Edit | Esc: Cancel):"), sqlContent)
 		sb.WriteString(SQLBoxStyle.Width(m.width-4).Render(preview) + "\n")
 	}
 
-	// 4. Input Area & Footer Hints
+	// 4. Input Area & Footer Keybindings
 	if m.editingSQL {
 		sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(AccentColor).Render("✏️  Edit SQL (Enter: Apply | Esc: Cancel):") + "\n")
 	}
@@ -463,11 +488,27 @@ func (m Model) View() string {
 		execModeHint = "AUTO"
 	}
 
-	help := fmt.Sprintf("Enter: Send Prompt | Tab: Focus Table | ←/→: Cols | PgUp/PgDn: Rows | Ctrl+E: Expand/Collapse | Shift+Tab: Mode (%s) | Esc: Quit", execModeHint)
+	var keybindings string
 	if m.state == StateSQLReady {
-		help = fmt.Sprintf("Enter: Execute SQL | e: Edit SQL | Esc: Cancel | Ctrl+E: Expand/Collapse | Shift+Tab: Mode (%s)", execModeHint)
+		keybindings = renderKeybindingBadges([][2]string{
+			{"Enter", "Execute"},
+			{"e", "Edit SQL"},
+			{"Esc", "Cancel"},
+			{"Shift+Tab", "Mode (" + execModeHint + ")"},
+		})
+	} else {
+		keybindings = renderKeybindingBadges([][2]string{
+			{"Enter", "Send"},
+			{"Tab", "Focus Table"},
+			{"←/→", "Cols"},
+			{"PgUp/PgDn", "Rows"},
+			{"Ctrl+E", "Expand"},
+			{"Shift+Tab", "Mode (" + execModeHint + ")"},
+			{"Esc", "Quit"},
+		})
 	}
-	sb.WriteString(HelpStyle.Render(help))
+
+	sb.WriteString(keybindings + "\n")
 
 	return sb.String()
 }
