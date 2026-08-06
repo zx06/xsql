@@ -61,13 +61,13 @@ type Model struct {
 	initialPrompt    string
 	autoExecute      bool
 
-	state        State
-	schemaInfo   *db.SchemaInfo
-	currentSQL   string
-	explanation  string
-	messages     []string
-	tableStates  []TableState
-	activeTable  int
+	state       State
+	schemaInfo  *db.SchemaInfo
+	currentSQL  string
+	explanation string
+	messages    []string
+	tableStates []TableState
+	activeTable int
 
 	textarea textarea.Model
 	viewport viewport.Model
@@ -206,10 +206,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.currentSQL = msg.response.SQL
 			m.explanation = msg.response.Explanation
-			
+
 			aiMsg := AITagStyle.Render("🤖 AI") + " " + AIResponseStyle.Render(msg.response.Explanation)
 			m.messages = append(m.messages, aiMsg)
-			
+
 			if msg.response.SQL != "" {
 				if m.autoExecute {
 					m.state = StateExecuting
@@ -233,7 +233,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if msg.result != nil {
 			statusLine := SuccessBadgeStyle.Render(fmt.Sprintf("✓ Execution Success (%d rows returned)", len(msg.result.Rows)))
 			m.messages = append(m.messages, statusLine)
-			
+
 			// Remove focus from previous active table
 			if m.activeTable >= 0 && m.activeTable < len(m.tableStates) {
 				m.renderTableState(m.activeTable, false)
@@ -449,7 +449,7 @@ func (m Model) View() string {
 			sqlContent = lipgloss.NewStyle().Foreground(MutedColor).Italic(true).Render("(No SQL generated)")
 		}
 		preview := fmt.Sprintf("%s\n%s", SQLTitleStyle.Render("✨ SQL Preview (Enter: Execute | e: Edit SQL | Esc: Cancel):"), sqlContent)
-		sb.WriteString(SQLBoxStyle.Width(m.width - 4).Render(preview) + "\n")
+		sb.WriteString(SQLBoxStyle.Width(m.width-4).Render(preview) + "\n")
 	}
 
 	// 4. Input Area & Footer Hints
@@ -462,7 +462,7 @@ func (m Model) View() string {
 	if m.autoExecute {
 		execModeHint = "AUTO"
 	}
-	
+
 	help := fmt.Sprintf("Enter: Send Prompt | Tab: Focus Table | ←/→: Cols | PgUp/PgDn: Rows | Ctrl+E: Expand/Collapse | Shift+Tab: Mode (%s) | Esc: Quit", execModeHint)
 	if m.state == StateSQLReady {
 		help = fmt.Sprintf("Enter: Execute SQL | e: Edit SQL | Esc: Cancel | Ctrl+E: Expand/Collapse | Shift+Tab: Mode (%s)", execModeHint)

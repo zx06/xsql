@@ -27,7 +27,7 @@ var (
 			Padding(0, 1)
 
 	TableBorderStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.AdaptiveColor{Light: "#CBD5E1", Dark: "#3B4261"})
+				Foreground(lipgloss.AdaptiveColor{Light: "#CBD5E1", Dark: "#3B4261"})
 
 	ActiveTableBorderStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.AdaptiveColor{Light: "#0284C7", Dark: "#7AA2F7"})
