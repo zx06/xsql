@@ -10,6 +10,7 @@ import (
 	"github.com/zx06/xsql/internal/ai"
 	"github.com/zx06/xsql/internal/config"
 	"github.com/zx06/xsql/internal/db"
+	"github.com/zx06/xsql/internal/errors"
 )
 
 func TestTUI_Model_StateTransitions(t *testing.T) {
@@ -463,4 +464,77 @@ func TestTUI_Model_FullCoverage(t *testing.T) {
 	if m.state != StateIdle {
 		t.Fatalf("expected StateIdle after Adjust Prompt option, got %v", m.state)
 	}
+}
+
+func TestTUI_Model_ViewAndAllStatesCoverage(t *testing.T) {
+	resolved := config.Resolved{
+		ProfileName: "dev",
+		Profile:     config.Profile{DB: "mysql"},
+	}
+	aiService := ai.NewService(config.AIConfig{}, nil)
+	m := NewModel(config.Options{}, resolved, aiService, "", true) // unsafeAllowWrite = true
+	m.autoExecute = true
+
+	// 1. Test View in StateLoadingSchema
+	m.state = StateLoadingSchema
+	if view := m.View(); !strings.Contains(view, "READ-WRITE") || !strings.Contains(view, "AUTO-EXEC") {
+		t.Fatalf("expected badges in header view, got:\n%s", view)
+	}
+
+	// 2. Test View in all states
+	states := []State{
+		StateIdle, StateThinking, StateSQLReady, StateExecuting, StateExportReady,
+	}
+	for _, st := range states {
+		m.state = st
+		_ = m.View()
+	}
+
+	// 3. Test schemaLoadedMsg with error
+	updated, _ := m.Update(schemaLoadedMsg{
+		err: errors.New("XSQL_CFG_INVALID", "invalid config", nil),
+	})
+	m = updated.(Model)
+
+	// 4. Test aiResponseMsg with error & TypeText
+	updated, _ = m.Update(aiResponseMsg{
+		err: errors.New("XSQL_AI_API_ERROR", "api failed", nil),
+	})
+	m = updated.(Model)
+	if m.state != StateIdle {
+		t.Fatalf("expected StateIdle after AI error, got %v", m.state)
+	}
+
+	updated, _ = m.Update(aiResponseMsg{
+		response: &ai.AIResponse{
+			Type:        ai.TypeText,
+			Explanation: "Here is text response",
+		},
+	})
+	m = updated.(Model)
+	if m.state != StateIdle {
+		t.Fatalf("expected StateIdle after TypeText response, got %v", m.state)
+	}
+
+	// 5. Test queryExecutedMsg with error
+	updated, _ = m.Update(queryExecutedMsg{
+		err: errors.New("XSQL_SQL_SYNTAX_ERROR", "syntax error", nil),
+	})
+	m = updated.(Model)
+
+	// 6. Test Option keys '1', '2', '3' in StateSQLReady
+	m.state = StateSQLReady
+	m.currentSQL = "SELECT 1;"
+
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+	m.state = StateSQLReady
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	m.state = StateSQLReady
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+
+	// 7. Test focusToolCall out of bounds & renderTableState invalid indices
+	m.focusToolCall(-1)
+	m.focusToolCall(999)
+	m.renderTableState(-1, false)
+	m.renderTableState(999, false)
 }

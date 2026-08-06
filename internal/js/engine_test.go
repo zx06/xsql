@@ -102,3 +102,48 @@ func TestJSEngine_PrimitiveResult(t *testing.T) {
 		t.Fatalf("expected array json output, got %q", res.JSONString)
 	}
 }
+
+func TestJSEngine_ConsoleAndNullAndDefaultTimeout(t *testing.T) {
+	engine := NewJSEngine(0) // Default 1 min
+	if engine.DefaultTimeout <= 0 {
+		t.Fatal("expected positive default timeout")
+	}
+
+	store := session.NewSessionDataStore()
+	store.Save("test query", &db.QueryResult{
+		Columns: []string{"id"},
+		Rows:    []map[string]any{{"id": 10}},
+	})
+
+	// 1. Console log and error with undefined return
+	jsCode := `
+		console.log("log msg", 123);
+		console.error("error msg");
+		rows.length;
+	`
+	res, xe := engine.Execute(nil, jsCode, store)
+	if xe != nil {
+		t.Fatalf("unexpected execution error: %v", xe)
+	}
+	if len(res.Logs) != 2 || !strings.Contains(res.SummaryText, "[ERROR] error msg") {
+		t.Fatalf("expected 2 log entries in summary, got:\n%s", res.SummaryText)
+	}
+
+	// 2. Null/Undefined return with console logs
+	resNull, xe := engine.Execute(nil, `console.log("hello"); null;`, nil)
+	if xe != nil {
+		t.Fatalf("unexpected execution error: %v", xe)
+	}
+	if resNull.JSONString != "null" || !strings.Contains(resNull.SummaryText, "hello") {
+		t.Fatalf("expected null return with logs, got %q", resNull.SummaryText)
+	}
+
+	// 3. JSON String return
+	resJSON, xe := engine.Execute(nil, `JSON.stringify({status: "ok"})`, nil)
+	if xe != nil {
+		t.Fatalf("unexpected execution error: %v", xe)
+	}
+	if !strings.Contains(resJSON.JSONString, `"status": "ok"`) {
+		t.Fatalf("expected pretty formatted JSON string, got %q", resJSON.JSONString)
+	}
+}
