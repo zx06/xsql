@@ -47,13 +47,26 @@ func TestExportQueryResult_CSV_JSON_MD(t *testing.T) {
 	}
 
 	// 3. Markdown
-	mdPath := filepath.Join(tempDir, "test.md")
+	mdPath := filepath.Join(tempDir, "sub", "test.md")
+	res.Rows[1]["status"] = "multiline\ntext|pipe"
 	absPath, xe = ExportQueryResult(res, FormatMarkdown, mdPath)
 	if xe != nil {
 		t.Fatalf("Markdown export failed: %v", xe)
 	}
 	content, _ = os.ReadFile(absPath)
-	if !strings.Contains(string(content), "| username |") {
+	if !strings.Contains(string(content), "| username |") || !strings.Contains(string(content), "text\\|pipe") {
 		t.Fatalf("unexpected Markdown content: %s", string(content))
 	}
+
+	// 4. Nil result & empty filePath fallback
+	_, xe = ExportQueryResult(nil, FormatCSV, "")
+	if xe == nil {
+		t.Fatal("expected error for nil QueryResult")
+	}
+
+	absDefault, xe := ExportQueryResult(res, FormatCSV, "")
+	if xe != nil {
+		t.Fatalf("unexpected error for empty filePath: %v", xe)
+	}
+	_ = os.Remove(absDefault)
 }

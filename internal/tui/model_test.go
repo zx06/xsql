@@ -418,7 +418,18 @@ func TestTUI_Model_FullCoverage(t *testing.T) {
 	})
 	m = updated.(Model)
 
-	// 5. Test Key Navigation (Tab, Left, Right, PgUp, PgDn, Ctrl+E)
+	// 5. Test Key Navigation & renderTableState
+	m.tableStates = append(m.tableStates, TableState{
+		Result:       res,
+		MsgIndex:     0,
+		VerticalView: false,
+	})
+	m.messages = []string{"msg0"}
+	m.renderTableState(0, true)
+	m.renderTableState(0, false)
+	m.tableStates[0].VerticalView = true
+	m.renderTableState(0, true)
+
 	m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m.Update(tea.KeyMsg{Type: tea.KeyRight})
 	m.Update(tea.KeyMsg{Type: tea.KeyLeft})

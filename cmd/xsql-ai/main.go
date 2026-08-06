@@ -26,6 +26,10 @@ type AIFlags struct {
 	Prompt           string
 }
 
+var newProgramFunc = func(model tea.Model) *tea.Program {
+	return tea.NewProgram(model, tea.WithAltScreen())
+}
+
 func newRootCmd() *cobra.Command {
 	flags := &AIFlags{}
 
@@ -94,7 +98,7 @@ func runAI(cmd *cobra.Command, flags *AIFlags) error {
 
 	model := tui.NewModel(opts, resolved, aiService, flags.Prompt, flags.UnsafeAllowWrite)
 
-	p := tea.NewProgram(model, tea.WithAltScreen())
+	p := newProgramFunc(model)
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("error running TUI: %w", err)
 	}

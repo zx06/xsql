@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/zx06/xsql/internal/config"
 )
 
@@ -117,5 +119,20 @@ profiles:
 	}
 	if resolved.ProfileName != "dev" {
 		t.Fatalf("expected profile 'dev', got %q", resolved.ProfileName)
+	}
+
+	// Test full runAI execution flow
+	oldNewProgram := newProgramFunc
+	defer func() { newProgramFunc = oldNewProgram }()
+
+	newProgramFunc = func(model tea.Model) *tea.Program {
+		p := tea.NewProgram(model, tea.WithInput(strings.NewReader("")), tea.WithOutput(os.Stderr), tea.WithoutRenderer())
+		go p.Quit()
+		return p
+	}
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("expected runAI to execute successfully, got %v", err)
 	}
 }

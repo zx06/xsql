@@ -45,4 +45,33 @@ func TestFormatTableResult_CJKBorderProtection(t *testing.T) {
 			}
 		}
 	}
+
+	// Nil and empty result fallbacks
+	if nilOut := FormatTableResult(nil, 0, 0, 80, false); !strings.Contains(nilOut, "empty dataset") {
+		t.Errorf("expected empty dataset message for nil QueryResult, got %q", nilOut)
+	}
+
+	if nilVert := FormatVerticalResult(nil); !strings.Contains(nilVert, "empty dataset") {
+		t.Errorf("expected empty dataset message for nil QueryResult vertical view, got %q", nilVert)
+	}
+
+	emptyRes := &db.QueryResult{Columns: []string{"id"}, Rows: []map[string]any{}}
+	if emptyOut := FormatTableResult(emptyRes, 0, 0, 80, false); !strings.Contains(emptyOut, "0 rows returned") {
+		t.Fatalf("expected '0 rows returned', got %q", emptyOut)
+	}
+
+	// Test offset and inactive view
+	offsetFormatted := FormatTableResult(res, 1, 1, 40, false)
+	if !strings.Contains(offsetFormatted, "status") {
+		t.Errorf("expected status column in offset view, got:\n%s", offsetFormatted)
+	}
+
+	// Test sanitizeCell & sanitizeCellWithStatus
+	if s, _ := sanitizeCellWithStatus(nil, 10); s != "NULL" {
+		t.Errorf("expected 'NULL' for nil input, got %q", s)
+	}
+
+	if s := sanitizeCell("short", 10); s != "short" {
+		t.Errorf("expected 'short', got %q", s)
+	}
 }
