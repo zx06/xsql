@@ -94,6 +94,8 @@ type Model struct {
 	jsRetryCount  int
 	maxJSRetries  int
 
+	confirmOption int // 0: Confirm/Execute, 1: Edit/Prompt, 2: Cancel/Deny
+
 	state         State
 	schemaInfo    *db.SchemaInfo
 	currentSQL    string
@@ -142,6 +144,7 @@ func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Servi
 		chatHistory:      []ai.ChatMessage{},
 		jsRetryCount:     0,
 		maxJSRetries:     3,
+		confirmOption:    0,
 		tableStates:      []TableState{},
 		toolCalls:        []ToolCallItem{},
 		activeTable:      -1,
@@ -439,6 +442,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					FilePath:  msg.response.FilePath,
 					ToolIdx:   toolIdx,
 				}
+				m.confirmOption = 0
 				m.state = StateExportReady
 			} else if msg.response.Type == ai.TypeSQL && msg.response.SQL != "" {
 				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
@@ -468,6 +472,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.viewport.GotoBottom()
 					return m, m.executeSQLCmd(m.currentSQL)
 				}
+				m.confirmOption = 0
 				m.state = StateSQLReady
 			} else {
 				// FINAL LLM AGENT OUTPUT (No Tool Call)
@@ -583,9 +588,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, taCmd
 		}
 
+		// UNIFIED HUMAN-IN-THE-LOOP INTERACTION FOR BOTH StateExportReady AND StateSQLReady!
 		if m.state == StateExportReady && m.pendingExport != nil {
 			switch msg.Type {
-			case tea.KeyEnter:
+			case tea.KeyUp:
+				m.confirmOption = (m.confirmOption - 1 + 3) % 3
+				return m, nil
+			case tea.KeyDown:
+				m.confirmOption = (m.confirmOption + 1) % 3
+				return m, nil
+			}
+
+			triggerOpt := -1
+			if msg.Type == tea.KeyEnter {
+				triggerOpt = m.confirmOption
+			} else if msg.String() == "1" {
+				triggerOpt = 0
+			} else if msg.String() == "2" || msg.String() == "e" || msg.String() == "E" {
+				triggerOpt = 1
+			} else if msg.String() == "3" || msg.Type == tea.KeyEsc {
+				triggerOpt = 2
+			}
+
+			switch triggerOpt {
+			case 0:
+				// Option 1: Confirm & Export
 				datasetRes, exists := m.sessionStore.Get(m.pendingExport.DatasetID)
 				if !exists || datasetRes == nil {
 					m.toolCalls[m.pendingExport.ToolIdx].Result = fmt.Sprintf("❌ Export Failed: Dataset '%s' not found", m.pendingExport.DatasetID)
@@ -622,7 +649,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.viewport.GotoBottom()
 				return m, m.runAgentStepCmd()
 
-			case tea.KeyEsc:
+			case 1:
+				// Option 2: Edit Path / Prompt Input
+				m.state = StateIdle
+				m.pendingExport = nil
+				m.textarea.Focus()
+				return m, nil
+
+			case 2:
+				// Option 3: Deny / Cancel Export
 				m.toolCalls[m.pendingExport.ToolIdx].Result = "🚫 Export Denied by User"
 				m.renderToolCall(m.pendingExport.ToolIdx)
 
@@ -641,25 +676,47 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if m.state == StateSQLReady {
 			switch msg.Type {
-			case tea.KeyEnter:
+			case tea.KeyUp:
+				m.confirmOption = (m.confirmOption - 1 + 3) % 3
+				return m, nil
+			case tea.KeyDown:
+				m.confirmOption = (m.confirmOption + 1) % 3
+				return m, nil
+			}
+
+			triggerOpt := -1
+			if msg.Type == tea.KeyEnter {
+				triggerOpt = m.confirmOption
+			} else if msg.String() == "1" {
+				triggerOpt = 0
+			} else if msg.String() == "2" || msg.String() == "e" || msg.String() == "E" {
+				triggerOpt = 1
+			} else if msg.String() == "3" || msg.Type == tea.KeyEsc {
+				triggerOpt = 2
+			}
+
+			switch triggerOpt {
+			case 0:
+				// Option 1: Execute SQL
 				m.state = StateExecuting
 				m.textarea.Focus()
 				m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 				m.viewport.GotoBottom()
 				return m, m.executeSQLCmd(m.currentSQL)
 
-			case tea.KeyEsc:
+			case 1:
+				// Option 2: Edit SQL
+				m.editingSQL = true
+				m.textarea.Focus()
+				m.textarea.SetValue(m.currentSQL)
+				m.textarea.CursorEnd()
+				return m, nil
+
+			case 2:
+				// Option 3: Cancel Execution
 				m.state = StateIdle
 				m.textarea.Focus()
 				return m, nil
-			default:
-				if msg.String() == "e" || msg.String() == "E" {
-					m.editingSQL = true
-					m.textarea.Focus()
-					m.textarea.SetValue(m.currentSQL)
-					m.textarea.CursorEnd()
-					return m, nil
-				}
 			}
 		}
 
@@ -782,6 +839,23 @@ func renderKeybindingBadges(items [][2]string) string {
 	return strings.Join(parts, "  ")
 }
 
+func renderActionOptionsCard(title string, detailText string, options []string, activeOpt int, width int) string {
+	var sb strings.Builder
+	sb.WriteString(SQLTitleStyle.Render(title) + "\n")
+	if detailText != "" {
+		sb.WriteString(detailText + "\n\n")
+	}
+	sb.WriteString(lipgloss.NewStyle().Foreground(MutedColor).Render("Action Options (Use ↑/↓ or 1/2/3 to select, Enter to confirm):") + "\n")
+	for i, opt := range options {
+		if i == activeOpt {
+			sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(PrimaryColor).Render(fmt.Sprintf(" ▶ [%d] %s", i+1, opt)) + "\n")
+		} else {
+			sb.WriteString(lipgloss.NewStyle().Foreground(MutedColor).Render(fmt.Sprintf("   [%d] %s", i+1, opt)) + "\n")
+		}
+	}
+	return SQLBoxStyle.Width(width - 4).Render(sb.String())
+}
+
 func (m Model) View() string {
 	var sb strings.Builder
 
@@ -806,7 +880,7 @@ func (m Model) View() string {
 	// 2. Main Viewport
 	sb.WriteString(m.viewport.View() + "\n\n")
 
-	// 3. State Status & SQL / Export Confirmation Box
+	// 3. State Status & Unified SQL / Export Action Selection Card
 	switch m.state {
 	case StateLoadingSchema:
 		sb.WriteString(m.spinner.View() + " Loading database schema...\n")
@@ -816,17 +890,29 @@ func (m Model) View() string {
 		sb.WriteString(m.spinner.View() + " Executing SQL query...\n")
 	case StateExportReady:
 		if m.pendingExport != nil {
-			exportInfo := fmt.Sprintf("Dataset: %s | Target: %s | Format: %s", m.pendingExport.DatasetID, m.pendingExport.FilePath, strings.ToUpper(m.pendingExport.Format))
-			preview := fmt.Sprintf("%s\n%s", SQLTitleStyle.Render("✨ File Export Approval Required (Enter: Confirm Export | Esc: Deny):"), SQLCodeStyle.Render(exportInfo))
-			sb.WriteString(SQLBoxStyle.Width(m.width-4).Render(preview) + "\n")
+			exportInfo := fmt.Sprintf("Dataset: %s | FilePath: %s | Format: %s", m.pendingExport.DatasetID, m.pendingExport.FilePath, strings.ToUpper(m.pendingExport.Format))
+			card := renderActionOptionsCard(
+				"✨ File Export Approval Required",
+				SQLCodeStyle.Render(exportInfo),
+				[]string{"Confirm & Export File", "Adjust Export Options / Prompt", "Deny & Cancel Export"},
+				m.confirmOption,
+				m.width,
+			)
+			sb.WriteString(card + "\n")
 		}
 	case StateSQLReady:
 		sqlContent := HighlightSQL(m.currentSQL)
 		if m.currentSQL == "" {
 			sqlContent = lipgloss.NewStyle().Foreground(MutedColor).Italic(true).Render("(No SQL generated)")
 		}
-		preview := fmt.Sprintf("%s\n%s", SQLTitleStyle.Render("✨ SQL Preview (Enter: Execute | e: Edit | Esc: Cancel):"), sqlContent)
-		sb.WriteString(SQLBoxStyle.Width(m.width-4).Render(preview) + "\n")
+		card := renderActionOptionsCard(
+			"✨ SQL Approval Required",
+			sqlContent,
+			[]string{"Execute Query", "Edit SQL / Adjust Prompt", "Cancel Execution"},
+			m.confirmOption,
+			m.width,
+		)
+		sb.WriteString(card + "\n")
 	}
 
 	// 4. Input Area & Footer Keybindings
@@ -853,24 +939,18 @@ func (m Model) View() string {
 	}
 
 	var keybindings string
-	if m.state == StateExportReady {
+	if m.state == StateExportReady || m.state == StateSQLReady {
 		keybindings = renderKeybindingBadges([][2]string{
-			{"Enter", "Confirm Export"},
-			{"Esc", "Deny Export"},
-		})
-	} else if m.state == StateSQLReady {
-		keybindings = renderKeybindingBadges([][2]string{
-			{"Enter", "Execute"},
-			{"e", "Edit SQL"},
+			{"↑/↓", "Select Option"},
+			{"Enter", "Confirm"},
+			{"1/2/3", "Quick Select"},
 			{"Esc", "Cancel"},
-			{"Shift+Tab", "Mode (" + execModeHint + ")"},
-			{"Ctrl+O", "Tool (" + toolFoldState + toolNavHint + ")"},
 		})
 	} else {
 		keybindings = renderKeybindingBadges([][2]string{
 			{"Enter", "Send"},
 			{"Tab", "Focus Tool" + toolNavHint},
-			{"Ctrl+O", "Fold/Unfold Tool"},
+			{"Ctrl+O", "Tools (" + toolFoldState + ")"},
 			{"←/→", "Cols"},
 			{"PgUp/PgDn", "Rows"},
 			{"Ctrl+E", "Expand Table"},
