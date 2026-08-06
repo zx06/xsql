@@ -14,30 +14,30 @@ import (
 var (
 	TableHeaderStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.AdaptiveColor{Light: "#6D28D9", Dark: "#A78BFA"}).
+				Foreground(lipgloss.AdaptiveColor{Light: "#4F46E5", Dark: "#818CF8"}).
 				Padding(0, 1)
 
 	TableCellStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.AdaptiveColor{Light: "#0F172A", Dark: "#E2E8F0"}).
+			Foreground(lipgloss.AdaptiveColor{Light: "#1E293B", Dark: "#F1F5F9"}).
 			Padding(0, 1)
 
 	TableNilStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.AdaptiveColor{Light: "#64748B", Dark: "#94A3B8"}).
+			Foreground(lipgloss.AdaptiveColor{Light: "#94A3B8", Dark: "#64748B"}).
 			Italic(true).
 			Padding(0, 1)
 
 	TableBorderStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.AdaptiveColor{Light: "#CBD5E1", Dark: "#3B4261"})
+				Foreground(lipgloss.AdaptiveColor{Light: "#CBD5E1", Dark: "#334155"})
 
 	ActiveTableBorderStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.AdaptiveColor{Light: "#0284C7", Dark: "#7AA2F7"})
+				Foreground(lipgloss.AdaptiveColor{Light: "#6366F1", Dark: "#818CF8"})
 
 	FieldKeyStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.AdaptiveColor{Light: "#0369A1", Dark: "#7AA2F7"})
+			Foreground(lipgloss.AdaptiveColor{Light: "#4F46E5", Dark: "#818CF8"})
 
 	FieldValueStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.AdaptiveColor{Light: "#0F172A", Dark: "#E2E8F0"})
+			Foreground(lipgloss.AdaptiveColor{Light: "#1E293B", Dark: "#F1F5F9"})
 
 	RecordDividerStyle = lipgloss.NewStyle().
 				Bold(true).
@@ -45,7 +45,7 @@ var (
 
 	ScrollBadgeStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.AdaptiveColor{Light: "#9D174D", Dark: "#FF75B5"})
+				Foreground(lipgloss.AdaptiveColor{Light: "#BE185D", Dark: "#F472B6"})
 )
 
 const (

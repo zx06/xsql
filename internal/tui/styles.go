@@ -4,27 +4,21 @@ import "github.com/charmbracelet/lipgloss"
 
 var (
 	// Palette Colors (Adaptive Catppuccin / Tokyo Night Theme)
-	PrimaryColor   = lipgloss.AdaptiveColor{Light: "#7C3AED", Dark: "#A78BFA"}
+	PrimaryColor   = lipgloss.AdaptiveColor{Light: "#6D28D9", Dark: "#A78BFA"}
 	SecondaryColor = lipgloss.AdaptiveColor{Light: "#059669", Dark: "#34D399"}
-	AccentColor    = lipgloss.AdaptiveColor{Light: "#DB2777", Dark: "#F472B6"}
+	AccentColor    = lipgloss.AdaptiveColor{Light: "#BE185D", Dark: "#F472B6"}
 	WarningColor   = lipgloss.AdaptiveColor{Light: "#D97706", Dark: "#FBBF24"}
 	ErrorColor     = lipgloss.AdaptiveColor{Light: "#E11D48", Dark: "#F87171"}
 	InfoColor      = lipgloss.AdaptiveColor{Light: "#0284C7", Dark: "#38BDF8"}
 	MutedColor     = lipgloss.AdaptiveColor{Light: "#64748B", Dark: "#94A3B8"}
 	TextNormal     = lipgloss.AdaptiveColor{Light: "#0F172A", Dark: "#F8FAFC"}
-	BgSubtle       = lipgloss.AdaptiveColor{Light: "#F1F5F9", Dark: "#1E293B"}
+	HeaderBg       = lipgloss.AdaptiveColor{Light: "#E2E8F0", Dark: "#1E293B"}
 
-	// Keybinding Badge Styles
-	KeyBadgeStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.AdaptiveColor{Light: "#1E293B", Dark: "#F8FAFC"}).
-			Background(lipgloss.AdaptiveColor{Light: "#E2E8F0", Dark: "#334155"}).
+	// Header Container & Badges
+	HeaderBarStyle = lipgloss.NewStyle().
+			Background(HeaderBg).
 			Padding(0, 1)
 
-	KeyLabelStyle = lipgloss.NewStyle().
-			Foreground(MutedColor)
-
-	// Header Pill Badges
 	HeaderTitleBadge = lipgloss.NewStyle().
 				Bold(true).
 				Foreground(lipgloss.Color("#FFFFFF")).
@@ -57,9 +51,19 @@ var (
 
 	BadgeManualApprove = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.AdaptiveColor{Light: "#1E293B", Dark: "#E2E8F0"}).
+				Foreground(lipgloss.AdaptiveColor{Light: "#0F172A", Dark: "#E2E8F0"}).
 				Background(lipgloss.AdaptiveColor{Light: "#CBD5E1", Dark: "#475569"}).
 				Padding(0, 1)
+
+	// Keybinding Badges
+	KeyBadgeStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.AdaptiveColor{Light: "#0F172A", Dark: "#F8FAFC"}).
+			Background(lipgloss.AdaptiveColor{Light: "#CBD5E1", Dark: "#334155"}).
+			Padding(0, 1)
+
+	KeyLabelStyle = lipgloss.NewStyle().
+			Foreground(MutedColor)
 
 	// SQL Preview Box
 	SQLBoxStyle = lipgloss.NewStyle().
@@ -77,7 +81,7 @@ var (
 			Bold(true).
 			Foreground(InfoColor)
 
-	// User & AI Chat Tags
+	// User & AI Message Tags
 	UserTagStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("#FFFFFF")).

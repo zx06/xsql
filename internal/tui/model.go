@@ -82,7 +82,8 @@ type Model struct {
 
 func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Service, initialPrompt string, unsafeAllowWrite bool) Model {
 	ta := textarea.New()
-	ta.Placeholder = "Ask AI to write a SQL query (e.g. 'Show top 10 users')...."
+	ta.Placeholder = "Ask AI to generate a SQL query (e.g. 'Show top 10 servers')...."
+	ta.ShowLineNumbers = false
 	ta.Prompt = PromptPrefixStyle.Render("✦ ")
 	ta.Focus()
 	ta.CharLimit = 1000
@@ -440,7 +441,7 @@ func renderKeybindingBadges(items [][2]string) string {
 func (m Model) View() string {
 	var sb strings.Builder
 
-	// 1. Header Pill Badges
+	// 1. Full-Width Header Bar
 	titlePill := HeaderTitleBadge.Render("xsql AI")
 	profilePill := HeaderProfileBadge.Render(fmt.Sprintf("%s (%s)", m.profileName, m.profile.DB))
 
@@ -454,7 +455,8 @@ func (m Model) View() string {
 		execPill = BadgeAutoExec.Render("AUTO-EXEC")
 	}
 
-	header := fmt.Sprintf(" %s %s %s %s", titlePill, profilePill, modePill, execPill)
+	headerContent := fmt.Sprintf("%s %s %s %s", titlePill, profilePill, modePill, execPill)
+	header := HeaderBarStyle.Width(m.width).Render(headerContent)
 	sb.WriteString(header + "\n\n")
 
 	// 2. Main Viewport
@@ -481,7 +483,7 @@ func (m Model) View() string {
 	if m.editingSQL {
 		sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(AccentColor).Render("✏️  Edit SQL (Enter: Apply | Esc: Cancel):") + "\n")
 	}
-	sb.WriteString(m.textarea.View() + "\n")
+	sb.WriteString(m.textarea.View() + "\n\n")
 
 	execModeHint := "MANUAL"
 	if m.autoExecute {
