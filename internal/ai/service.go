@@ -52,3 +52,7 @@ func (s *Service) GenerateResponse(ctx context.Context, userPrompt string, schem
 
 	return s.client.ChatCompletion(ctx, messages)
 }
+
+func (s *Service) ChatCompletion(ctx context.Context, messages []ChatMessage) (*AIResponse, *errors.XError) {
+	return s.client.ChatCompletion(ctx, messages)
+}

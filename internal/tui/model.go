@@ -65,11 +65,11 @@ type Model struct {
 	profileName      string
 	unsafeAllowWrite bool
 	initialPrompt    string
-	lastUserPrompt   string
 	autoExecute      bool
 
 	sessionStore *session.SessionDataStore
 	jsEngine     *js.JSEngine
+	chatHistory  []ai.ChatMessage
 	jsRetryCount int
 	maxJSRetries int
 
@@ -113,10 +113,10 @@ func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Servi
 		profileName:      resolved.ProfileName,
 		unsafeAllowWrite: unsafeAllowWrite || resolved.Profile.UnsafeAllowWrite,
 		initialPrompt:    strings.TrimSpace(initialPrompt),
-		lastUserPrompt:   strings.TrimSpace(initialPrompt),
 		autoExecute:      false,
 		sessionStore:     session.NewSessionDataStore(),
 		jsEngine:         js.NewJSEngine(1 * time.Minute),
+		chatHistory:      []ai.ChatMessage{},
 		jsRetryCount:     0,
 		maxJSRetries:     3,
 		tableStates:      []TableState{},
@@ -150,13 +150,29 @@ func (m Model) loadSchemaCmd() tea.Cmd {
 	}
 }
 
-func (m Model) generateSQLCmd(prompt string) tea.Cmd {
+func (m Model) runAgentStepCmd() tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
+		// Inject updated catalog into system prompt if needed
 		catalog := m.sessionStore.GetCatalog()
-		resp, xe := m.aiService.GenerateResponse(ctx, prompt, m.schemaInfo, m.profile.DB, catalog)
+		sysPrompt := ai.BuildSystemPrompt(m.profile.DB, m.schemaInfo, catalog)
+
+		// Ensure system prompt is up to date in history
+		msgs := make([]ai.ChatMessage, 0, len(m.chatHistory)+1)
+		msgs = append(msgs, ai.ChatMessage{Role: "system", Content: sysPrompt})
+		for _, item := range m.chatHistory {
+			if item.Role != "system" {
+				msgs = append(msgs, item)
+			}
+		}
+
+		resp, xe := m.aiService.ChatCompletion(ctx, msgs)
 		return aiResponseMsg{response: resp, err: xe}
 	}
+}
+
+func (m Model) generateSQLCmd(prompt string) tea.Cmd {
+	return m.runAgentStepCmd()
 }
 
 func (m Model) executeSQLCmd(sqlStr string) tea.Cmd {
@@ -191,17 +207,6 @@ func (m *Model) renderTableState(idx int, isActive bool) {
 	m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 }
 
-func shouldTriggerJSAnalysis(prompt string) bool {
-	p := strings.ToLower(prompt)
-	keywords := []string{"分析", "计算", "占比", "导出", "统计", "处理", "汇总", "比例", "生成报告", "报表", "analyze", "calculate", "percentage", "ratio", "export", "summary", "report", "group"}
-	for _, kw := range keywords {
-		if strings.Contains(p, kw) {
-			return true
-		}
-	}
-	return false
-}
-
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
@@ -222,13 +227,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.initialPrompt != "" {
 			prompt := m.initialPrompt
 			m.initialPrompt = ""
-			m.lastUserPrompt = prompt
 			userLine := UserTagStyle.Render("👤 YOU") + " " + prompt
 			m.messages = append(m.messages, userLine)
+			m.chatHistory = append(m.chatHistory, ai.ChatMessage{Role: "user", Content: prompt})
 			m.state = StateThinking
 			m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 			m.viewport.GotoBottom()
-			return m, m.generateSQLCmd(prompt)
+			return m, m.runAgentStepCmd()
 		}
 		m.state = StateIdle
 		m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
@@ -239,11 +244,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.state = StateIdle
 		} else {
 			m.explanation = msg.response.Explanation
-			aiMsg := AITagStyle.Render("🤖 AI") + " " + AIResponseStyle.Render(msg.response.Explanation)
-			m.messages = append(m.messages, aiMsg)
 
 			if msg.response.Type == ai.TypeJS && msg.response.JSCode != "" {
-				// Execute JS script using goja on active session datasets
+				// Record Assistant Tool Call into chat history
+				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+					Role:    "assistant",
+					Content: fmt.Sprintf("Call tool 'execute_javascript':\n%s", msg.response.JSCode),
+				})
+
 				lineCount := len(strings.Split(msg.response.JSCode, "\n"))
 				jsExecLine := ExecutingTagStyle.Render("⚡ JS Analysis") + " " + MetricsStyle.Render(fmt.Sprintf("Executing %d lines of JavaScript data processing script...", lineCount))
 				m.messages = append(m.messages, jsExecLine)
@@ -255,30 +263,42 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if m.jsRetryCount <= m.maxJSRetries {
 						retryWarn := ErrorMsgStyle.Render(fmt.Sprintf("⚠️ JS Execution Failed (Attempt %d/%d): %v", m.jsRetryCount, m.maxJSRetries, jsErr.Message))
 						m.messages = append(m.messages, retryWarn)
+
+						// Append tool error to chat history and loop back to Agent
+						m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+							Role:    "user",
+							Content: fmt.Sprintf("Tool 'execute_javascript' failed with error: %s. Please fix the code and call 'execute_javascript' again.", jsErr.Message),
+						})
+
 						m.state = StateThinking
 						m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 						m.viewport.GotoBottom()
-
-						retryPrompt := fmt.Sprintf("The previous JavaScript code execution failed with error:\n%s\n\nPlease analyze the error, fix your JavaScript code, and call 'execute_javascript' again.", jsErr.Message)
-						return m, m.generateSQLCmd(retryPrompt)
+						return m, m.runAgentStepCmd()
 					}
 					m.messages = append(m.messages, ErrorMsgStyle.Render(fmt.Sprintf("❌ JS Execution Error (after %d retries): %v", m.maxJSRetries, jsErr.Message)))
 					m.jsRetryCount = 0
 					m.state = StateIdle
 				} else {
 					m.jsRetryCount = 0
-					// Automatically ask AI to format the computed JS summary into a clean, human-readable Markdown analysis report
-					if jsRes != nil && jsRes.SummaryText != "" {
-						m.state = StateThinking
-						m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
-						m.viewport.GotoBottom()
 
-						reportPrompt := fmt.Sprintf("The JavaScript data calculation produced the following computed result:\n%s\n\nPlease synthesize this computed result into a clear, professional, beautifully formatted Markdown analysis report for the user.", jsRes.SummaryText)
-						return m, m.generateSQLCmd(reportPrompt)
-					}
-					m.state = StateIdle
+					// Append tool success result to chat history and loop back to Agent
+					m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+						Role:    "user",
+						Content: fmt.Sprintf("Tool 'execute_javascript' executed successfully. Output:\n%s", jsRes.SummaryText),
+					})
+
+					m.state = StateThinking
+					m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+					m.viewport.GotoBottom()
+					return m, m.runAgentStepCmd()
 				}
 			} else if msg.response.Type == ai.TypeSQL && msg.response.SQL != "" {
+				// Record Assistant Tool Call into chat history
+				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+					Role:    "assistant",
+					Content: fmt.Sprintf("Call tool 'execute_sql': %s", msg.response.SQL),
+				})
+
 				m.currentSQL = msg.response.SQL
 				if m.autoExecute {
 					m.state = StateExecuting
@@ -290,6 +310,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.state = StateSQLReady
 			} else {
+				// FINAL LLM AGENT OUTPUT (No Tool Call)
+				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+					Role:    "assistant",
+					Content: msg.response.Explanation,
+				})
+
+				if msg.response.Explanation != "" {
+					aiMsg := AITagStyle.Render("🤖 AI") + " " + AIResponseStyle.Render(msg.response.Explanation)
+					m.messages = append(m.messages, aiMsg)
+				}
 				m.state = StateIdle
 			}
 		}
@@ -298,7 +328,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case queryExecutedMsg:
 		if msg.err != nil {
-			m.messages = append(m.messages, ErrorMsgStyle.Render(fmt.Sprintf("SQL Exec Error [%s]: %s", msg.err.Code, msg.err.Message)))
+			errText := fmt.Sprintf("SQL Exec Error [%s]: %s", msg.err.Code, msg.err.Message)
+			m.messages = append(m.messages, ErrorMsgStyle.Render(errText))
+
+			// Append tool error to chat history and loop back to Agent
+			m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+				Role:    "user",
+				Content: fmt.Sprintf("Tool 'execute_sql' failed with error: %s", errText),
+			})
+
+			m.state = StateThinking
+			m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+			m.viewport.GotoBottom()
+			return m, m.runAgentStepCmd()
 		} else if msg.result != nil {
 			// Save QueryResult into SessionDataStore and get assigned ID
 			datasetID := m.sessionStore.Save(m.currentSQL, msg.result)
@@ -333,13 +375,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			formatted := FormatTableResult(msg.result, 0, 0, m.width, true)
 			m.messages = append(m.messages, formatted)
 
-			// Auto-chain: Check if user prompt requests post-query data analysis or JS computation
-			if shouldTriggerJSAnalysis(m.lastUserPrompt) {
-				m.state = StateThinking
-				m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
-				m.viewport.GotoBottom()
-				return m, m.generateSQLCmd(m.lastUserPrompt)
-			}
+			// Append tool success result to chat history and LOOP BACK to Agent
+			m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+				Role:    "user",
+				Content: fmt.Sprintf("Tool 'execute_sql' executed successfully. Returned %d rows (columns: %v). Dataset saved as '%s'.", len(msg.result.Rows), msg.result.Columns, datasetID),
+			})
+
+			m.state = StateThinking
+			m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+			m.viewport.GotoBottom()
+			return m, m.runAgentStepCmd()
 		}
 		m.state = StateIdle
 		m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
@@ -480,14 +525,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyEnter:
 			prompt := strings.TrimSpace(m.textarea.Value())
 			if prompt != "" && m.state == StateIdle {
-				m.lastUserPrompt = prompt
 				userLine := UserTagStyle.Render("👤 YOU") + " " + prompt
 				m.messages = append(m.messages, userLine)
+				m.chatHistory = append(m.chatHistory, ai.ChatMessage{Role: "user", Content: prompt})
 				m.textarea.Reset()
 				m.state = StateThinking
 				m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 				m.viewport.GotoBottom()
-				return m, m.generateSQLCmd(prompt)
+				return m, m.runAgentStepCmd()
 			}
 		}
 	}

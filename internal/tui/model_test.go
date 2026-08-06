@@ -73,16 +73,31 @@ func TestTUI_Model_StateTransitions(t *testing.T) {
 		t.Fatal("expected non-nil Cmd for executeSQLCmd")
 	}
 
-	// 5. Send queryExecutedMsg -> transition to StateIdle
-	updated, _ = m.Update(queryExecutedMsg{
+	// 5. Send queryExecutedMsg -> Agent loops back with runAgentStepCmd (StateThinking)
+	updated, cmd = m.Update(queryExecutedMsg{
 		result: &db.QueryResult{
 			Columns: []string{"id", "name"},
 			Rows:    []map[string]any{{"id": 1, "name": "Alice"}},
 		},
 	})
 	m = updated.(Model)
+	if m.state != StateThinking {
+		t.Fatalf("expected state StateThinking while Agent processes tool result, got %v", m.state)
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil Cmd for runAgentStepCmd after query execution")
+	}
+
+	// 6. Send final aiResponseMsg (TypeText) -> transition to StateIdle
+	updated, _ = m.Update(aiResponseMsg{
+		response: &ai.AIResponse{
+			Type:        ai.TypeText,
+			Explanation: "Found 1 user named Alice.",
+		},
+	})
+	m = updated.(Model)
 	if m.state != StateIdle {
-		t.Fatalf("expected state StateIdle after query executed, got %v", m.state)
+		t.Fatalf("expected state StateIdle after final text response, got %v", m.state)
 	}
 
 	// View output should contain query result
