@@ -214,6 +214,30 @@ func (m Model) executeSQLCmd(sqlStr string) tea.Cmd {
 	}
 }
 
+func (m *Model) focusToolCall(idx int) {
+	if len(m.toolCalls) == 0 {
+		return
+	}
+	if idx < 0 {
+		idx = len(m.toolCalls) - 1
+	} else if idx >= len(m.toolCalls) {
+		idx = 0
+	}
+
+	oldIdx := m.activeToolIdx
+	m.activeToolIdx = idx
+
+	// Sync embedded table focus if tool call has attached table
+	if tc := m.toolCalls[idx]; tc.TableStateIndex >= 0 {
+		m.activeTable = tc.TableStateIndex
+	}
+
+	if oldIdx >= 0 && oldIdx < len(m.toolCalls) {
+		m.renderToolCall(oldIdx)
+	}
+	m.renderToolCall(m.activeToolIdx)
+}
+
 func (m *Model) renderTableState(idx int, isActive bool) {
 	if idx < 0 || idx >= len(m.tableStates) {
 		return
@@ -339,7 +363,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.messages = append(m.messages, "")
 				m.toolCalls = append(m.toolCalls, tc)
 				toolIdx := len(m.toolCalls) - 1
-				m.activeToolIdx = toolIdx
+				m.focusToolCall(toolIdx)
 
 				ctx := context.Background()
 				jsRes, jsErr := m.jsEngine.Execute(ctx, msg.response.JSCode, m.sessionStore)
@@ -408,7 +432,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.tableStates = append(m.tableStates, ts)
 				tableIdx := len(m.tableStates) - 1
-				m.activeTable = tableIdx
 
 				tc := ToolCallItem{
 					ID:              fmt.Sprintf("tc_%d", len(m.toolCalls)+1),
@@ -423,8 +446,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.messages = append(m.messages, "")
 				m.toolCalls = append(m.toolCalls, tc)
 				toolIdx := len(m.toolCalls) - 1
-				m.activeToolIdx = toolIdx
-				m.renderToolCall(toolIdx)
+				m.focusToolCall(toolIdx)
 
 				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
 					Role:    "user",
@@ -454,8 +476,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.messages = append(m.messages, "")
 				m.toolCalls = append(m.toolCalls, tc)
 				toolIdx := len(m.toolCalls) - 1
-				m.activeToolIdx = toolIdx
-				m.renderToolCall(toolIdx)
+				m.focusToolCall(toolIdx)
 
 				m.pendingExport = &PendingExport{
 					DatasetID: msg.response.DatasetID,
@@ -484,8 +505,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.messages = append(m.messages, "")
 				m.toolCalls = append(m.toolCalls, tc)
 				toolIdx := len(m.toolCalls) - 1
-				m.activeToolIdx = toolIdx
-				m.renderToolCall(toolIdx)
+				m.focusToolCall(toolIdx)
 
 				if m.autoExecute {
 					m.state = StateExecuting
@@ -548,7 +568,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.tableStates = append(m.tableStates, ts)
 			tableIdx := len(m.tableStates) - 1
-			m.activeTable = tableIdx
 
 			// Attach TableStateIndex directly inside execute_sql ToolCallItem
 			if len(m.toolCalls) > 0 {
@@ -556,7 +575,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.toolCalls[lastIdx].Name == "execute_sql" {
 					m.toolCalls[lastIdx].Result = statusLine
 					m.toolCalls[lastIdx].TableStateIndex = tableIdx
-					m.renderToolCall(lastIdx)
+					m.focusToolCall(lastIdx)
 				}
 			}
 
@@ -702,51 +721,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-		case tea.KeyCtrlP:
-			// Cycle active tool call focus to PREVIOUS tool call
+		case tea.KeyTab, tea.KeyCtrlN:
+			// Tab / Ctrl+N: Navigate focus to NEXT Tool Call Container
 			if len(m.toolCalls) > 0 {
-				oldIdx := m.activeToolIdx
-				if m.activeToolIdx <= 0 {
-					m.activeToolIdx = len(m.toolCalls) - 1
-				} else {
-					m.activeToolIdx--
-				}
-				if oldIdx >= 0 && oldIdx < len(m.toolCalls) {
-					m.renderToolCall(oldIdx)
-				}
-				m.renderToolCall(m.activeToolIdx)
+				m.focusToolCall((m.activeToolIdx + 1) % len(m.toolCalls))
 				return m, nil
 			}
 
-		case tea.KeyCtrlN:
-			// Cycle active tool call focus to NEXT tool call
+		case tea.KeyShiftTab, tea.KeyCtrlP:
+			// Shift+Tab / Ctrl+P: Navigate focus to PREVIOUS Tool Call Container
 			if len(m.toolCalls) > 0 {
-				oldIdx := m.activeToolIdx
-				m.activeToolIdx = (m.activeToolIdx + 1) % len(m.toolCalls)
-				if oldIdx >= 0 && oldIdx < len(m.toolCalls) {
-					m.renderToolCall(oldIdx)
+				if m.activeToolIdx <= 0 {
+					m.focusToolCall(len(m.toolCalls) - 1)
+				} else {
+					m.focusToolCall(m.activeToolIdx - 1)
 				}
-				m.renderToolCall(m.activeToolIdx)
 				return m, nil
 			}
+
+		case tea.KeyCtrlA:
+			// Ctrl+A: Toggle Auto-Execute / Manual approval mode
+			m.autoExecute = !m.autoExecute
 
 		case tea.KeyCtrlE:
 			if m.activeTable >= 0 && m.activeTable < len(m.tableStates) {
 				ts := &m.tableStates[m.activeTable]
 				ts.VerticalView = !ts.VerticalView
 				m.renderTableState(m.activeTable, true)
-			}
-
-		case tea.KeyShiftTab:
-			m.autoExecute = !m.autoExecute
-
-		case tea.KeyTab:
-			if len(m.tableStates) > 1 {
-				oldIdx := m.activeTable
-				m.activeTable = (m.activeTable + 1) % len(m.tableStates)
-				m.renderTableState(oldIdx, false)
-				m.renderTableState(m.activeTable, true)
-				return m, nil
 			}
 
 		case tea.KeyLeft:
@@ -916,20 +917,19 @@ func (m Model) View() string {
 			{"Enter", "Execute"},
 			{"e", "Edit SQL"},
 			{"Esc", "Cancel"},
-			{"Shift+Tab", "Mode (" + execModeHint + ")"},
+			{"Ctrl+A", "Mode (" + execModeHint + ")"},
 			{"Ctrl+O", "Tool Details (" + toolFoldState + toolNavHint + ")"},
-			{"Ctrl+P/N", "Nav Tools"},
+			{"Tab/Shift+Tab", "Nav Tools"},
 		})
 	} else {
 		keybindings = renderKeybindingBadges([][2]string{
 			{"Enter", "Send"},
-			{"Tab", "Focus Table"},
+			{"Tab/Shift+Tab", "Focus Tool" + toolNavHint},
 			{"←/→", "Cols"},
 			{"PgUp/PgDn", "Rows"},
+			{"Ctrl+O", "Tools (" + toolFoldState + ")"},
 			{"Ctrl+E", "Expand Table"},
-			{"Ctrl+O", "Tools (" + toolFoldState + toolNavHint + ")"},
-			{"Ctrl+P/N", "Nav Tools"},
-			{"Shift+Tab", "Mode (" + execModeHint + ")"},
+			{"Ctrl+A", "Mode (" + execModeHint + ")"},
 			{"Esc", "Quit"},
 		})
 	}
