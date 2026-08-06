@@ -286,7 +286,15 @@ func (m *Model) renderToolCall(idx int) {
 	} else {
 		badge := ToolExpandedBadge.Render("▼ 🛠️ Tool: " + tc.Name + activeMarker)
 		summary := SQLCodeStyle.Render(tc.Summary)
-		detail := ToolDetailStyle.Render(tc.Detail)
+
+		detailCode := tc.Detail
+		if tc.Name == "execute_sql" {
+			detailCode = HighlightSQL(tc.Detail)
+		} else if tc.Name == "execute_javascript" {
+			detailCode = HighlightJS(tc.Detail)
+		}
+
+		detail := ToolDetailStyle.Render(detailCode)
 		resText := MetricsStyle.Render(tc.Result)
 		sb.WriteString(fmt.Sprintf("%s %s\n%s\n%s", badge, summary, detail, resText))
 
@@ -469,7 +477,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				})
 
 				if msg.response.Explanation != "" {
-					aiMsg := AITagStyle.Render("🤖 AI") + " " + AIResponseStyle.Render(msg.response.Explanation)
+					renderedMD := RenderMarkdown(msg.response.Explanation, m.width)
+					aiMsg := AITagStyle.Render("🤖 AI") + "\n" + renderedMD
 					m.messages = append(m.messages, aiMsg)
 				}
 				m.state = StateIdle
@@ -677,7 +686,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case tea.KeyShiftTab:
-			// Shift+Tab: Restored keybinding for toggling AUTO-EXECUTE / MANUAL approval mode!
+			// Shift+Tab: Toggle AUTO-EXECUTE / MANUAL approval mode
 			m.autoExecute = !m.autoExecute
 
 		case tea.KeyCtrlE:
@@ -812,7 +821,7 @@ func (m Model) View() string {
 			sb.WriteString(SQLBoxStyle.Width(m.width-4).Render(preview) + "\n")
 		}
 	case StateSQLReady:
-		sqlContent := SQLCodeStyle.Render(m.currentSQL)
+		sqlContent := HighlightSQL(m.currentSQL)
 		if m.currentSQL == "" {
 			sqlContent = lipgloss.NewStyle().Foreground(MutedColor).Italic(true).Render("(No SQL generated)")
 		}
