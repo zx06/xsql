@@ -14,30 +14,30 @@ import (
 var (
 	TableHeaderStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("#7D56F4")).
+				Foreground(lipgloss.AdaptiveColor{Light: "#6D28D9", Dark: "#A78BFA"}).
 				Padding(0, 1)
 
 	TableCellStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#C0CAF5")).
+			Foreground(lipgloss.AdaptiveColor{Light: "#0F172A", Dark: "#E2E8F0"}).
 			Padding(0, 1)
 
 	TableNilStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#565F89")).
+			Foreground(lipgloss.AdaptiveColor{Light: "#64748B", Dark: "#94A3B8"}).
 			Italic(true).
 			Padding(0, 1)
 
 	TableBorderStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#3B4261"))
+			Foreground(lipgloss.AdaptiveColor{Light: "#CBD5E1", Dark: "#3B4261"})
 
 	ActiveTableBorderStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#7AA2F7"))
+				Foreground(lipgloss.AdaptiveColor{Light: "#0284C7", Dark: "#7AA2F7"})
 
 	FieldKeyStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("#7AA2F7"))
+			Foreground(lipgloss.AdaptiveColor{Light: "#0369A1", Dark: "#7AA2F7"})
 
 	FieldValueStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#C0CAF5"))
+			Foreground(lipgloss.AdaptiveColor{Light: "#0F172A", Dark: "#E2E8F0"})
 
 	RecordDividerStyle = lipgloss.NewStyle().
 				Bold(true).
@@ -45,7 +45,7 @@ var (
 
 	ScrollBadgeStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("#FF75B5"))
+				Foreground(lipgloss.AdaptiveColor{Light: "#9D174D", Dark: "#FF75B5"})
 )
 
 const (
@@ -258,15 +258,15 @@ func FormatVerticalResult(result *db.QueryResult) string {
 			keyStr := FieldKeyStyle.Render(col + padding)
 
 			if val == nil {
-				sb.WriteString(fmt.Sprintf("  %s : %s\n", keyStr, TableNilStyle.Render("NULL")))
+				fmt.Fprintf(&sb, "  %s : %s\n", keyStr, TableNilStyle.Render("NULL"))
 			} else {
 				valStr := fmt.Sprintf("%v", val)
 				// Full display with indentation for multiline text
 				if strings.Contains(valStr, "\n") {
 					indented := strings.ReplaceAll(valStr, "\n", "\n    ")
-					sb.WriteString(fmt.Sprintf("  %s :\n    %s\n", keyStr, FieldValueStyle.Render(indented)))
+					fmt.Fprintf(&sb, "  %s :\n    %s\n", keyStr, FieldValueStyle.Render(indented))
 				} else {
-					sb.WriteString(fmt.Sprintf("  %s : %s\n", keyStr, FieldValueStyle.Render(valStr)))
+					fmt.Fprintf(&sb, "  %s : %s\n", keyStr, FieldValueStyle.Render(valStr))
 				}
 			}
 		}
