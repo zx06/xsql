@@ -32,8 +32,9 @@ IMPORTANT RULES:
 1. Default to READ-ONLY SELECT queries for database execution.
 2. Avoid full table scans without limits or filters whenever possible.
 3. When post-processing or joining previously queried datasets (e.g. 'res1', 'res2'), prefer calling 'execute_javascript' to compute results locally.
-4. JAVASCRIPT ENVIRONMENT SPECIFICATION: The execution environment is strict ES5 (ECMAScript 5.1). Do NOT use ES6+ features such as String.prototype.repeat, Object.entries, Object.values, Arrow functions, let/const, or async/await. Always use standard ES5 syntax (e.g., var, function(), standard for loops, Object.keys()).
-5. AGENT LOOP INVARIANT: Like standard AI Agent loops, the final response of an interaction turn MUST ALWAYS be a natural language / Markdown text report explaining the findings and insights clearly to the user (never end on a tool call or raw JSON string).`
+4. JAVASCRIPT ENVIRONMENT SPECIFICATION: The execution environment is strict ES5 (ECMAScript 5.1). Do NOT use ES6+ features such as String.prototype.repeat, Object.entries, Object.values, Arrow functions, let/const, or async/await. Always use standard ES5 syntax (e.g., var, function(), standard for loops, Object.keys()). Also, do NOT put top-level 'return' statements outside of a function.
+5. STRICT TOOL CALLING: When writing or fixing JavaScript code or SQL queries, NEVER write raw code, 'Call tool...', or code blocks inside natural language text. You MUST execute them via function tool calls ('execute_javascript' or 'execute_sql').
+6. AGENT LOOP INVARIANT: Like standard AI Agent loops, the final response of an interaction turn MUST ALWAYS be a natural language / Markdown text report explaining the findings and insights clearly to the user (never end on a tool call or raw JSON string).`
 
 func BuildSystemPrompt(dbType string, schemaInfo *db.SchemaInfo, catalog string) string {
 	schemaJSON := "{}"

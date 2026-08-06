@@ -475,13 +475,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state = StateSQLReady
 			} else {
 				// FINAL LLM AGENT OUTPUT (No Tool Call)
+				exp := msg.response.Explanation
+
+				// Defensive guard: If LLM mistakenly output raw JS code in text instead of tool call, intercept it!
+				if strings.Contains(exp, "Call tool 'execute_javascript'") || (strings.Contains(exp, "var data =") && strings.Contains(exp, "stats")) {
+					jsCode := exp
+					if idx := strings.Index(exp, "var "); idx >= 0 {
+						jsCode = exp[idx:]
+					}
+					msg.response.Type = ai.TypeJS
+					msg.response.JSCode = jsCode
+					return m.Update(msg)
+				}
+
 				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
 					Role:    "assistant",
-					Content: msg.response.Explanation,
+					Content: exp,
 				})
 
-				if msg.response.Explanation != "" {
-					renderedMD := RenderMarkdown(msg.response.Explanation, m.width)
+				if exp != "" {
+					renderedMD := RenderMarkdown(exp, m.width)
 					aiMsg := AITagStyle.Render("🤖 AI") + "\n" + renderedMD
 					m.messages = append(m.messages, aiMsg)
 				}
