@@ -58,6 +58,16 @@ type TableState struct {
 	VerticalView bool
 }
 
+type ToolCallItem struct {
+	ID         string
+	Name       string
+	Summary    string
+	Detail     string
+	Result     string
+	MsgIndex   int
+	IsExpanded bool
+}
+
 type Model struct {
 	opts             config.Options
 	aiService        *ai.Service
@@ -79,6 +89,7 @@ type Model struct {
 	explanation string
 	messages    []string
 	tableStates []TableState
+	toolCalls   []ToolCallItem
 	activeTable int
 
 	textarea textarea.Model
@@ -120,6 +131,7 @@ func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Servi
 		jsRetryCount:     0,
 		maxJSRetries:     3,
 		tableStates:      []TableState{},
+		toolCalls:        []ToolCallItem{},
 		activeTable:      -1,
 		state:            StateLoadingSchema,
 		textarea:         ta,
@@ -153,11 +165,9 @@ func (m Model) loadSchemaCmd() tea.Cmd {
 func (m Model) runAgentStepCmd() tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
-		// Inject updated catalog into system prompt if needed
 		catalog := m.sessionStore.GetCatalog()
 		sysPrompt := ai.BuildSystemPrompt(m.profile.DB, m.schemaInfo, catalog)
 
-		// Ensure system prompt is up to date in history
 		msgs := make([]ai.ChatMessage, 0, len(m.chatHistory)+1)
 		msgs = append(msgs, ai.ChatMessage{Role: "system", Content: sysPrompt})
 		for _, item := range m.chatHistory {
@@ -207,6 +217,32 @@ func (m *Model) renderTableState(idx int, isActive bool) {
 	m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 }
 
+func (m *Model) renderToolCall(idx int) {
+	if idx < 0 || idx >= len(m.toolCalls) {
+		return
+	}
+	tc := &m.toolCalls[idx]
+	if tc.MsgIndex < 0 || tc.MsgIndex >= len(m.messages) {
+		return
+	}
+
+	var sb strings.Builder
+	if !tc.IsExpanded {
+		badge := ToolCollapsedBadge.Render("▶ 🛠️ Tool: " + tc.Name)
+		summary := MetricsStyle.Render(fmt.Sprintf("%s (Folded - Press Ctrl+O to unfold)", tc.Summary))
+		sb.WriteString(fmt.Sprintf("%s %s", badge, summary))
+	} else {
+		badge := ToolExpandedBadge.Render("▼ 🛠️ Tool: " + tc.Name)
+		summary := SQLCodeStyle.Render(tc.Summary)
+		detail := ToolDetailStyle.Render(tc.Detail)
+		resText := MetricsStyle.Render(tc.Result)
+		sb.WriteString(fmt.Sprintf("%s %s\n%s\n%s", badge, summary, detail, resText))
+	}
+
+	m.messages[tc.MsgIndex] = sb.String()
+	m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
@@ -253,18 +289,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				})
 
 				lineCount := len(strings.Split(msg.response.JSCode, "\n"))
-				jsExecLine := ExecutingTagStyle.Render("⚡ JS Analysis") + " " + MetricsStyle.Render(fmt.Sprintf("Executing %d lines of JavaScript data processing script...", lineCount))
-				m.messages = append(m.messages, jsExecLine)
+				tc := ToolCallItem{
+					ID:         fmt.Sprintf("tc_%d", len(m.toolCalls)+1),
+					Name:       "execute_javascript",
+					Summary:    fmt.Sprintf("Executing %d lines of JS data analysis", lineCount),
+					Detail:     msg.response.JSCode,
+					MsgIndex:   len(m.messages),
+					IsExpanded: false, // Folded by default!
+				}
+
+				m.messages = append(m.messages, "")
+				m.toolCalls = append(m.toolCalls, tc)
+				toolIdx := len(m.toolCalls) - 1
 
 				ctx := context.Background()
 				jsRes, jsErr := m.jsEngine.Execute(ctx, msg.response.JSCode, m.sessionStore)
 				if jsErr != nil {
 					m.jsRetryCount++
+					m.toolCalls[toolIdx].Result = fmt.Sprintf("❌ Failed: %v", jsErr.Message)
+					m.renderToolCall(toolIdx)
+
 					if m.jsRetryCount <= m.maxJSRetries {
 						retryWarn := ErrorMsgStyle.Render(fmt.Sprintf("⚠️ JS Execution Failed (Attempt %d/%d): %v", m.jsRetryCount, m.maxJSRetries, jsErr.Message))
 						m.messages = append(m.messages, retryWarn)
 
-						// Append tool error to chat history and loop back to Agent
 						m.chatHistory = append(m.chatHistory, ai.ChatMessage{
 							Role:    "user",
 							Content: fmt.Sprintf("Tool 'execute_javascript' failed with error: %s. Please fix the code and call 'execute_javascript' again.", jsErr.Message),
@@ -280,8 +328,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.state = StateIdle
 				} else {
 					m.jsRetryCount = 0
+					m.toolCalls[toolIdx].Result = "✓ JavaScript executed successfully"
+					m.renderToolCall(toolIdx)
 
-					// Append tool success result to chat history and loop back to Agent
 					m.chatHistory = append(m.chatHistory, ai.ChatMessage{
 						Role:    "user",
 						Content: fmt.Sprintf("Tool 'execute_javascript' executed successfully. Output:\n%s", jsRes.SummaryText),
@@ -293,13 +342,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, m.runAgentStepCmd()
 				}
 			} else if msg.response.Type == ai.TypeSQL && msg.response.SQL != "" {
-				// Record Assistant Tool Call into chat history
 				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
 					Role:    "assistant",
 					Content: fmt.Sprintf("Call tool 'execute_sql': %s", msg.response.SQL),
 				})
 
 				m.currentSQL = msg.response.SQL
+
+				tc := ToolCallItem{
+					ID:         fmt.Sprintf("tc_%d", len(m.toolCalls)+1),
+					Name:       "execute_sql",
+					Summary:    m.currentSQL,
+					Detail:     m.currentSQL,
+					MsgIndex:   len(m.messages),
+					IsExpanded: false, // Folded by default!
+				}
+				m.messages = append(m.messages, "")
+				m.toolCalls = append(m.toolCalls, tc)
+				toolIdx := len(m.toolCalls) - 1
+				m.renderToolCall(toolIdx)
+
 				if m.autoExecute {
 					m.state = StateExecuting
 					execLine := ExecutingTagStyle.Render("⚡ Auto-Executing") + " " + SQLCodeStyle.Render(m.currentSQL)
@@ -331,7 +393,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			errText := fmt.Sprintf("SQL Exec Error [%s]: %s", msg.err.Code, msg.err.Message)
 			m.messages = append(m.messages, ErrorMsgStyle.Render(errText))
 
-			// Append tool error to chat history and loop back to Agent
 			m.chatHistory = append(m.chatHistory, ai.ChatMessage{
 				Role:    "user",
 				Content: fmt.Sprintf("Tool 'execute_sql' failed with error: %s", errText),
@@ -342,7 +403,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.GotoBottom()
 			return m, m.runAgentStepCmd()
 		} else if msg.result != nil {
-			// Save QueryResult into SessionDataStore and get assigned ID
 			datasetID := m.sessionStore.Save(m.currentSQL, msg.result)
 
 			modelName := m.opts.CLIAIModel
@@ -356,6 +416,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			metricsStr := fmt.Sprintf("⏱️ %s | 📊 %d rows | 🤖 %s | 💾 %s", durStr, len(msg.result.Rows), modelName, datasetID)
 			statusLine := SuccessBadgeStyle.Render("✓ Execution Success") + " " + MetricsStyle.Render(metricsStr)
 			m.messages = append(m.messages, statusLine)
+
+			// Update latest SQL ToolCallItem result
+			if len(m.toolCalls) > 0 {
+				lastIdx := len(m.toolCalls) - 1
+				if m.toolCalls[lastIdx].Name == "execute_sql" {
+					m.toolCalls[lastIdx].Result = statusLine
+					m.renderToolCall(lastIdx)
+				}
+			}
 
 			// Remove focus from previous active table
 			if m.activeTable >= 0 && m.activeTable < len(m.tableStates) {
@@ -375,7 +444,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			formatted := FormatTableResult(msg.result, 0, 0, m.width, true)
 			m.messages = append(m.messages, formatted)
 
-			// Append tool success result to chat history and LOOP BACK to Agent
 			m.chatHistory = append(m.chatHistory, ai.ChatMessage{
 				Role:    "user",
 				Content: fmt.Sprintf("Tool 'execute_sql' executed successfully. Returned %d rows (columns: %v). Dataset saved as '%s'.", len(msg.result.Rows), msg.result.Columns, datasetID),
@@ -452,6 +520,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyEsc:
 			return m, tea.Quit
+
+		case tea.KeyCtrlO:
+			// Toggle folding/unfolding of all tool calls or the latest tool call
+			if len(m.toolCalls) > 0 {
+				lastIdx := len(m.toolCalls) - 1
+				m.toolCalls[lastIdx].IsExpanded = !m.toolCalls[lastIdx].IsExpanded
+				m.renderToolCall(lastIdx)
+				return m, nil
+			}
 
 		case tea.KeyCtrlE:
 			if m.activeTable >= 0 && m.activeTable < len(m.tableStates) {
@@ -587,7 +664,7 @@ func (m Model) View() string {
 	case StateLoadingSchema:
 		sb.WriteString(m.spinner.View() + " Loading database schema...\n")
 	case StateThinking:
-		sb.WriteString(m.spinner.View() + " AI is analyzing schema and generating SQL...\n")
+		sb.WriteString(m.spinner.View() + " AI is analyzing schema and executing tools...\n")
 	case StateExecuting:
 		sb.WriteString(m.spinner.View() + " Executing SQL query...\n")
 	case StateSQLReady:
@@ -612,6 +689,11 @@ func (m Model) View() string {
 		execModeHint = "AUTO"
 	}
 
+	toolFoldState := "Folded"
+	if len(m.toolCalls) > 0 && m.toolCalls[len(m.toolCalls)-1].IsExpanded {
+		toolFoldState = "Unfolded"
+	}
+
 	var keybindings string
 	if m.state == StateSQLReady {
 		keybindings = renderKeybindingBadges([][2]string{
@@ -619,6 +701,7 @@ func (m Model) View() string {
 			{"e", "Edit SQL"},
 			{"Esc", "Cancel"},
 			{"Shift+Tab", "Mode (" + execModeHint + ")"},
+			{"Ctrl+O", "Tool Details (" + toolFoldState + ")"},
 		})
 	} else {
 		keybindings = renderKeybindingBadges([][2]string{
@@ -626,7 +709,8 @@ func (m Model) View() string {
 			{"Tab", "Focus Table"},
 			{"←/→", "Cols"},
 			{"PgUp/PgDn", "Rows"},
-			{"Ctrl+E", "Expand"},
+			{"Ctrl+E", "Expand Table"},
+			{"Ctrl+O", "Tools (" + toolFoldState + ")"},
 			{"Shift+Tab", "Mode (" + execModeHint + ")"},
 			{"Esc", "Quit"},
 		})

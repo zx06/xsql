@@ -120,4 +120,23 @@ var (
 	PromptPrefixStyle = lipgloss.NewStyle().
 				Bold(true).
 				Foreground(PrimaryColor)
+
+	// Collapsible Tool Call Badges
+	ToolCollapsedBadge = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.AdaptiveColor{Light: "#475569", Dark: "#94A3B8"}).
+				Background(lipgloss.AdaptiveColor{Light: "#E2E8F0", Dark: "#1E293B"}).
+				Padding(0, 1)
+
+	ToolExpandedBadge = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("#FFFFFF")).
+				Background(WarningColor).
+				Padding(0, 1)
+
+	ToolDetailStyle = lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder(), false, false, false, true).
+			BorderForeground(MutedColor).
+			PaddingLeft(1).
+			Foreground(MutedColor)
 )
