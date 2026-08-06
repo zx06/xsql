@@ -87,7 +87,7 @@ MCP Server 提供以下 tools：
   "mcpServers": {
     "xsql": {
       "command": "xsql",
-      "args": ["mcp", "server", "--config", "/path/to/config.yaml"]
+      "args": ["mcp", "server", "--command", "mcp", "server", "--config", "/path/to/config.yaml"]
     }
   }
 }
@@ -105,3 +105,45 @@ xsql web
 ```
 
 Web UI 复用 xsql 的 profile、SSH、只读策略和结构化错误契约，但其 HTTP API 面向浏览器，不等同于 MCP 协议。
+
+## AI TUI 交互模式 (xsql-ai)
+xsql-ai 为独立的 CLI 可执行程序，提供交互式 AI 终端模式。用户只需在终端以自然语言发问，AI 结合当前数据库 Schema 结构自动构建对应的 SQL 查询，并在 TUI 中提供交互预览与安全执行：
+
+```bash
+# 启动交互式 TUI
+xsql-ai --profile dev
+```
+
+### LLM 集成与 Tool Call 机制
+`xsql` 使用 OpenAI 官方 SDK (`github.com/openai/openai-go`) 与大模型交互，基于标准的 **ReAct Agent Loop 循环推理**，支持 3 大核心 Tools 调度：
+1. **`execute_sql(sql: string, explanation: string)`**: 数据库 SQL 查询工具（执行成功后宿主自动渲染内嵌交互表格）。
+2. **`execute_javascript(js_code: string, explanation: string)`**: 基于 `goja` 沙箱的本地 JS 数据聚合计算工具（必须遵循 ES5 语法）。
+3. **`export_data(dataset_id: string, format: string, filepath: string, explanation: string)`**: 会话数据集文件导出工具（触发人机交互二次确认）。
+
+#### ReAct Agent Loop 准则
+- **循环驱动**：Agent 会在单次交互中循环执行 Tools，直到不再产生 Tool Call。
+- **最终回答不变性**：交互轮次的最终输出必定是 AI 总结出的自然语言 / Markdown 格式分析报告。
+- **工具折叠与容器内嵌**：所有的中间 Tool Call 默认以单行 Pill 收起折叠（内嵌表格与指标数据），界面保持极简清爽。
+
+#### 零数据泄露与 Session 数据集召回 (Session DataStore)
+- 每次查询成功的结果在本地分配标号（`res1`, `res2`, ...）。
+- 大模型上下文中仅包含数据集的轻量 Catalog 目录结构（字段名与行数），不传输海量真实数据。
+- AI 可通过 `execute_javascript` 生成纯 Go 沙箱 (`goja`) 执行的代码，在本地对 `res1`, `res2` 等数据集做跨表 Join、占比统计与数据清洗，并通过 `export_data` 安全导出为 CSV/JSON/Markdown。
+
+### 快捷键操作
+
+#### SQL & 导出确认状态 (Approval Mode)
+- `Enter`: 确认并安全执行当前生成预览的 SQL 或同意文件导出
+- `e`: 切换到 SQL 文本手工编辑/微调模式
+- `Esc`: 取消当前 SQL 生成建议或拒绝文件导出
+
+#### 通用与表格/工具操作 (General & Tool Operations)
+- `Enter`: 提交自然语言需求给 AI
+- `Ctrl+O`: 折叠/展开当前选中的 Tool Call 详情（内嵌表格与指标）
+- `Ctrl+P` / `Ctrl+N`: 在会话历史中的多个 Tool Call 组件之间向前/向后切换焦点
+- `Ctrl+E`: 切换表格单行展开视图（Expand Vertical View）
+- `Tab`: 在历史多个查询结果表格之间无缝切换焦点 (`[FOCUSED]`)
+- `←` / `→`: 横向平滑滚动查看当前焦点表格的隐藏列
+- `PgUp` / `PgDn`: 向上/向下翻页查看当前焦点表格的数据
+- `Shift+Tab`: 一键切换 **自动执行 (AUTO-EXECUTE)** 与 **手动批准 (MANUAL-APPROVE)** 模式
+- `Esc` / `Ctrl+C`: 退出 AI 模式

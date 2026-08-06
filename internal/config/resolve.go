@@ -61,33 +61,39 @@ func Resolve(opts Options) (Resolved, *errors.XError) {
 		}
 	}
 
+	// Resolve all profiles in cfg.Profiles
+	resolvedProfiles := make(map[string]Profile, len(cfg.Profiles))
+	for name, p := range cfg.Profiles {
+		pCopy := p
+		if pCopy.SSHProxy != "" {
+			if proxy, ok := cfg.SSHProxies[pCopy.SSHProxy]; ok {
+				pCopy.SSHConfig = &proxy
+			}
+		}
+		if pCopy.Port == 0 {
+			switch pCopy.DB {
+			case "mysql":
+				pCopy.Port = 3306
+			case "pg":
+				pCopy.Port = 5432
+			}
+		}
+		resolvedProfiles[name] = pCopy
+	}
+
 	// 3) Retrieve full profile
 	var selectedProfile Profile
 	if profile != "" {
-		p, ok := cfg.Profiles[profile]
+		p, ok := resolvedProfiles[profile]
 		if !ok {
 			return Resolved{}, errors.New(errors.CodeCfgInvalid, "profile not found",
 				map[string]any{"profile": profile})
 		}
+		if p.SSHProxy != "" && p.SSHConfig == nil {
+			return Resolved{}, errors.New(errors.CodeCfgInvalid, "ssh_proxy not found",
+				map[string]any{"profile": profile, "ssh_proxy": p.SSHProxy})
+		}
 		selectedProfile = p
-		// Resolve ssh_proxy reference
-		if selectedProfile.SSHProxy != "" {
-			if proxy, ok := cfg.SSHProxies[selectedProfile.SSHProxy]; ok {
-				selectedProfile.SSHConfig = &proxy
-			} else {
-				return Resolved{}, errors.New(errors.CodeCfgInvalid, "ssh_proxy not found",
-					map[string]any{"profile": profile, "ssh_proxy": selectedProfile.SSHProxy})
-			}
-		}
-		// Set default port
-		if selectedProfile.Port == 0 {
-			switch selectedProfile.DB {
-			case "mysql":
-				selectedProfile.Port = 3306
-			case "pg":
-				selectedProfile.Port = 5432
-			}
-		}
 	}
 
 	// 4) Merge format: --format > XSQL_FORMAT > profile.format > auto
@@ -102,5 +108,47 @@ func Resolve(opts Options) (Resolved, *errors.XError) {
 		format = opts.CLIFormat
 	}
 
-	return Resolved{ConfigPath: cfgPath, ProfileName: profile, Format: format, Profile: selectedProfile}, nil
+	// 5) Merge AI Config: CLI > ENV > Config > Default
+	aiConfig := cfg.AI
+	if aiConfig.Provider == "" {
+		aiConfig.Provider = "openai"
+	}
+	if aiConfig.BaseURL == "" {
+		aiConfig.BaseURL = "https://api.openai.com/v1"
+	}
+	if aiConfig.Model == "" {
+		aiConfig.Model = "gpt-4o"
+	}
+	if aiConfig.MaxTokens == 0 {
+		aiConfig.MaxTokens = 2048
+	}
+
+	if opts.EnvAIBaseURL != "" {
+		aiConfig.BaseURL = opts.EnvAIBaseURL
+	}
+	if opts.EnvAIModel != "" {
+		aiConfig.Model = opts.EnvAIModel
+	}
+	if opts.EnvAIAPIKey != "" {
+		aiConfig.APIKey = opts.EnvAIAPIKey
+	}
+
+	if opts.CLIAIBaseURLSet && opts.CLIAIBaseURL != "" {
+		aiConfig.BaseURL = opts.CLIAIBaseURL
+	}
+	if opts.CLIAIModelSet && opts.CLIAIModel != "" {
+		aiConfig.Model = opts.CLIAIModel
+	}
+	if opts.CLIAIAPIKeySet && opts.CLIAIAPIKey != "" {
+		aiConfig.APIKey = opts.CLIAIAPIKey
+	}
+
+	return Resolved{
+		ConfigPath:  cfgPath,
+		ProfileName: profile,
+		Format:      format,
+		Profile:     selectedProfile,
+		AllProfiles: resolvedProfiles,
+		AI:          aiConfig,
+	}, nil
 }

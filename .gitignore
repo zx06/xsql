@@ -11,3 +11,4 @@ coverage*.txt
 coverage*.html
 coverage.out
 stats_coverage.out
+bin/

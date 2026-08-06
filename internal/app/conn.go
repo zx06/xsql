@@ -7,6 +7,8 @@ import (
 
 	"github.com/zx06/xsql/internal/config"
 	"github.com/zx06/xsql/internal/db"
+	_ "github.com/zx06/xsql/internal/db/mysql"
+	_ "github.com/zx06/xsql/internal/db/pg"
 	"github.com/zx06/xsql/internal/errors"
 	"github.com/zx06/xsql/internal/secret"
 	"github.com/zx06/xsql/internal/ssh"

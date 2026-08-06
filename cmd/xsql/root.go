@@ -6,6 +6,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/zx06/xsql/internal/config"
+	_ "github.com/zx06/xsql/internal/db/mysql"
+	_ "github.com/zx06/xsql/internal/db/pg"
 	"github.com/zx06/xsql/internal/errors"
 	"github.com/zx06/xsql/internal/stats"
 )

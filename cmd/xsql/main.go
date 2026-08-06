@@ -34,6 +34,7 @@ func run() int {
 	root.AddCommand(NewServeCommand(&w))
 	root.AddCommand(NewWebCommand(&w))
 	root.AddCommand(NewStatsCommand(&w))
+	root.AddCommand(NewAICommand())
 
 	// Execute and handle errors
 	if err := root.Execute(); err != nil {
