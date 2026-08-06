@@ -410,7 +410,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.viewport.GotoBottom()
 				return m, m.runAgentStepCmd()
 			} else if msg.response.Type == ai.TypeExport && msg.response.DatasetID != "" {
-				// Record Assistant Tool Call into chat history
 				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
 					Role:    "assistant",
 					Content: fmt.Sprintf("Call tool 'export_data': dataset_id=%s, format=%s, filepath=%s", msg.response.DatasetID, msg.response.Format, msg.response.FilePath),
@@ -460,8 +459,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				if m.autoExecute {
 					m.state = StateExecuting
-					execLine := ExecutingTagStyle.Render("⚡ Auto-Executing") + " " + SQLCodeStyle.Render(m.currentSQL)
-					m.messages = append(m.messages, execLine)
 					m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 					m.viewport.GotoBottom()
 					return m, m.executeSQLCmd(m.currentSQL)
@@ -511,8 +508,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			metricsStr := fmt.Sprintf("⏱️ %s | 📊 %d rows | 🤖 %s | 💾 %s", durStr, len(msg.result.Rows), modelName, datasetID)
 			statusLine := SuccessBadgeStyle.Render("✓ Execution Success") + " " + MetricsStyle.Render(metricsStr)
-			m.messages = append(m.messages, statusLine)
 
+			// Update existing execute_sql ToolCallItem result with execution metrics (NO duplicate text line appended!)
 			if len(m.toolCalls) > 0 {
 				lastIdx := len(m.toolCalls) - 1
 				if m.toolCalls[lastIdx].Name == "execute_sql" {
@@ -521,6 +518,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
+			// Render interactive table widget directly below the tool call item
 			if m.activeTable >= 0 && m.activeTable < len(m.tableStates) {
 				m.renderTableState(m.activeTable, false)
 			}
@@ -589,7 +587,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.state == StateExportReady && m.pendingExport != nil {
 			switch msg.Type {
 			case tea.KeyEnter:
-				// Execute Export after human confirmation
 				datasetRes, exists := m.sessionStore.Get(m.pendingExport.DatasetID)
 				if !exists || datasetRes == nil {
 					m.toolCalls[m.pendingExport.ToolIdx].Result = fmt.Sprintf("❌ Export Failed: Dataset '%s' not found", m.pendingExport.DatasetID)
@@ -627,7 +624,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.runAgentStepCmd()
 
 			case tea.KeyEsc:
-				// Export Denied by User
 				m.toolCalls[m.pendingExport.ToolIdx].Result = "🚫 Export Denied by User"
 				m.renderToolCall(m.pendingExport.ToolIdx)
 
@@ -649,8 +645,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case msg.Type == tea.KeyEnter:
 				m.state = StateExecuting
 				m.textarea.Focus()
-				execLine := ExecutingTagStyle.Render("⚡ Executing") + " " + SQLCodeStyle.Render(m.currentSQL)
-				m.messages = append(m.messages, execLine)
 				m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 				m.viewport.GotoBottom()
 				return m, m.executeSQLCmd(m.currentSQL)
