@@ -48,7 +48,6 @@ var (
 	SQLBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(PrimaryColor).
-			Background(BgBox).
 			Padding(0, 1).
 			MarginTop(1).
 			MarginBottom(1)
