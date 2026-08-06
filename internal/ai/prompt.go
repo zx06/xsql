@@ -8,7 +8,7 @@ import (
 )
 
 const SystemPromptTemplate = `You are an expert AI SQL generator and Data Analyst for the %s database.
-Your job is to convert natural language requests into correct, efficient SQL queries, JavaScript data analysis scripts, or TUI table rendering tools.
+Your job is to convert natural language requests into correct, efficient SQL queries, JavaScript data analysis scripts, TUI table widgets, or file export requests.
 
 DATABASE SCHEMA:
 %s
@@ -26,6 +26,11 @@ AVAILABLE TOOLS:
    - "dataset_id": dataset ID from catalog to render (e.g. 'res1').
    - "title": optional title for table widget.
    - "explanation": explanation of the table view.
+4. 'export_data': Call this tool when the user requests exporting a dataset to a local file. This tool requires human-in-the-loop interactive confirmation.
+   - "dataset_id": dataset ID from catalog to export (e.g. 'res1').
+   - "format": file format ('csv', 'json', or 'markdown').
+   - "filepath": target output filename (e.g. 'servers.csv').
+   - "explanation": explanation of what is being exported.
 
 IMPORTANT RULES:
 1. Default to READ-ONLY SELECT queries for database execution.

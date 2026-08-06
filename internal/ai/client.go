@@ -126,6 +126,35 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*A
 		},
 	}
 
+	exportToolDef := openai.ChatCompletionToolParam{
+		Function: shared.FunctionDefinitionParam{
+			Name:        "export_data",
+			Description: openai.String("Export a cached session dataset (e.g. res1, res2) to a local file in CSV, JSON, or Markdown format after human confirmation."),
+			Parameters: shared.FunctionParameters{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"dataset_id": map[string]interface{}{
+						"type":        "string",
+						"description": "The dataset ID from session catalog to export (e.g. 'res1').",
+					},
+					"format": map[string]interface{}{
+						"type":        "string",
+						"description": "Export file format: 'csv', 'json', or 'markdown'.",
+					},
+					"filepath": map[string]interface{}{
+						"type":        "string",
+						"description": "Target file path (e.g. 'result.csv', 'report.json').",
+					},
+					"explanation": map[string]interface{}{
+						"type":        "string",
+						"description": "Explanation of the data being exported.",
+					},
+				},
+				"required": []string{"dataset_id", "format", "filepath", "explanation"},
+			},
+		},
+	}
+
 	model := c.cfg.Model
 	if model == "" {
 		model = "gpt-4o"
@@ -134,7 +163,7 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*A
 	params := openai.ChatCompletionNewParams{
 		Model:    shared.ChatModel(model),
 		Messages: sdkMessages,
-		Tools:    []openai.ChatCompletionToolParam{sqlToolDef, jsToolDef, tableToolDef},
+		Tools:    []openai.ChatCompletionToolParam{sqlToolDef, jsToolDef, tableToolDef, exportToolDef},
 	}
 	if c.cfg.MaxTokens > 0 {
 		params.MaxTokens = openai.Int(int64(c.cfg.MaxTokens))
@@ -190,6 +219,22 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*A
 					Type:        TypeTable,
 					DatasetID:   strings.TrimSpace(raw.DatasetID),
 					Title:       strings.TrimSpace(raw.Title),
+					Explanation: strings.TrimSpace(raw.Explanation),
+				}, nil
+			}
+		} else if toolCall.Function.Name == "export_data" {
+			var raw struct {
+				DatasetID   string `json:"dataset_id"`
+				Format      string `json:"format"`
+				FilePath    string `json:"filepath"`
+				Explanation string `json:"explanation"`
+			}
+			if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &raw); err == nil {
+				return &AIResponse{
+					Type:        TypeExport,
+					DatasetID:   strings.TrimSpace(raw.DatasetID),
+					Format:      strings.TrimSpace(raw.Format),
+					FilePath:    strings.TrimSpace(raw.FilePath),
 					Explanation: strings.TrimSpace(raw.Explanation),
 				}, nil
 			}

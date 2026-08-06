@@ -11,10 +11,11 @@ import (
 type ResponseType string
 
 const (
-	TypeSQL   ResponseType = "sql"
-	TypeJS    ResponseType = "js"
-	TypeTable ResponseType = "table"
-	TypeText  ResponseType = "text"
+	TypeSQL    ResponseType = "sql"
+	TypeJS     ResponseType = "js"
+	TypeTable  ResponseType = "table"
+	TypeExport ResponseType = "export"
+	TypeText   ResponseType = "text"
 )
 
 type AIResponse struct {
@@ -22,6 +23,8 @@ type AIResponse struct {
 	SQL         string       `json:"sql,omitempty"`
 	JSCode      string       `json:"js_code,omitempty"`
 	DatasetID   string       `json:"dataset_id,omitempty"`
+	Format      string       `json:"format,omitempty"`
+	FilePath    string       `json:"filepath,omitempty"`
 	Title       string       `json:"title,omitempty"`
 	Explanation string       `json:"explanation"`
 }

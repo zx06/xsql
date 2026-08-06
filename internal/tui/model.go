@@ -17,6 +17,7 @@ import (
 	"github.com/zx06/xsql/internal/config"
 	"github.com/zx06/xsql/internal/db"
 	"github.com/zx06/xsql/internal/errors"
+	"github.com/zx06/xsql/internal/export"
 	"github.com/zx06/xsql/internal/js"
 	"github.com/zx06/xsql/internal/session"
 )
@@ -29,6 +30,7 @@ const (
 	StateThinking
 	StateSQLReady
 	StateExecuting
+	StateExportReady
 )
 
 // Msg types
@@ -68,6 +70,13 @@ type ToolCallItem struct {
 	IsExpanded bool
 }
 
+type PendingExport struct {
+	DatasetID string
+	Format    string
+	FilePath  string
+	ToolIdx   int
+}
+
 type Model struct {
 	opts             config.Options
 	aiService        *ai.Service
@@ -77,11 +86,12 @@ type Model struct {
 	initialPrompt    string
 	autoExecute      bool
 
-	sessionStore *session.SessionDataStore
-	jsEngine     *js.JSEngine
-	chatHistory  []ai.ChatMessage
-	jsRetryCount int
-	maxJSRetries int
+	sessionStore  *session.SessionDataStore
+	jsEngine      *js.JSEngine
+	chatHistory   []ai.ChatMessage
+	pendingExport *PendingExport
+	jsRetryCount  int
+	maxJSRetries  int
 
 	state       State
 	schemaInfo  *db.SchemaInfo
@@ -282,7 +292,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.explanation = msg.response.Explanation
 
 			if msg.response.Type == ai.TypeJS && msg.response.JSCode != "" {
-				// Record Assistant Tool Call into chat history
 				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
 					Role:    "assistant",
 					Content: fmt.Sprintf("Call tool 'execute_javascript':\n%s", msg.response.JSCode),
@@ -295,7 +304,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					Summary:    fmt.Sprintf("Executing %d lines of JS data analysis", lineCount),
 					Detail:     msg.response.JSCode,
 					MsgIndex:   len(m.messages),
-					IsExpanded: false, // Folded by default!
+					IsExpanded: false,
 				}
 
 				m.messages = append(m.messages, "")
@@ -342,7 +351,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, m.runAgentStepCmd()
 				}
 			} else if msg.response.Type == ai.TypeTable && msg.response.DatasetID != "" {
-				// Record Assistant Tool Call into chat history
 				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
 					Role:    "assistant",
 					Content: fmt.Sprintf("Call tool 'render_table': dataset_id=%s, title=%s", msg.response.DatasetID, msg.response.Title),
@@ -361,7 +369,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, m.runAgentStepCmd()
 				}
 
-				// Render table component in TUI
 				tc := ToolCallItem{
 					ID:         fmt.Sprintf("tc_%d", len(m.toolCalls)+1),
 					Name:       "render_table",
@@ -376,7 +383,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				toolIdx := len(m.toolCalls) - 1
 				m.renderToolCall(toolIdx)
 
-				// Remove focus from previous active table
 				if m.activeTable >= 0 && m.activeTable < len(m.tableStates) {
 					m.renderTableState(m.activeTable, false)
 				}
@@ -403,6 +409,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 				m.viewport.GotoBottom()
 				return m, m.runAgentStepCmd()
+			} else if msg.response.Type == ai.TypeExport && msg.response.DatasetID != "" {
+				// Record Assistant Tool Call into chat history
+				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+					Role:    "assistant",
+					Content: fmt.Sprintf("Call tool 'export_data': dataset_id=%s, format=%s, filepath=%s", msg.response.DatasetID, msg.response.Format, msg.response.FilePath),
+				})
+
+				tc := ToolCallItem{
+					ID:         fmt.Sprintf("tc_%d", len(m.toolCalls)+1),
+					Name:       "export_data",
+					Summary:    fmt.Sprintf("Export %s to %s (%s) [Pending User Confirmation]", msg.response.DatasetID, msg.response.FilePath, strings.ToUpper(msg.response.Format)),
+					Detail:     fmt.Sprintf("Dataset: %s | FilePath: %s | Format: %s", msg.response.DatasetID, msg.response.FilePath, msg.response.Format),
+					Result:     "⏳ Pending Human Confirmation",
+					MsgIndex:   len(m.messages),
+					IsExpanded: false,
+				}
+				m.messages = append(m.messages, "")
+				m.toolCalls = append(m.toolCalls, tc)
+				toolIdx := len(m.toolCalls) - 1
+				m.renderToolCall(toolIdx)
+
+				m.pendingExport = &PendingExport{
+					DatasetID: msg.response.DatasetID,
+					Format:    msg.response.Format,
+					FilePath:  msg.response.FilePath,
+					ToolIdx:   toolIdx,
+				}
+				m.state = StateExportReady
 			} else if msg.response.Type == ai.TypeSQL && msg.response.SQL != "" {
 				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
 					Role:    "assistant",
@@ -417,7 +451,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					Summary:    m.currentSQL,
 					Detail:     m.currentSQL,
 					MsgIndex:   len(m.messages),
-					IsExpanded: false, // Folded by default!
+					IsExpanded: false,
 				}
 				m.messages = append(m.messages, "")
 				m.toolCalls = append(m.toolCalls, tc)
@@ -479,7 +513,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			statusLine := SuccessBadgeStyle.Render("✓ Execution Success") + " " + MetricsStyle.Render(metricsStr)
 			m.messages = append(m.messages, statusLine)
 
-			// Update latest SQL ToolCallItem result
 			if len(m.toolCalls) > 0 {
 				lastIdx := len(m.toolCalls) - 1
 				if m.toolCalls[lastIdx].Name == "execute_sql" {
@@ -488,7 +521,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-			// Auto-render interactive table widget for the dataset
 			if m.activeTable >= 0 && m.activeTable < len(m.tableStates) {
 				m.renderTableState(m.activeTable, false)
 			}
@@ -552,6 +584,64 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var taCmd tea.Cmd
 			m.textarea, taCmd = m.textarea.Update(msg)
 			return m, taCmd
+		}
+
+		if m.state == StateExportReady && m.pendingExport != nil {
+			switch msg.Type {
+			case tea.KeyEnter:
+				// Execute Export after human confirmation
+				datasetRes, exists := m.sessionStore.Get(m.pendingExport.DatasetID)
+				if !exists || datasetRes == nil {
+					m.toolCalls[m.pendingExport.ToolIdx].Result = fmt.Sprintf("❌ Export Failed: Dataset '%s' not found", m.pendingExport.DatasetID)
+					m.renderToolCall(m.pendingExport.ToolIdx)
+					m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+						Role:    "user",
+						Content: fmt.Sprintf("Tool 'export_data' failed: dataset '%s' not found in session catalog.", m.pendingExport.DatasetID),
+					})
+				} else {
+					outPath, xe := export.ExportQueryResult(datasetRes, export.ExportFormat(m.pendingExport.Format), m.pendingExport.FilePath)
+					if xe != nil {
+						m.toolCalls[m.pendingExport.ToolIdx].Result = fmt.Sprintf("❌ Export Failed: %v", xe.Message)
+						m.renderToolCall(m.pendingExport.ToolIdx)
+						m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+							Role:    "user",
+							Content: fmt.Sprintf("Tool 'export_data' failed to write file: %v", xe.Message),
+						})
+					} else {
+						m.toolCalls[m.pendingExport.ToolIdx].Result = fmt.Sprintf("✓ Exported dataset '%s' to '%s' (%s)", m.pendingExport.DatasetID, outPath, strings.ToUpper(m.pendingExport.Format))
+						m.renderToolCall(m.pendingExport.ToolIdx)
+
+						statusLine := SuccessBadgeStyle.Render("✓ File Exported Success") + " " + MetricsStyle.Render(fmt.Sprintf("Exported dataset '%s' to '%s'", m.pendingExport.DatasetID, outPath))
+						m.messages = append(m.messages, statusLine)
+
+						m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+							Role:    "user",
+							Content: fmt.Sprintf("Tool 'export_data' executed successfully. Exported dataset '%s' to local file '%s'.", m.pendingExport.DatasetID, outPath),
+						})
+					}
+				}
+				m.pendingExport = nil
+				m.state = StateThinking
+				m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+				m.viewport.GotoBottom()
+				return m, m.runAgentStepCmd()
+
+			case tea.KeyEsc:
+				// Export Denied by User
+				m.toolCalls[m.pendingExport.ToolIdx].Result = "🚫 Export Denied by User"
+				m.renderToolCall(m.pendingExport.ToolIdx)
+
+				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+					Role:    "user",
+					Content: "Tool 'export_data' was denied by user.",
+				})
+				m.pendingExport = nil
+				m.state = StateThinking
+				m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+				m.viewport.GotoBottom()
+				return m, m.runAgentStepCmd()
+			}
+			return m, nil
 		}
 
 		if m.state == StateSQLReady {
@@ -720,7 +810,7 @@ func (m Model) View() string {
 	// 2. Main Viewport
 	sb.WriteString(m.viewport.View() + "\n\n")
 
-	// 3. State Status & SQL Preview Box
+	// 3. State Status & SQL / Export Confirmation Box
 	switch m.state {
 	case StateLoadingSchema:
 		sb.WriteString(m.spinner.View() + " Loading database schema...\n")
@@ -728,6 +818,12 @@ func (m Model) View() string {
 		sb.WriteString(m.spinner.View() + " AI is analyzing schema and executing tools...\n")
 	case StateExecuting:
 		sb.WriteString(m.spinner.View() + " Executing SQL query...\n")
+	case StateExportReady:
+		if m.pendingExport != nil {
+			exportInfo := fmt.Sprintf("Dataset: %s | Target: %s | Format: %s", m.pendingExport.DatasetID, m.pendingExport.FilePath, strings.ToUpper(m.pendingExport.Format))
+			preview := fmt.Sprintf("%s\n%s", SQLTitleStyle.Render("✨ File Export Approval Required (Enter: Confirm Export | Esc: Deny):"), SQLCodeStyle.Render(exportInfo))
+			sb.WriteString(SQLBoxStyle.Width(m.width-4).Render(preview) + "\n")
+		}
 	case StateSQLReady:
 		sqlContent := SQLCodeStyle.Render(m.currentSQL)
 		if m.currentSQL == "" {
@@ -756,7 +852,12 @@ func (m Model) View() string {
 	}
 
 	var keybindings string
-	if m.state == StateSQLReady {
+	if m.state == StateExportReady {
+		keybindings = renderKeybindingBadges([][2]string{
+			{"Enter", "Confirm Export"},
+			{"Esc", "Deny Export"},
+		})
+	} else if m.state == StateSQLReady {
 		keybindings = renderKeybindingBadges([][2]string{
 			{"Enter", "Execute"},
 			{"e", "Edit SQL"},
