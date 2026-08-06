@@ -17,6 +17,8 @@ import (
 	"github.com/zx06/xsql/internal/config"
 	"github.com/zx06/xsql/internal/db"
 	"github.com/zx06/xsql/internal/errors"
+	"github.com/zx06/xsql/internal/js"
+	"github.com/zx06/xsql/internal/session"
 )
 
 type State int
@@ -35,10 +37,12 @@ type schemaLoadedMsg struct {
 	err    *errors.XError
 }
 
-type sqlGeneratedMsg struct {
-	response *ai.SQLResponse
+type aiResponseMsg struct {
+	response *ai.AIResponse
 	err      *errors.XError
 }
+
+type sqlGeneratedMsg = aiResponseMsg
 
 type queryExecutedMsg struct {
 	result   *db.QueryResult
@@ -63,6 +67,9 @@ type Model struct {
 	initialPrompt    string
 	autoExecute      bool
 
+	sessionStore *session.SessionDataStore
+	jsEngine     *js.JSEngine
+
 	state       State
 	schemaInfo  *db.SchemaInfo
 	currentSQL  string
@@ -82,7 +89,7 @@ type Model struct {
 
 func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Service, initialPrompt string, unsafeAllowWrite bool) Model {
 	ta := textarea.New()
-	ta.Placeholder = "Ask AI to generate a SQL query (e.g. 'Show top 10 servers')...."
+	ta.Placeholder = "Ask AI to generate SQL or analyze datasets (e.g. 'Show top 10 servers')...."
 	ta.ShowLineNumbers = false
 	ta.Prompt = ""
 	ta.Focus()
@@ -104,6 +111,8 @@ func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Servi
 		unsafeAllowWrite: unsafeAllowWrite || resolved.Profile.UnsafeAllowWrite,
 		initialPrompt:    strings.TrimSpace(initialPrompt),
 		autoExecute:      false,
+		sessionStore:     session.NewSessionDataStore(),
+		jsEngine:         js.NewJSEngine(1 * time.Minute),
 		tableStates:      []TableState{},
 		activeTable:      -1,
 		state:            StateLoadingSchema,
@@ -138,8 +147,9 @@ func (m Model) loadSchemaCmd() tea.Cmd {
 func (m Model) generateSQLCmd(prompt string) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
-		resp, xe := m.aiService.GenerateSQL(ctx, prompt, m.schemaInfo, m.profile.DB)
-		return sqlGeneratedMsg{response: resp, err: xe}
+		catalog := m.sessionStore.GetCatalog()
+		resp, xe := m.aiService.GenerateResponse(ctx, prompt, m.schemaInfo, m.profile.DB, catalog)
+		return aiResponseMsg{response: resp, err: xe}
 	}
 }
 
@@ -205,18 +215,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state = StateIdle
 		m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 
-	case sqlGeneratedMsg:
+	case aiResponseMsg:
 		if msg.err != nil {
 			m.messages = append(m.messages, ErrorMsgStyle.Render(fmt.Sprintf("AI Error: %v", msg.err)))
 			m.state = StateIdle
 		} else {
-			m.currentSQL = msg.response.SQL
 			m.explanation = msg.response.Explanation
-
 			aiMsg := AITagStyle.Render("🤖 AI") + " " + AIResponseStyle.Render(msg.response.Explanation)
 			m.messages = append(m.messages, aiMsg)
 
-			if msg.response.SQL != "" {
+			if msg.response.Type == ai.TypeJS && msg.response.JSCode != "" {
+				// Execute JS script using goja on active session datasets
+				jsExecLine := ExecutingTagStyle.Render("⚡ JS Analysis") + " " + SQLCodeStyle.Render(msg.response.JSCode)
+				m.messages = append(m.messages, jsExecLine)
+
+				ctx := context.Background()
+				jsRes, jsErr := m.jsEngine.Execute(ctx, msg.response.JSCode, m.sessionStore)
+				if jsErr != nil {
+					m.messages = append(m.messages, ErrorMsgStyle.Render(fmt.Sprintf("JS Execution Error: %v", jsErr)))
+				} else {
+					resultMsg := SuccessBadgeStyle.Render("📊 JS Result:") + "\n" + AIResponseStyle.Render(jsRes.SummaryText)
+					m.messages = append(m.messages, resultMsg)
+				}
+				m.state = StateIdle
+			} else if msg.response.Type == ai.TypeSQL && msg.response.SQL != "" {
+				m.currentSQL = msg.response.SQL
 				if m.autoExecute {
 					m.state = StateExecuting
 					execLine := ExecutingTagStyle.Render("⚡ Auto-Executing") + " " + SQLCodeStyle.Render(m.currentSQL)
@@ -237,6 +260,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.messages = append(m.messages, ErrorMsgStyle.Render(fmt.Sprintf("SQL Exec Error [%s]: %s", msg.err.Code, msg.err.Message)))
 		} else if msg.result != nil {
+			// Save QueryResult into SessionDataStore and get assigned ID
+			datasetID := m.sessionStore.Save(m.currentSQL, msg.result)
+
 			modelName := m.opts.CLIAIModel
 			if modelName == "" {
 				modelName = "gpt-4o"
@@ -245,7 +271,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.duration < time.Millisecond {
 				durStr = fmt.Sprintf("%.2fms", float64(msg.duration.Microseconds())/1000.0)
 			}
-			metricsStr := fmt.Sprintf("⏱️ %s | 📊 %d rows | 🤖 %s", durStr, len(msg.result.Rows), modelName)
+			metricsStr := fmt.Sprintf("⏱️ %s | 📊 %d rows | 🤖 %s | 💾 %s", durStr, len(msg.result.Rows), modelName, datasetID)
 			statusLine := SuccessBadgeStyle.Render("✓ Execution Success") + " " + MetricsStyle.Render(metricsStr)
 			m.messages = append(m.messages, statusLine)
 

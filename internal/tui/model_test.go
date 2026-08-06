@@ -37,7 +37,8 @@ func TestTUI_Model_StateTransitions(t *testing.T) {
 
 	// 2. Send sqlGeneratedMsg -> transition to StateSQLReady
 	updated, _ = m.Update(sqlGeneratedMsg{
-		response: &ai.SQLResponse{
+		response: &ai.AIResponse{
+			Type:        ai.TypeSQL,
 			SQL:         "SELECT * FROM users;",
 			Explanation: "Returns all users.",
 		},
@@ -163,7 +164,8 @@ func TestTUI_Model_ShiftTabAutoExecuteToggle(t *testing.T) {
 
 	// Send sqlGeneratedMsg -> should automatically transition to StateExecuting
 	updated, cmd := m.Update(sqlGeneratedMsg{
-		response: &ai.SQLResponse{
+		response: &ai.AIResponse{
+			Type:        ai.TypeSQL,
 			SQL:         "SELECT * FROM users;",
 			Explanation: "Returns users.",
 		},

@@ -115,9 +115,14 @@ xsql-ai --profile dev
 ```
 
 ### LLM 集成与 Tool Call 机制
-`xsql` 使用 OpenAI 官方 SDK (`github.com/openai/openai-go`) 与大模型交互。SQL 生成过程通过 Tool Calling 约定完成：
-- 导出 Tool：`execute_sql(sql: string, explanation: string)`
-- 模型通过调用 `execute_sql` 返回生成的 SQL 及对查询动作的解释说明。
+`xsql` 使用 OpenAI 官方 SDK (`github.com/openai/openai-go`) 与大模型交互，支持双 Tool Calling 与多轮数据集召回：
+- 数据库查询 Tool：`execute_sql(sql: string, explanation: string)`
+- JS 数据分析 Tool：`execute_javascript(js_code: string, explanation: string)`
+
+#### 零数据泄露与 Session 数据集召回 (Session DataStore)
+- 每次查询成功的结果在本地分配标号（`res1`, `res2`, ...）。
+- 大模型上下文中仅包含数据集的轻量 Catalog 目录结构（字段名与行数），不传输海量真实数据。
+- AI 可通过 `execute_javascript` 生成纯 Go 沙箱 (`goja`) 执行的代码，在本地对 `res1`, `res2` 等数据集做跨表 Join、占比统计与数据清洗，并通过 Go 宿主层安全导出为 CSV/JSON/Markdown。
 
 ### 快捷键操作
 

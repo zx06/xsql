@@ -8,10 +8,22 @@ import (
 	"github.com/zx06/xsql/internal/errors"
 )
 
-type SQLResponse struct {
-	SQL         string `json:"sql"`
-	Explanation string `json:"explanation"`
+type ResponseType string
+
+const (
+	TypeSQL  ResponseType = "sql"
+	TypeJS   ResponseType = "js"
+	TypeText ResponseType = "text"
+)
+
+type AIResponse struct {
+	Type        ResponseType `json:"type"`
+	SQL         string       `json:"sql,omitempty"`
+	JSCode      string       `json:"js_code,omitempty"`
+	Explanation string       `json:"explanation"`
 }
+
+type SQLResponse = AIResponse
 
 type Service struct {
 	client *Client
@@ -26,8 +38,12 @@ func NewService(cfg config.AIConfig, client *Client) *Service {
 	}
 }
 
-func (s *Service) GenerateSQL(ctx context.Context, userPrompt string, schemaInfo *db.SchemaInfo, dbType string) (*SQLResponse, *errors.XError) {
-	systemPrompt := BuildSystemPrompt(dbType, schemaInfo)
+func (s *Service) GenerateSQL(ctx context.Context, userPrompt string, schemaInfo *db.SchemaInfo, dbType string) (*AIResponse, *errors.XError) {
+	return s.GenerateResponse(ctx, userPrompt, schemaInfo, dbType, "")
+}
+
+func (s *Service) GenerateResponse(ctx context.Context, userPrompt string, schemaInfo *db.SchemaInfo, dbType string, catalog string) (*AIResponse, *errors.XError) {
+	systemPrompt := BuildSystemPrompt(dbType, schemaInfo, catalog)
 
 	messages := []ChatMessage{
 		{Role: "system", Content: systemPrompt},

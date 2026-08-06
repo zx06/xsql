@@ -24,12 +24,12 @@ func TestBuildSystemPrompt(t *testing.T) {
 		},
 	}
 
-	prompt := BuildSystemPrompt("mysql", schema)
+	prompt := BuildSystemPrompt("mysql", schema, "res1: users")
 	if prompt == "" {
 		t.Fatal("expected non-empty prompt")
 	}
 
-	defaultPrompt := BuildSystemPrompt("", nil)
+	defaultPrompt := BuildSystemPrompt("", nil, "")
 	if defaultPrompt == "" {
 		t.Fatal("expected non-empty default prompt")
 	}
@@ -107,6 +107,61 @@ func TestGenerateSQL_MockHTTP_ToolCall(t *testing.T) {
 	}
 	if res.Explanation != "Queries all users." {
 		t.Errorf("expected explanation 'Queries all users.', got %q", res.Explanation)
+	}
+}
+
+func TestGenerateResponse_MockHTTP_JSToolCall(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		respBody := `{
+			"id": "chatcmpl-125",
+			"object": "chat.completion",
+			"created": 1677652288,
+			"model": "gpt-4o",
+			"choices": [
+				{
+					"index": 0,
+					"message": {
+						"role": "assistant",
+						"content": null,
+						"tool_calls": [
+							{
+								"id": "call_js123",
+								"type": "function",
+								"function": {
+									"name": "execute_javascript",
+									"arguments": "{\"js_code\":\"rows.filter(r => r.status === 'ONLINE');\",\"explanation\":\"Filters online servers.\"}"
+								}
+							}
+						]
+					},
+					"finish_reason": "tool_calls"
+				}
+			]
+		}`
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(respBody))
+	}))
+	defer mockServer.Close()
+
+	cfg := config.AIConfig{
+		Provider: "openai",
+		BaseURL:  mockServer.URL,
+		APIKey:   "test-key",
+	}
+
+	client := NewClient(cfg, mockServer.Client())
+	service := NewService(cfg, client)
+
+	res, xe := service.GenerateResponse(context.Background(), "filter online servers", nil, "mysql", "res1 catalog")
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+
+	if res.Type != TypeJS {
+		t.Errorf("expected type JS, got %q", res.Type)
+	}
+	if res.JSCode != "rows.filter(r => r.status === 'ONLINE');" {
+		t.Errorf("unexpected JS code: %q", res.JSCode)
 	}
 }
 

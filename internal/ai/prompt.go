@@ -7,23 +7,28 @@ import (
 	"github.com/zx06/xsql/internal/db"
 )
 
-const SystemPromptTemplate = `You are an expert AI SQL generator for the %s database.
-Your job is to convert natural language requests into correct, efficient SQL queries based on the provided database schema.
+const SystemPromptTemplate = `You are an expert AI SQL generator and Data Analyst for the %s database.
+Your job is to convert natural language requests into correct, efficient SQL queries or JavaScript data analysis scripts.
 
 DATABASE SCHEMA:
 %s
 
-IMPORTANT RULES:
-1. Generate valid %s SQL ONLY.
-2. Default to READ-ONLY SELECT queries unless explicitly instructed otherwise.
-3. When you have generated a SQL query or need to respond with a query decision, call the 'execute_sql' tool with arguments:
-   - "sql": the generated SQL query (e.g. "SELECT * FROM users WHERE active = true;")
-   - "explanation": a concise explanation of what the query does or why it cannot be generated.
-4. If the request asks for general database metadata or listing tables/columns (e.g. 'show tables', 'what tables exist'), generate standard SQL (e.g. 'SHOW TABLES;' for MySQL, or 'SELECT table_name FROM information_schema.tables WHERE table_schema = \'public\';' for PostgreSQL) even if the provided schema is empty.
-5. Avoid full table scans without limits or filters whenever possible. Prefer specifying necessary columns, WHERE conditions, or adding LIMIT clauses where appropriate to protect performance.
-6. If the request genuinely cannot be answered by the schema or database, call 'execute_sql' with "sql": "" and state the reason in "explanation".`
+%s
 
-func BuildSystemPrompt(dbType string, schemaInfo *db.SchemaInfo) string {
+AVAILABLE TOOLS:
+1. 'execute_sql': Call this to query the database.
+   - "sql": the generated SQL query (e.g. "SELECT * FROM users WHERE active = true;")
+   - "explanation": a concise explanation of what the query does.
+2. 'execute_javascript': Call this when the user asks for post-query data analysis, percentage calculations, cross-dataset joins/comparisons, or structured formatting.
+   - "js_code": JavaScript code snippet executing on available session datasets (e.g. 'res1', 'res2', or 'rows').
+   - "explanation": explanation of what the JavaScript script processes.
+
+IMPORTANT RULES:
+1. Default to READ-ONLY SELECT queries for database execution.
+2. Avoid full table scans without limits or filters whenever possible.
+3. When post-processing or joining previously queried datasets (e.g. 'res1', 'res2'), prefer calling 'execute_javascript' to compute results locally.`
+
+func BuildSystemPrompt(dbType string, schemaInfo *db.SchemaInfo, catalog string) string {
 	schemaJSON := "{}"
 	if schemaInfo != nil {
 		if bytes, err := json.MarshalIndent(schemaInfo, "", "  "); err == nil {
@@ -33,5 +38,9 @@ func BuildSystemPrompt(dbType string, schemaInfo *db.SchemaInfo) string {
 	if dbType == "" {
 		dbType = "MySQL/PostgreSQL"
 	}
-	return fmt.Sprintf(SystemPromptTemplate, dbType, schemaJSON, dbType)
+	catalogBlock := ""
+	if catalog != "" {
+		catalogBlock = fmt.Sprintf("SESSION DATASETS CATALOG:\n%s\n", catalog)
+	}
+	return fmt.Sprintf(SystemPromptTemplate, dbType, schemaJSON, catalogBlock)
 }

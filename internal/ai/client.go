@@ -44,7 +44,7 @@ func NewClient(cfg config.AIConfig, httpClient *http.Client) *Client {
 	}
 }
 
-func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*SQLResponse, *errors.XError) {
+func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*AIResponse, *errors.XError) {
 	sdkMessages := make([]openai.ChatCompletionMessageParamUnion, 0, len(messages))
 	for _, m := range messages {
 		switch m.Role {
@@ -59,7 +59,7 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*S
 		}
 	}
 
-	toolDef := openai.ChatCompletionToolParam{
+	sqlToolDef := openai.ChatCompletionToolParam{
 		Function: shared.FunctionDefinitionParam{
 			Name:        "execute_sql",
 			Description: openai.String("Execute or present generated SQL query based on database schema and user intent"),
@@ -80,6 +80,27 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*S
 		},
 	}
 
+	jsToolDef := openai.ChatCompletionToolParam{
+		Function: shared.FunctionDefinitionParam{
+			Name:        "execute_javascript",
+			Description: openai.String("Execute JavaScript code in local goja VM sandbox to aggregate, transform, join, or format active session datasets (res1, res2, rows)."),
+			Parameters: shared.FunctionParameters{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"js_code": map[string]interface{}{
+						"type":        "string",
+						"description": "The JavaScript code snippet to execute on active session datasets.",
+					},
+					"explanation": map[string]interface{}{
+						"type":        "string",
+						"description": "Explanation of what the JavaScript processing code does.",
+					},
+				},
+				"required": []string{"js_code", "explanation"},
+			},
+		},
+	}
+
 	model := c.cfg.Model
 	if model == "" {
 		model = "gpt-4o"
@@ -88,7 +109,7 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*S
 	params := openai.ChatCompletionNewParams{
 		Model:    shared.ChatModel(model),
 		Messages: sdkMessages,
-		Tools:    []openai.ChatCompletionToolParam{toolDef},
+		Tools:    []openai.ChatCompletionToolParam{sqlToolDef, jsToolDef},
 	}
 	if c.cfg.MaxTokens > 0 {
 		params.MaxTokens = openai.Int(int64(c.cfg.MaxTokens))
@@ -110,17 +131,35 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*S
 
 	for _, toolCall := range msg.ToolCalls {
 		if toolCall.Function.Name == "execute_sql" {
-			var sqlResp SQLResponse
-			if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &sqlResp); err == nil {
-				sqlResp.SQL = strings.TrimSpace(sqlResp.SQL)
-				sqlResp.Explanation = strings.TrimSpace(sqlResp.Explanation)
-				return &sqlResp, nil
+			var raw struct {
+				SQL         string `json:"sql"`
+				Explanation string `json:"explanation"`
+			}
+			if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &raw); err == nil {
+				return &AIResponse{
+					Type:        TypeSQL,
+					SQL:         strings.TrimSpace(raw.SQL),
+					Explanation: strings.TrimSpace(raw.Explanation),
+				}, nil
+			}
+		} else if toolCall.Function.Name == "execute_javascript" {
+			var raw struct {
+				JSCode      string `json:"js_code"`
+				Explanation string `json:"explanation"`
+			}
+			if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &raw); err == nil {
+				return &AIResponse{
+					Type:        TypeJS,
+					JSCode:      strings.TrimSpace(raw.JSCode),
+					Explanation: strings.TrimSpace(raw.Explanation),
+				}, nil
 			}
 		}
 	}
 
 	content := strings.TrimSpace(msg.Content)
-	return &SQLResponse{
+	return &AIResponse{
+		Type:        TypeText,
 		SQL:         "",
 		Explanation: content,
 	}, nil
