@@ -68,3 +68,37 @@ func TestJSEngine_Timeout(t *testing.T) {
 		t.Fatal("expected timeout error for infinite loop, got nil")
 	}
 }
+
+func TestJSEngine_SyntaxAndRuntimeError(t *testing.T) {
+	engine := NewJSEngine(1 * time.Second)
+
+	_, xe := engine.Execute(context.Background(), "invalid js {code", nil)
+	if xe == nil {
+		t.Fatal("expected syntax error for invalid JS")
+	}
+
+	_, xe = engine.Execute(context.Background(), "throw new Error('custom js error');", nil)
+	if xe == nil {
+		t.Fatal("expected runtime error for thrown error")
+	}
+}
+
+func TestJSEngine_PrimitiveResult(t *testing.T) {
+	engine := NewJSEngine(1 * time.Second)
+
+	res, xe := engine.Execute(context.Background(), "'hello world'", nil)
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+	if res.SummaryText != "hello world" {
+		t.Fatalf("expected summary 'hello world', got %q", res.SummaryText)
+	}
+
+	res, xe = engine.Execute(context.Background(), "[1, 2, 3]", nil)
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+	if !strings.Contains(res.JSONString, "[1, 2, 3]") && !strings.Contains(res.JSONString, "[\n  1") {
+		t.Fatalf("expected array json output, got %q", res.JSONString)
+	}
+}

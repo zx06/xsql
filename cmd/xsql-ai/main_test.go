@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/zx06/xsql/internal/config"
 )
 
 func TestCmdXSQLAI_MissingProfileError(t *testing.T) {
@@ -71,5 +73,49 @@ profiles:
 
 	if flags.Profile != "dev" {
 		t.Fatalf("expected profile 'dev', got %q", flags.Profile)
+	}
+}
+
+func TestCmdXSQLAI_RunAIValidation(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "xsql.yaml")
+	cfgContent := `
+ai:
+  api_key: "keyring:test_key"
+profiles:
+  dev:
+    db: mysql
+    host: 127.0.0.1
+    port: 3306
+    user: root
+    database: testdb
+`
+	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0600); err != nil {
+		t.Fatalf("failed to write temp config: %v", err)
+	}
+
+	flags := &AIFlags{
+		ConfigPath: cfgPath,
+		Profile:    "dev",
+		APIKey:     "test-key",
+	}
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"--config", cfgPath, "--profile", "dev", "--api-key", "test-key", "show users"})
+	_ = cmd.ParseFlags([]string{"--config", cfgPath, "--profile", "dev", "--api-key", "test-key"})
+
+	// Validate runAI options resolution up to TUI program
+	opts := config.Options{
+		ConfigPath:    flags.ConfigPath,
+		CLIProfile:    flags.Profile,
+		CLIProfileSet: true,
+		CLIAIAPIKey:   flags.APIKey,
+	}
+	resolved, xe := config.Resolve(opts)
+	if xe != nil {
+		t.Fatalf("unexpected error resolving config options: %v", xe)
+	}
+	if resolved.ProfileName != "dev" {
+		t.Fatalf("expected profile 'dev', got %q", resolved.ProfileName)
 	}
 }

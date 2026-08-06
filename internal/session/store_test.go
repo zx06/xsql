@@ -46,4 +46,9 @@ func TestSessionDataStore(t *testing.T) {
 	if !ok || got1.Rows[0]["name"] != "srv1" {
 		t.Fatal("failed to get res1 from store")
 	}
+
+	all := store.GetAll()
+	if len(all) != 2 || all["res1"] == nil || all["res2"] == nil {
+		t.Fatalf("expected GetAll to return 2 datasets, got %d", len(all))
+	}
 }
