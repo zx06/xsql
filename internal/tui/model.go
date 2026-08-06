@@ -45,8 +45,6 @@ type aiResponseMsg struct {
 	err      *errors.XError
 }
 
-type sqlGeneratedMsg = aiResponseMsg
-
 type queryExecutedMsg struct {
 	result   *db.QueryResult
 	err      *errors.XError
@@ -214,10 +212,6 @@ func (m Model) runAgentStepCmd() tea.Cmd {
 		resp, xe := m.aiService.ChatCompletion(ctx, msgs)
 		return aiResponseMsg{response: resp, err: xe}
 	}
-}
-
-func (m Model) generateSQLCmd(prompt string) tea.Cmd {
-	return m.runAgentStepCmd()
 }
 
 func (m Model) executeSQLCmd(sqlStr string) tea.Cmd {

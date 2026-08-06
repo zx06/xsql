@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -35,8 +36,8 @@ func TestTUI_Model_StateTransitions(t *testing.T) {
 		t.Fatalf("expected state StateIdle, got %v", m.state)
 	}
 
-	// 2. Send sqlGeneratedMsg -> transition to StateSQLReady
-	updated, _ = m.Update(sqlGeneratedMsg{
+	// 2. Send aiResponseMsg -> transition to StateSQLReady
+	updated, _ = m.Update(aiResponseMsg{
 		response: &ai.AIResponse{
 			Type:        ai.TypeSQL,
 			SQL:         "SELECT * FROM users;",
@@ -177,8 +178,8 @@ func TestTUI_Model_ShiftTabAutoExecuteToggle(t *testing.T) {
 		t.Fatal("expected autoExecute to be true after Shift+Tab")
 	}
 
-	// Send sqlGeneratedMsg -> should automatically transition to StateExecuting
-	updated, cmd := m.Update(sqlGeneratedMsg{
+	// Send aiResponseMsg -> should automatically transition to StateExecuting
+	updated, cmd := m.Update(aiResponseMsg{
 		response: &ai.AIResponse{
 			Type:        ai.TypeSQL,
 			SQL:         "SELECT * FROM users;",
@@ -362,5 +363,93 @@ func TestTUI_Model_ExportFlow(t *testing.T) {
 	}
 	if cmd == nil {
 		t.Fatal("expected runAgentStepCmd after export feedback")
+	}
+}
+
+func TestTUI_Model_FullCoverage(t *testing.T) {
+	resolved := config.Resolved{
+		ProfileName: "dev",
+		Profile:     config.Profile{DB: "mysql", AllowPlaintext: true},
+	}
+	aiService := ai.NewService(config.AIConfig{}, nil)
+	m := NewModel(config.Options{}, resolved, aiService, "", false)
+
+	// 1. Test Init & loadSchemaCmd
+	initCmd := m.Init()
+	if initCmd == nil {
+		t.Fatal("expected non-nil Init Cmd")
+	}
+
+	loadCmd := m.loadSchemaCmd()
+	if loadCmd == nil {
+		t.Fatal("expected non-nil loadSchemaCmd")
+	}
+	_ = loadCmd() // execute closure statements
+
+	// 2. Test runAgentStepCmd & executeSQLCmd closures
+	stepCmd := m.runAgentStepCmd()
+	if stepCmd != nil {
+		_ = stepCmd()
+	}
+
+	execCmd := m.executeSQLCmd("SELECT 1")
+	if execCmd != nil {
+		_ = execCmd()
+	}
+
+	// 3. Test JS response and raw output rendering
+	updated, _ := m.Update(aiResponseMsg{
+		response: &ai.AIResponse{
+			Type:        ai.TypeJS,
+			JSCode:      "var x = 1;",
+			Explanation: "Run JS script",
+		},
+	})
+	m = updated.(Model)
+
+	// 4. Test queryExecutedMsg with TableResult and TableState
+	res := &db.QueryResult{
+		Columns: []string{"id", "name"},
+		Rows:    []map[string]any{{"id": 1, "name": "Alice"}},
+	}
+	updated, _ = m.Update(queryExecutedMsg{
+		result:   res,
+		duration: 10 * time.Millisecond,
+	})
+	m = updated.(Model)
+
+	// 5. Test Key Navigation (Tab, Left, Right, PgUp, PgDn, Ctrl+E)
+	m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	m.Update(tea.KeyMsg{Type: tea.KeyCtrlE})
+
+	// 6. Test Export Option 1 (Confirm Export)
+	m.state = StateExportReady
+	m.pendingExport = &PendingExport{
+		DatasetID: "res1",
+		Format:    "csv",
+		FilePath:  "test.csv",
+	}
+	m.confirmOption = 0
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+
+	// 7. Test Export Option 2 (Adjust Export Prompt)
+	m.state = StateExportReady
+	m.toolCalls = []ToolCallItem{{ID: "tc_1", Name: "export_data"}}
+	m.pendingExport = &PendingExport{
+		DatasetID: "res1",
+		Format:    "csv",
+		FilePath:  "test.csv",
+		ToolIdx:   0,
+	}
+	m.confirmOption = 1
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if m.state != StateIdle {
+		t.Fatalf("expected StateIdle after Adjust Prompt option, got %v", m.state)
 	}
 }
