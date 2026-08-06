@@ -65,6 +65,7 @@ type Model struct {
 	profileName      string
 	unsafeAllowWrite bool
 	initialPrompt    string
+	lastUserPrompt   string
 	autoExecute      bool
 
 	sessionStore *session.SessionDataStore
@@ -112,6 +113,7 @@ func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Servi
 		profileName:      resolved.ProfileName,
 		unsafeAllowWrite: unsafeAllowWrite || resolved.Profile.UnsafeAllowWrite,
 		initialPrompt:    strings.TrimSpace(initialPrompt),
+		lastUserPrompt:   strings.TrimSpace(initialPrompt),
 		autoExecute:      false,
 		sessionStore:     session.NewSessionDataStore(),
 		jsEngine:         js.NewJSEngine(1 * time.Minute),
@@ -189,6 +191,17 @@ func (m *Model) renderTableState(idx int, isActive bool) {
 	m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 }
 
+func shouldTriggerJSAnalysis(prompt string) bool {
+	p := strings.ToLower(prompt)
+	keywords := []string{"分析", "计算", "占比", "导出", "统计", "处理", "汇总", "比例", "生成报告", "报表", "analyze", "calculate", "percentage", "ratio", "export", "summary", "report", "group"}
+	for _, kw := range keywords {
+		if strings.Contains(p, kw) {
+			return true
+		}
+	}
+	return false
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
@@ -209,6 +222,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.initialPrompt != "" {
 			prompt := m.initialPrompt
 			m.initialPrompt = ""
+			m.lastUserPrompt = prompt
 			userLine := UserTagStyle.Render("👤 YOU") + " " + prompt
 			m.messages = append(m.messages, userLine)
 			m.state = StateThinking
@@ -309,6 +323,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			formatted := FormatTableResult(msg.result, 0, 0, m.width, true)
 			m.messages = append(m.messages, formatted)
+
+			// Auto-chain: Check if user prompt requests post-query data analysis or JS computation
+			if shouldTriggerJSAnalysis(m.lastUserPrompt) {
+				m.state = StateThinking
+				m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+				m.viewport.GotoBottom()
+				return m, m.generateSQLCmd(m.lastUserPrompt)
+			}
 		}
 		m.state = StateIdle
 		m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
@@ -449,6 +471,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyEnter:
 			prompt := strings.TrimSpace(m.textarea.Value())
 			if prompt != "" && m.state == StateIdle {
+				m.lastUserPrompt = prompt
 				userLine := UserTagStyle.Render("👤 YOU") + " " + prompt
 				m.messages = append(m.messages, userLine)
 				m.textarea.Reset()
