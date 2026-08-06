@@ -5,6 +5,7 @@ package e2e
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -115,10 +116,43 @@ func TestE2E_AI_Service_With_MockOpenAI(t *testing.T) {
 }
 
 func TestE2E_AI_TUI_Terminal_Pipe(t *testing.T) {
+	// Setup Mock Server for AI BaseURL
+	aiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		respBody := `{
+			"id": "chatcmpl-tui",
+			"object": "chat.completion",
+			"created": 1677652288,
+			"model": "test-model",
+			"choices": [
+				{
+					"index": 0,
+					"message": {
+						"role": "assistant",
+						"content": null,
+						"tool_calls": [
+							{
+								"id": "call_tui",
+								"type": "function",
+								"function": {
+									"name": "execute_sql",
+									"arguments": "{\"sql\":\"SELECT COUNT(*) FROM users;\",\"explanation\":\"Returns total user count.\"}"
+								}
+							}
+						]
+					},
+					"finish_reason": "tool_calls"
+				}
+			]
+		}`
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(respBody))
+	}))
+	defer aiServer.Close()
+
 	// Setup temporary xsql config file
 	tmpDir := t.TempDir()
 	cfgPath := filepath.Join(tmpDir, "xsql.yaml")
-	cfgContent := `profiles:
+	cfgContent := fmt.Sprintf(`profiles:
   dev:
     db: mysql
     host: 127.0.0.1
@@ -126,10 +160,10 @@ func TestE2E_AI_TUI_Terminal_Pipe(t *testing.T) {
     user: root
     database: test
 ai:
-  base_url: "https://mock.api.com"
+  base_url: "%s"
   model: "test-model"
   api_key: "test-key"
-`
+`, aiServer.URL)
 	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +173,8 @@ ai:
 		t.Fatalf("failed to resolve config: %v", xe)
 	}
 
-	aiService := ai.NewService(resolved.AI, nil)
+	aiClient := ai.NewClient(resolved.AI, aiServer.Client())
+	aiService := ai.NewService(resolved.AI, aiClient)
 	model := tui.NewModel(config.Options{}, resolved, aiService, "Show total users", false)
 
 	inBuf := bytes.NewBufferString("\n") // Press Enter
@@ -148,7 +183,7 @@ ai:
 	p := tea.NewProgram(model, tea.WithInput(inBuf), tea.WithOutput(outBuf))
 
 	go func() {
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(300 * time.Millisecond)
 		p.Quit()
 	}()
 
