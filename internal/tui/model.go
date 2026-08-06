@@ -894,7 +894,7 @@ func (m Model) View() string {
 			card := renderActionOptionsCard(
 				"✨ File Export Approval Required",
 				SQLCodeStyle.Render(exportInfo),
-				[]string{"Confirm & Export File", "Adjust Export Options / Prompt", "Deny & Cancel Export"},
+				[]string{"Confirm & Export File", "Adjust Options / New Prompt", "Deny & Cancel Export"},
 				m.confirmOption,
 				m.width,
 			)
@@ -908,7 +908,7 @@ func (m Model) View() string {
 		card := renderActionOptionsCard(
 			"✨ SQL Approval Required",
 			sqlContent,
-			[]string{"Execute Query", "Edit SQL / Adjust Prompt", "Cancel Execution"},
+			[]string{"Execute SQL Query", "Edit SQL Statement", "Cancel Execution"},
 			m.confirmOption,
 			m.width,
 		)
