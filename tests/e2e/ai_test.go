@@ -5,7 +5,7 @@ package e2e
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -23,7 +23,7 @@ import (
 )
 
 func TestE2E_AI_Service_With_MockOpenAI(t *testing.T) {
-	// 1. Setup Mock OpenAI Server
+	// 1. Setup Mock OpenAI Server with Tool Call response
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/chat/completions" {
 			http.Error(w, "not found", http.StatusNotFound)
@@ -34,33 +34,42 @@ func TestE2E_AI_Service_With_MockOpenAI(t *testing.T) {
 			return
 		}
 
-		var req ai.ChatCompletionRequest
-		_ = json.NewDecoder(r.Body).Decode(&req)
+		bodyBytes, _ := io.ReadAll(r.Body)
+		bodyStr := string(bodyBytes)
 
-		// Assert System prompt contains schema context
-		hasSystem := false
-		for _, msg := range req.Messages {
-			if msg.Role == "system" && strings.Contains(msg.Content, "DATABASE SCHEMA") {
-				hasSystem = true
-				break
-			}
-		}
-		if !hasSystem {
-			t.Errorf("system prompt missing schema context: %+v", req.Messages)
+		// Assert request contains schema context
+		if !strings.Contains(bodyStr, "DATABASE SCHEMA") {
+			t.Errorf("request body missing schema context: %s", bodyStr)
 		}
 
-		resp := ai.ChatCompletionResponse{
-			Choices: []ai.ChatCompletionChoice{
+		respBody := `{
+			"id": "chatcmpl-e2e-123",
+			"object": "chat.completion",
+			"created": 1677652288,
+			"model": "gpt-4o",
+			"choices": [
 				{
-					Message: ai.ChatMessage{
-						Role:    "assistant",
-						Content: `{"sql": "SELECT COUNT(*) FROM users;", "explanation": "Returns total user count."}`,
+					"index": 0,
+					"message": {
+						"role": "assistant",
+						"content": null,
+						"tool_calls": [
+							{
+								"id": "call_e2e_123",
+								"type": "function",
+								"function": {
+									"name": "execute_sql",
+									"arguments": "{\"sql\":\"SELECT COUNT(*) FROM users;\",\"explanation\":\"Returns total user count.\"}"
+								}
+							}
+						]
 					},
-				},
-			},
-		}
+					"finish_reason": "tool_calls"
+				}
+			]
+		}`
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(resp)
+		_, _ = w.Write([]byte(respBody))
 	}))
 	defer server.Close()
 
@@ -137,7 +146,7 @@ ai:
 	outBuf := &bytes.Buffer{}
 
 	p := tea.NewProgram(model, tea.WithInput(inBuf), tea.WithOutput(outBuf))
-	
+
 	go func() {
 		time.Sleep(100 * time.Millisecond)
 		p.Quit()

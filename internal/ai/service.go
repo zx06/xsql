@@ -2,9 +2,6 @@ package ai
 
 import (
 	"context"
-	"encoding/json"
-	"regexp"
-	"strings"
 
 	"github.com/zx06/xsql/internal/config"
 	"github.com/zx06/xsql/internal/db"
@@ -37,42 +34,5 @@ func (s *Service) GenerateSQL(ctx context.Context, userPrompt string, schemaInfo
 		{Role: "user", Content: userPrompt},
 	}
 
-	content, xe := s.client.ChatCompletion(ctx, messages)
-	if xe != nil {
-		return nil, xe
-	}
-
-	return parseSQLResponse(content)
-}
-
-var codeBlockRegex = regexp.MustCompile("(?s)```(?:json)?\\s*(.*?)\\s*```")
-
-func parseSQLResponse(content string) (*SQLResponse, *errors.XError) {
-	cleaned := strings.TrimSpace(content)
-	if matches := codeBlockRegex.FindStringSubmatch(cleaned); len(matches) > 1 {
-		cleaned = strings.TrimSpace(matches[1])
-	}
-
-	var resp SQLResponse
-	if err := json.Unmarshal([]byte(cleaned), &resp); err == nil {
-		resp.SQL = strings.TrimSpace(resp.SQL)
-		resp.Explanation = strings.TrimSpace(resp.Explanation)
-		return &resp, nil
-	}
-
-	// Fallback if AI returned raw SQL or raw text
-	if strings.HasPrefix(strings.ToUpper(cleaned), "SELECT") ||
-		strings.HasPrefix(strings.ToUpper(cleaned), "WITH") ||
-		strings.HasPrefix(strings.ToUpper(cleaned), "SHOW") ||
-		strings.HasPrefix(strings.ToUpper(cleaned), "EXPLAIN") {
-		return &SQLResponse{
-			SQL:         cleaned,
-			Explanation: "Generated SQL based on request.",
-		}, nil
-	}
-
-	return &SQLResponse{
-		SQL:         "",
-		Explanation: cleaned,
-	}, nil
+	return s.client.ChatCompletion(ctx, messages)
 }

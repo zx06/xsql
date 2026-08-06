@@ -114,6 +114,11 @@ xsql-ai 为独立的 CLI 可执行程序，提供交互式 AI 终端模式。用
 xsql-ai --profile dev
 ```
 
+### LLM 集成与 Tool Call 机制
+`xsql` 使用 OpenAI 官方 SDK (`github.com/openai/openai-go`) 与大模型交互。SQL 生成过程通过 Tool Calling 约定完成：
+- 导出 Tool：`execute_sql(sql: string, explanation: string)`
+- 模型通过调用 `execute_sql` 返回生成的 SQL 及对查询动作的解释说明。
+
 ### 快捷键操作
 
 #### SQL 待确认状态 (SQL Preview Mode)
@@ -129,4 +134,5 @@ xsql-ai --profile dev
 - `PgUp` / `PgDn`: 向上/向下翻页查看当前焦点表格的第 13-N 行数据
 - `Shift+Tab`: 一键切换 **自动执行 (AUTO-EXECUTE)** 与 **手动批准 (MANUAL-APPROVE)** 模式
 - `Esc` / `Ctrl+C`: 退出 AI 模式
+
 
