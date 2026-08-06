@@ -117,13 +117,17 @@ type Model struct {
 
 func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Service, initialPrompt string, unsafeAllowWrite bool) Model {
 	ta := textarea.New()
-	ta.Placeholder = "Ask AI to query or analyze database..."
+	ta.Placeholder = "Ask AI to query database or perform data analysis..."
 	ta.ShowLineNumbers = false
 	ta.Prompt = "❯ "
 	ta.Focus()
-	ta.CharLimit = 2000
+	ta.CharLimit = 4000
 	ta.SetWidth(80)
 	ta.SetHeight(3)
+
+	// Custom crisp styles for textarea
+	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
+	ta.FocusedStyle.Prompt = lipgloss.NewStyle().Bold(true).Foreground(PrimaryColor)
 
 	vp := viewport.New(80, 15)
 
@@ -329,8 +333,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.textarea.SetWidth(msg.Width - 6)
-		m.viewport.Width = msg.Width - 4
+		m.textarea.SetWidth(max(20, msg.Width-6))
+		m.viewport.Width = max(20, msg.Width-4)
 		m.viewport.Height = max(5, msg.Height-15)
 
 	case schemaLoadedMsg:
@@ -342,7 +346,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.initialPrompt != "" {
 			prompt := m.initialPrompt
 			m.initialPrompt = ""
-			userLine := UserTagStyle.Render("👤 YOU") + " " + prompt
+
+			userHeader := UserTagStyle.Render("👤 YOU")
+			var userLine string
+			if strings.Contains(prompt, "\n") {
+				userLine = fmt.Sprintf("%s\n%s", userHeader, prompt)
+			} else {
+				userLine = fmt.Sprintf("%s %s", userHeader, prompt)
+			}
+
 			m.messages = append(m.messages, userLine)
 			m.chatHistory = append(m.chatHistory, ai.ChatMessage{Role: "user", Content: prompt})
 			m.state = StateThinking
@@ -714,6 +726,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// MULTI-LINE PROMPT INPUT SHORTCUT: Alt+Enter or Ctrl+J to insert soft newline into textarea
+		if m.state == StateIdle && (msg.Type == tea.KeyCtrlJ || (msg.Alt && msg.Type == tea.KeyEnter)) {
+			m.textarea.InsertString("\n")
+			return m, nil
+		}
+
 		switch msg.Type {
 		case tea.KeyEsc:
 			return m, tea.Quit
@@ -800,7 +818,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyEnter:
 			prompt := strings.TrimSpace(m.textarea.Value())
 			if prompt != "" && m.state == StateIdle {
-				userLine := UserTagStyle.Render("👤 YOU") + " " + prompt
+				userHeader := UserTagStyle.Render("👤 YOU")
+				var userLine string
+				if strings.Contains(prompt, "\n") {
+					userLine = fmt.Sprintf("%s\n%s", userHeader, prompt)
+				} else {
+					userLine = fmt.Sprintf("%s %s", userHeader, prompt)
+				}
+
 				m.messages = append(m.messages, userLine)
 				m.chatHistory = append(m.chatHistory, ai.ChatMessage{Role: "user", Content: prompt})
 				m.textarea.Reset()
@@ -946,6 +971,7 @@ func (m Model) View() string {
 	} else {
 		keybindings = renderKeybindingBadges([][2]string{
 			{"Enter", "Send"},
+			{"Ctrl+J", "Newline"},
 			{"Tab", "Focus Tool" + toolNavHint},
 			{"Ctrl+O", "Tools (" + toolFoldState + ")"},
 			{"←/→", "Cols"},
