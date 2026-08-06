@@ -66,7 +66,8 @@ type ToolCallItem struct {
 	Summary         string
 	Detail          string
 	Result          string
-	TableStateIndex int // -1 if no table attached
+	RawOutput       string // Raw execution output/logs (never hidden!)
+	TableStateIndex int    // -1 if no table attached
 	MsgIndex        int
 	IsExpanded      bool
 }
@@ -94,7 +95,7 @@ type Model struct {
 	jsRetryCount  int
 	maxJSRetries  int
 
-	confirmOption int // 0: Confirm/Execute, 1: Edit/Prompt, 2: Cancel/Deny
+	confirmOption int // 0: Confirm/Execute, 1: Adjust Prompt, 2: Cancel/Deny
 
 	state         State
 	schemaInfo    *db.SchemaInfo
@@ -110,9 +111,8 @@ type Model struct {
 	viewport viewport.Model
 	spinner  spinner.Model
 
-	editingSQL bool
-	width      int
-	height     int
+	width  int
+	height int
 }
 
 func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Service, initialPrompt string, unsafeAllowWrite bool) Model {
@@ -121,9 +121,9 @@ func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Servi
 	ta.ShowLineNumbers = false
 	ta.Prompt = "❯ "
 	ta.Focus()
-	ta.CharLimit = 1000
+	ta.CharLimit = 2000
 	ta.SetWidth(80)
-	ta.SetHeight(1)
+	ta.SetHeight(3)
 
 	vp := viewport.New(80, 15)
 
@@ -300,6 +300,13 @@ func (m *Model) renderToolCall(idx int) {
 		resText := MetricsStyle.Render(tc.Result)
 		sb.WriteString(fmt.Sprintf("%s\n%s\n%s", badge, detail, resText))
 
+		// Render Raw Output / Calculation Results if present (Never hide tool output!)
+		if tc.RawOutput != "" {
+			outTitle := lipgloss.NewStyle().Bold(true).Foreground(SecondaryColor).Render("📊 Raw Execution Output:")
+			outBox := ToolDetailStyle.Render(tc.RawOutput)
+			sb.WriteString(fmt.Sprintf("\n%s\n%s", outTitle, outBox))
+		}
+
 		// Render embedded Table Result inside container when unfolded
 		if tc.TableStateIndex >= 0 && tc.TableStateIndex < len(m.tableStates) {
 			ts := &m.tableStates[tc.TableStateIndex]
@@ -322,9 +329,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.textarea.SetWidth(msg.Width - 4)
+		m.textarea.SetWidth(msg.Width - 6)
 		m.viewport.Width = msg.Width - 4
-		m.viewport.Height = max(5, msg.Height-14)
+		m.viewport.Height = max(5, msg.Height-15)
 
 	case schemaLoadedMsg:
 		if msg.err != nil {
@@ -402,6 +409,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					m.jsRetryCount = 0
 					m.toolCalls[toolIdx].Result = "✓ JavaScript executed successfully"
+					m.toolCalls[toolIdx].RawOutput = jsRes.SummaryText // Display raw JS output inside tool call container!
 					m.renderToolCall(toolIdx)
 
 					m.chatHistory = append(m.chatHistory, ai.ChatMessage{
@@ -576,30 +584,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 
-		if m.editingSQL {
-			switch msg.Type {
-			case tea.KeyEnter:
-				editedVal := strings.TrimSpace(m.textarea.Value())
-				if editedVal != "" {
-					m.currentSQL = editedVal
-				}
-				m.editingSQL = false
-				m.textarea.Reset()
-				m.textarea.Blur()
-				m.state = StateSQLReady
-				return m, nil
-
-			case tea.KeyEsc:
-				m.editingSQL = false
-				m.textarea.Reset()
-				m.textarea.Focus()
-				return m, nil
-			}
-			var taCmd tea.Cmd
-			m.textarea, taCmd = m.textarea.Update(msg)
-			return m, taCmd
-		}
-
 		// UNIFIED HUMAN-IN-THE-LOOP INTERACTION FOR BOTH StateExportReady AND StateSQLReady!
 		if m.state == StateExportReady && m.pendingExport != nil {
 			switch msg.Type {
@@ -616,7 +600,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				triggerOpt = m.confirmOption
 			} else if msg.String() == "1" {
 				triggerOpt = 0
-			} else if msg.String() == "2" || msg.String() == "e" || msg.String() == "E" {
+			} else if msg.String() == "2" {
 				triggerOpt = 1
 			} else if msg.String() == "3" || msg.Type == tea.KeyEsc {
 				triggerOpt = 2
@@ -662,7 +646,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.runAgentStepCmd()
 
 			case 1:
-				// Option 2: Edit Path / Prompt Input
+				// Option 2: Adjust Prompt
 				m.state = StateIdle
 				m.pendingExport = nil
 				m.textarea.Focus()
@@ -701,7 +685,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				triggerOpt = m.confirmOption
 			} else if msg.String() == "1" {
 				triggerOpt = 0
-			} else if msg.String() == "2" || msg.String() == "e" || msg.String() == "E" {
+			} else if msg.String() == "2" {
 				triggerOpt = 1
 			} else if msg.String() == "3" || msg.Type == tea.KeyEsc {
 				triggerOpt = 2
@@ -717,11 +701,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.executeSQLCmd(m.currentSQL)
 
 			case 1:
-				// Option 2: Edit SQL
-				m.editingSQL = true
+				// Option 2: Adjust Prompt / Re-generate
+				m.state = StateIdle
 				m.textarea.Focus()
-				m.textarea.SetValue(m.currentSQL)
-				m.textarea.CursorEnd()
 				return m, nil
 
 			case 2:
@@ -906,7 +888,7 @@ func (m Model) View() string {
 			card := renderActionOptionsCard(
 				"✨ File Export Approval Required",
 				SQLCodeStyle.Render(exportInfo),
-				[]string{"Confirm & Export File", "Adjust Options / New Prompt", "Deny & Cancel Export"},
+				[]string{"Confirm & Export File", "Adjust Prompt / Change Options", "Deny & Cancel Export"},
 				m.confirmOption,
 				m.width,
 			)
@@ -920,15 +902,20 @@ func (m Model) View() string {
 		card := renderActionOptionsCard(
 			"✨ SQL Approval Required",
 			sqlContent,
-			[]string{"Execute SQL Query", "Edit SQL Statement", "Cancel Execution"},
+			[]string{"Execute SQL Query", "Adjust Prompt / Re-generate", "Cancel Execution"},
 			m.confirmOption,
 			m.width,
 		)
 		sb.WriteString(card + "\n")
 	}
 
-	// 4. Ultra-Minimal Prompt Input Area & Footer Keybindings
-	separator := lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#CBD5E1", Dark: "#334155"}).Render(strings.Repeat("─", m.width-4))
+	// 4. Ultra-Minimal Prompt Input Area & Dynamic Divider Rules
+	divLen := m.width - 4
+	if divLen < 10 {
+		divLen = 10
+	}
+	separator := lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#CBD5E1", Dark: "#334155"}).Render(strings.Repeat("─", divLen))
+
 	sb.WriteString(separator + "\n")
 	sb.WriteString(m.textarea.View() + "\n")
 	sb.WriteString(separator + "\n\n")
