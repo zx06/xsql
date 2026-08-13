@@ -32,6 +32,13 @@ ssh_proxies:
 
 ```yaml
 # xsql.yaml
+ai:
+  provider: openai
+  base_url: https://api.openai.com/v1
+  api_key: "keyring:ai/api_key"
+  model: gpt-4o
+  max_tokens: 2048
+
 stats:
   enabled: true
   log_sql: false
@@ -115,6 +122,18 @@ profiles:
 | `mcp.http.addr` | string | Streamable HTTP 监听地址 |
 | `mcp.http.auth_token` | string | Streamable HTTP 鉴权 token（支持 `keyring:` 引用） |
 | `mcp.http.allow_plaintext_token` | bool | 允许在配置中使用明文 token |
+
+## AI 配置项
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `ai.provider` | string | AI provider，当前为 `openai` 兼容接口 |
+| `ai.base_url` | string | AI 服务 Base URL，默认 `https://api.openai.com/v1` |
+| `ai.api_key` | string | AI 服务 API Key，推荐使用 `keyring:` 引用 |
+| `ai.model` | string | 模型名称，默认 `gpt-4o` |
+| `ai.max_tokens` | int | 单次响应最大 token 数，默认 2048 |
+
+配置文件中的明文 `ai.api_key` 默认拒绝。仅在 `xsql ai` 显式使用 `--allow-plaintext` 时允许；CLI `--api-key` 和 `XSQL_AI_API_KEY` 本身属于显式运行时输入。
 
 ## Web 配置项
 

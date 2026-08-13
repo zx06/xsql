@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -278,7 +279,7 @@ func TestTUI_Model_CtrlPProfileSwitching(t *testing.T) {
 		AllProfiles: allProfiles,
 	}
 	aiService := ai.NewService(config.AIConfig{}, nil)
-	m := NewModel(config.Options{}, resolved, aiService, "", false)
+	m := NewModel(config.Options{}, resolved, aiService, "", true)
 
 	// Press Ctrl+P -> switches profile to 'prod'
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
@@ -289,8 +290,36 @@ func TestTUI_Model_CtrlPProfileSwitching(t *testing.T) {
 	if m.profile.DB != "pg" {
 		t.Fatalf("expected profile DB to be 'pg', got %q", m.profile.DB)
 	}
+	if !m.unsafeAllowWrite {
+		t.Fatal("expected CLI write override to remain active after profile switch")
+	}
 	if cmd == nil {
 		t.Fatal("expected loadSchemaCmd after switching profile")
+	}
+}
+
+func TestTUI_Model_ProfileSwitchRejectsMissingSSHProxy(t *testing.T) {
+	allProfiles := map[string]config.Profile{
+		"dev":  {DB: "mysql"},
+		"prod": {DB: "pg", SSHProxy: "missing"},
+	}
+	resolved := config.Resolved{
+		ProfileName: "dev",
+		Profile:     allProfiles["dev"],
+		AllProfiles: allProfiles,
+	}
+	m := NewModel(config.Options{}, resolved, ai.NewService(config.AIConfig{}, nil), "", false)
+
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+	m = updated.(Model)
+	if cmd != nil {
+		t.Fatal("expected invalid profile switch to avoid loading schema")
+	}
+	if m.profileName != "dev" {
+		t.Fatalf("expected active profile to remain dev, got %q", m.profileName)
+	}
+	if !strings.Contains(strings.Join(m.messages, "\n"), "ssh_proxy 'missing' not found") {
+		t.Fatalf("expected missing ssh_proxy error, got %v", m.messages)
 	}
 }
 
@@ -438,12 +467,14 @@ func TestTUI_Model_FullCoverage(t *testing.T) {
 	m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
 	m.Update(tea.KeyMsg{Type: tea.KeyCtrlE})
 
+	exportPath := filepath.Join(t.TempDir(), "test.csv")
+
 	// 6. Test Export Option 1 (Confirm Export)
 	m.state = StateExportReady
 	m.pendingExport = &PendingExport{
 		DatasetID: "res1",
 		Format:    "csv",
-		FilePath:  "test.csv",
+		FilePath:  exportPath,
 	}
 	m.confirmOption = 0
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -455,7 +486,7 @@ func TestTUI_Model_FullCoverage(t *testing.T) {
 	m.pendingExport = &PendingExport{
 		DatasetID: "res1",
 		Format:    "csv",
-		FilePath:  "test.csv",
+		FilePath:  exportPath,
 		ToolIdx:   0,
 	}
 	m.confirmOption = 1

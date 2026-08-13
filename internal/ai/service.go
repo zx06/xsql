@@ -2,11 +2,15 @@ package ai
 
 import (
 	"context"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/zx06/xsql/internal/config"
 	"github.com/zx06/xsql/internal/db"
 	"github.com/zx06/xsql/internal/errors"
 )
+
+const MaxToolFeedbackRunes = 4096
 
 type ResponseType string
 
@@ -59,4 +63,16 @@ func (s *Service) GenerateResponse(ctx context.Context, userPrompt string, schem
 
 func (s *Service) ChatCompletion(ctx context.Context, messages []ChatMessage) (*AIResponse, *errors.XError) {
 	return s.client.ChatCompletion(ctx, messages)
+}
+
+// BoundToolFeedback limits locally computed tool output before it is sent to
+// the remote model. The complete output remains available in the local TUI.
+func BoundToolFeedback(value string) string {
+	value = strings.TrimSpace(value)
+	if utf8.RuneCountInString(value) <= MaxToolFeedbackRunes {
+		return value
+	}
+
+	runes := []rune(value)
+	return string(runes[:MaxToolFeedbackRunes]) + "\n...[truncated: complete result remains local]"
 }

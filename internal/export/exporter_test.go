@@ -69,4 +69,13 @@ func TestExportQueryResult_CSV_JSON_MD(t *testing.T) {
 		t.Fatalf("unexpected error for empty filePath: %v", xe)
 	}
 	_ = os.Remove(absDefault)
+
+	// 5. Unsupported formats must fail before creating or truncating a file.
+	invalidPath := filepath.Join(tempDir, "invalid.xlsx")
+	if _, xe = ExportQueryResult(res, ExportFormat("xlsx"), invalidPath); xe == nil {
+		t.Fatal("expected unsupported export format error")
+	}
+	if _, err := os.Stat(invalidPath); !os.IsNotExist(err) {
+		t.Fatalf("unsupported format should not create a file, stat err=%v", err)
+	}
 }

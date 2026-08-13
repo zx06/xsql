@@ -2,8 +2,10 @@ package ai
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/zx06/xsql/internal/config"
@@ -53,6 +55,10 @@ func TestGenerateSQL_MockHTTP_ToolCall(t *testing.T) {
 		}
 		if r.Header.Get("Authorization") != "Bearer test-key" {
 			t.Errorf("unexpected auth header: %s", r.Header.Get("Authorization"))
+		}
+		body, _ := io.ReadAll(r.Body)
+		if !strings.Contains(string(body), `"parallel_tool_calls":false`) {
+			t.Errorf("expected parallel tool calls to be disabled, got %s", body)
 		}
 
 		respBody := `{
@@ -107,6 +113,51 @@ func TestGenerateSQL_MockHTTP_ToolCall(t *testing.T) {
 	}
 	if res.Explanation != "Queries all users." {
 		t.Errorf("expected explanation 'Queries all users.', got %q", res.Explanation)
+	}
+}
+
+func TestChatCompletionRejectsMultipleToolCalls(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		respBody := `{
+			"id":"chatcmpl-multi",
+			"object":"chat.completion",
+			"created":1677652288,
+			"model":"gpt-4o",
+			"choices":[{
+				"index":0,
+				"message":{"role":"assistant","content":null,"tool_calls":[
+					{"id":"call_1","type":"function","function":{"name":"execute_sql","arguments":"{\"sql\":\"SELECT 1\",\"explanation\":\"one\"}"}},
+					{"id":"call_2","type":"function","function":{"name":"execute_sql","arguments":"{\"sql\":\"SELECT 2\",\"explanation\":\"two\"}"}}
+				]},
+				"finish_reason":"tool_calls"
+			}]
+		}`
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(respBody))
+	}))
+	defer mockServer.Close()
+
+	cfg := config.AIConfig{BaseURL: mockServer.URL, APIKey: "test-key", Model: "gpt-4o"}
+	client := NewClient(cfg, mockServer.Client())
+	_, xe := client.ChatCompletion(context.Background(), []ChatMessage{{Role: "user", Content: "run two queries"}})
+	if xe == nil || !strings.Contains(xe.Message, "multiple tool calls") {
+		t.Fatalf("expected explicit multiple-tool-call error, got %v", xe)
+	}
+}
+
+func TestBoundToolFeedback(t *testing.T) {
+	short := "compact aggregate"
+	if got := BoundToolFeedback(short); got != short {
+		t.Fatalf("expected short feedback unchanged, got %q", got)
+	}
+
+	long := strings.Repeat("数", MaxToolFeedbackRunes+10)
+	got := BoundToolFeedback(long)
+	if !strings.Contains(got, "[truncated:") {
+		t.Fatalf("expected truncation marker, got suffix %q", got[len(got)-64:])
+	}
+	if count := len([]rune(strings.Split(got, "\n...[truncated:")[0])); count != MaxToolFeedbackRunes {
+		t.Fatalf("expected %d retained runes, got %d", MaxToolFeedbackRunes, count)
 	}
 }
 

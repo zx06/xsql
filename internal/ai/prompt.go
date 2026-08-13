@@ -19,8 +19,9 @@ DATABASE SCHEMA:
 %s
 
 ENVIRONMENT & SPECIFICATIONS:
-- Database Mode: Default to READ-ONLY SELECT queries.
-- JavaScript Environment: Strict ES5 (ECMAScript 5.1) engine. Active session datasets (e.g. res1, res2) are available in global context.
+	- Database Mode: Default to READ-ONLY SELECT queries.
+	- JavaScript Environment: Strict ES5 (ECMAScript 5.1) engine. Active session datasets (e.g. res1, res2) are available in global context.
+	- JavaScript Output: Return only compact derived aggregates needed for the final answer. Never copy or return complete raw datasets.
 `
 
 func FormatDBName(dbType string) string {

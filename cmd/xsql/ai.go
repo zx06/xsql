@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/zx06/xsql/internal/ai"
 	"github.com/zx06/xsql/internal/config"
+	"github.com/zx06/xsql/internal/errors"
 	"github.com/zx06/xsql/internal/secret"
 	"github.com/zx06/xsql/internal/tui"
 )
@@ -21,6 +23,7 @@ func NewAICommand() *cobra.Command {
 	var modelStr string
 	var baseURLStr string
 	var apiKeyStr string
+	var allowPlaintext bool
 	var unsafeAllowWrite bool
 
 	cmd := &cobra.Command{
@@ -44,23 +47,34 @@ func NewAICommand() *cobra.Command {
 				CLIAIAPIKeySet:  cmd.Flags().Changed("api-key"),
 			}
 
-			resolved, xe := config.Resolve(opts)
-			if xe != nil {
-				return xe
+			resolved := GlobalConfig.Resolved
+			if opts.CLIAIModelSet && opts.CLIAIModel != "" {
+				resolved.AI.Model = opts.CLIAIModel
+			}
+			if opts.CLIAIBaseURLSet && opts.CLIAIBaseURL != "" {
+				resolved.AI.BaseURL = opts.CLIAIBaseURL
+			}
+			apiKeyFromCLI := opts.CLIAIAPIKeySet && opts.CLIAIAPIKey != ""
+			if apiKeyFromCLI {
+				resolved.AI.APIKey = opts.CLIAIAPIKey
 			}
 			if resolved.ProfileName == "" || resolved.Profile.DB == "" {
-				return fmt.Errorf("config error [XSQL_CFG_INVALID]: no profile specified and no 'default' profile found in config")
+				return errors.New(errors.CodeCfgInvalid, "no profile specified and no 'default' profile found in config", nil)
 			}
 
-			// Resolve API key if keyring reference or plaintext
+			// Runtime CLI/ENV values are explicit plaintext inputs. Plaintext from
+			// the config file still requires --allow-plaintext.
 			apiKey := resolved.AI.APIKey
-			if secret.IsKeyringRef(apiKey) {
-				resolvedKey, xe := secret.Resolve(apiKey, secret.Options{AllowPlaintext: true})
-				if xe == nil {
-					apiKey = resolvedKey
+			if apiKey != "" {
+				allowAPIKeyPlaintext := allowPlaintext || apiKeyFromCLI || os.Getenv("XSQL_AI_API_KEY") != ""
+				resolvedKey, xe := secret.Resolve(apiKey, secret.Options{AllowPlaintext: allowAPIKeyPlaintext})
+				if xe != nil {
+					return xe
 				}
+				apiKey = resolvedKey
 			}
 			resolved.AI.APIKey = apiKey
+			opts.CLIAIModel = resolved.AI.Model
 
 			aiClient := ai.NewClient(resolved.AI, nil)
 			aiService := ai.NewService(resolved.AI, aiClient)
@@ -77,6 +91,7 @@ func NewAICommand() *cobra.Command {
 	cmd.Flags().StringVar(&modelStr, "model", "", "AI model name (default: gpt-4o)")
 	cmd.Flags().StringVar(&baseURLStr, "base-url", "", "AI service base URL")
 	cmd.Flags().StringVar(&apiKeyStr, "api-key", "", "AI service API key")
+	cmd.Flags().BoolVar(&allowPlaintext, "allow-plaintext", false, "Allow plaintext AI API key in config")
 	cmd.Flags().BoolVar(&unsafeAllowWrite, "unsafe-allow-write", false, "Allow write operations (bypasses read-only protection)")
 
 	return cmd

@@ -1,6 +1,6 @@
 # RFC 0009: Migrate OpenAI Integration to Official SDK and Tool Call
 
-Status: Proposed
+Status: Implemented
 
 ## 摘要
 本 RFC 提出将 `xsql` 项目中的 AI 客户端重构为使用 OpenAI 官方 Go SDK (`github.com/openai/openai-go`)，并将 SQL 生成与解析机制从手动字符串/JSON 解析改为标准 OpenAI Tool Call (`execute_sql`) 模式。
@@ -14,7 +14,7 @@ Status: Proposed
   2. 定义 `execute_sql(sql string, explanation string)` 函数工具，由模型通过 Tool Call 返回结构化参数。
   3. 保留对无 Tool Call 场景（文本回复）的兼容容错。
 
-## 方案（Proposed）
+## 方案
 
 ### 技术设计
 1. **官方 SDK 集成**：
@@ -27,6 +27,8 @@ Status: Proposed
      - `sql`: (string) 针对特定 DB 语法的 SQL 查询语句。
      - `explanation`: (string) 对查询意图或无法生成 SQL 的说明解释。
 3. **响应处理逻辑**：
+   - 请求显式设置 `parallel_tool_calls=false`，每轮只接受一个工具调用。
+   - 若兼容服务仍返回多个调用，则返回明确错误，不静默丢弃调用。
    - 若模型响应包含 `execute_sql` 的 Tool Call，则解析 JSON 参数提取 `sql` 与 `explanation`。
    - 若模型仅返回文本（无 Tool Call），则设置 `sql=""`，并将文本存入 `explanation`。
 

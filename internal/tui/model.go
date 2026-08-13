@@ -34,6 +34,11 @@ const (
 	StateExportReady
 )
 
+const (
+	defaultTUIQueryTimeout  = 30 * time.Second
+	defaultTUISchemaTimeout = 60 * time.Second
+)
+
 // Msg types
 type schemaLoadedMsg struct {
 	schema *db.SchemaInfo
@@ -79,13 +84,14 @@ type PendingExport struct {
 }
 
 type Model struct {
-	opts             config.Options
 	aiService        *ai.Service
 	profile          config.Profile
 	profileName      string
 	allProfiles      map[string]config.Profile
 	profileList      []string
 	unsafeAllowWrite bool
+	cliAllowWrite    bool
+	aiModel          string
 	initialPrompt    string
 	autoExecute      bool
 
@@ -117,7 +123,7 @@ type Model struct {
 	height int
 }
 
-func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Service, initialPrompt string, unsafeAllowWrite bool) Model {
+func NewModel(_ config.Options, resolved config.Resolved, aiService *ai.Service, initialPrompt string, unsafeAllowWrite bool) Model {
 	ta := textarea.New()
 	ta.Placeholder = "Ask AI to query database or perform data analysis..."
 	ta.ShowLineNumbers = false
@@ -147,13 +153,14 @@ func NewModel(opts config.Options, resolved config.Resolved, aiService *ai.Servi
 	}
 
 	return Model{
-		opts:             opts,
 		aiService:        aiService,
 		profile:          resolved.Profile,
 		profileName:      resolved.ProfileName,
 		allProfiles:      resolved.AllProfiles,
 		profileList:      pList,
 		unsafeAllowWrite: unsafeAllowWrite || resolved.Profile.UnsafeAllowWrite,
+		cliAllowWrite:    unsafeAllowWrite,
+		aiModel:          resolved.AI.Model,
 		initialPrompt:    strings.TrimSpace(initialPrompt),
 		autoExecute:      false,
 		sessionStore:     session.NewSessionDataStore(),
@@ -185,7 +192,9 @@ func (m Model) Init() tea.Cmd {
 
 func (m Model) loadSchemaCmd() tea.Cmd {
 	return func() tea.Msg {
-		ctx := context.Background()
+		timeout := app.SchemaTimeout(m.profile, 0, false, defaultTUISchemaTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
 		info, xe := app.DumpSchema(ctx, app.SchemaDumpRequest{
 			Profile:          m.profile,
 			AllowPlaintext:   m.profile.AllowPlaintext,
@@ -217,7 +226,9 @@ func (m Model) runAgentStepCmd() tea.Cmd {
 func (m Model) executeSQLCmd(sqlStr string) tea.Cmd {
 	return func() tea.Msg {
 		start := time.Now()
-		ctx := context.Background()
+		timeout := app.QueryTimeout(m.profile, 0, false, defaultTUIQueryTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
 		res, xe := app.Query(ctx, app.QueryRequest{
 			Profile:          m.profile,
 			SQL:              sqlStr,
@@ -434,9 +445,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.toolCalls[toolIdx].RawOutput = jsRes.SummaryText // Display raw JS output inside tool call container!
 					m.renderToolCall(toolIdx)
 
+					feedback := ai.BoundToolFeedback(jsRes.SummaryText)
 					m.chatHistory = append(m.chatHistory, ai.ChatMessage{
 						Role:    "user",
-						Content: fmt.Sprintf("Tool 'execute_javascript' executed successfully. Output:\n%s", jsRes.SummaryText),
+						Content: fmt.Sprintf("Tool 'execute_javascript' executed successfully. Bounded derived output:\n%s", feedback),
 					})
 
 					m.state = StateThinking
@@ -551,7 +563,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if msg.result != nil {
 			datasetID := m.sessionStore.Save(m.currentSQL, msg.result)
 
-			modelName := m.opts.CLIAIModel
+			modelName := m.aiModel
 			if modelName == "" {
 				modelName = "gpt-4o"
 			}
@@ -774,6 +786,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				newP, ok := m.allProfiles[nextProfileName]
 				if ok {
+					if newP.SSHProxy != "" && newP.SSHConfig == nil {
+						errLine := ErrorMsgStyle.Render(fmt.Sprintf("Cannot switch to profile '%s': ssh_proxy '%s' not found", nextProfileName, newP.SSHProxy))
+						m.messages = append(m.messages, errLine)
+						m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+						m.viewport.GotoBottom()
+						return m, nil
+					}
 					if newP.Port == 0 {
 						switch newP.DB {
 						case "mysql":
@@ -785,7 +804,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					m.profileName = nextProfileName
 					m.profile = newP
-					m.unsafeAllowWrite = newP.UnsafeAllowWrite
+					m.unsafeAllowWrite = m.cliAllowWrite || newP.UnsafeAllowWrite
 					m.schemaInfo = nil
 					m.state = StateLoadingSchema
 

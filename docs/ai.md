@@ -125,25 +125,26 @@ xsql ai --profile dev
 - **最终回答不变性**：交互轮次的最终输出必定是 AI 总结出的自然语言 / Markdown 格式分析报告。
 - **工具折叠与容器内嵌**：所有的中间 Tool Call 默认以单行 Pill 收起折叠（内嵌表格与指标数据），界面保持极简清爽。
 
-#### 零数据泄露与 Session 数据集召回 (Session DataStore)
+#### 有界数据回传与 Session 数据集召回 (Session DataStore)
 - 每次查询成功的结果在本地分配标号（`res1`, `res2`, ...）。
-- 大模型上下文中仅包含数据集的轻量 Catalog 目录结构（字段名与行数），不传输海量真实数据。
+- 大模型上下文包含数据集的轻量 Catalog 目录结构（字段名与行数），不会自动加入完整查询结果。
+- 本地 JavaScript 的派生结果会以最多 4096 个字符的摘要回传给模型，用于生成最终分析；超出部分会截断并明确标记。
 - AI 可通过 `execute_javascript` 生成纯 Go 沙箱 (`goja`) 执行的代码，在本地对 `res1`, `res2` 等数据集做跨表 Join、占比统计与数据清洗，并通过 `export_data` 安全导出为 CSV/JSON/Markdown。
 
 ### 快捷键操作
 
 #### SQL & 导出确认状态 (Approval Mode)
 - `Enter`: 确认并安全执行当前生成预览的 SQL 或同意文件导出
-- `e`: 切换到 SQL 文本手工编辑/微调模式
 - `Esc`: 取消当前 SQL 生成建议或拒绝文件导出
 
 #### 通用与表格/工具操作 (General & Tool Operations)
 - `Enter`: 提交自然语言需求给 AI
 - `Ctrl+O`: 折叠/展开当前选中的 Tool Call 详情（内嵌表格与指标）
-- `Ctrl+P` / `Ctrl+N`: 在会话历史中的多个 Tool Call 组件之间向前/向后切换焦点
+- `Ctrl+P`: 切换数据库 Profile
+- `Tab`: 在会话历史中的多个 Tool Call 组件之间切换焦点
 - `Ctrl+E`: 切换表格单行展开视图（Expand Vertical View）
-- `Tab`: 在历史多个查询结果表格之间无缝切换焦点 (`[FOCUSED]`)
 - `←` / `→`: 横向平滑滚动查看当前焦点表格的隐藏列
 - `PgUp` / `PgDn`: 向上/向下翻页查看当前焦点表格的数据
 - `Shift+Tab`: 一键切换 **自动执行 (AUTO-EXECUTE)** 与 **手动批准 (MANUAL-APPROVE)** 模式
-- `Esc` / `Ctrl+C`: 退出 AI 模式
+- `Esc`: 清空输入框
+- `Ctrl+C` 连按两次：退出 AI 模式

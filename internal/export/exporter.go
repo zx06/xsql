@@ -25,6 +25,15 @@ func ExportQueryResult(result *db.QueryResult, format ExportFormat, filePath str
 		return "", errors.New(errors.CodeCfgInvalid, "cannot export nil QueryResult", nil)
 	}
 
+	format = ExportFormat(strings.ToLower(strings.TrimSpace(string(format))))
+	switch format {
+	case FormatCSV, FormatJSON, FormatMarkdown:
+	default:
+		return "", errors.New(errors.CodeCfgInvalid, "unsupported export format", map[string]any{
+			"format": format,
+		})
+	}
+
 	if filePath == "" {
 		filePath = fmt.Sprintf("export_%s.%s", format, format)
 	}
@@ -86,8 +95,6 @@ func ExportQueryResult(result *db.QueryResult, format ExportFormat, filePath str
 		}
 
 	case FormatCSV:
-		fallthrough
-	default:
 		w := csv.NewWriter(f)
 		if err := w.Write(result.Columns); err != nil {
 			return "", errors.New(errors.CodeInternal, "failed to write CSV header", map[string]any{"err": err.Error()})

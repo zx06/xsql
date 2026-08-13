@@ -37,9 +37,10 @@ xsql ai "查看用户表前 10 条数据" -p dev
 | Flag | 默认值 | 说明 |
 |------|--------|------|
 | `--profile`, `-p` | - | Profile 名称 |
-| `--model` | - | AI 模型名称 (如 `gpt-4o`) |
-| `--base-url` | - | AI 服务 Base URL |
-| `--api-key` | - | AI 服务 API Key |
+| `--model` | `gpt-4o` | AI 模型名称（ENV：`XSQL_AI_MODEL`，配置：`ai.model`） |
+| `--base-url` | `https://api.openai.com/v1` | AI 服务 Base URL（ENV：`XSQL_AI_BASE_URL`，配置：`ai.base_url`） |
+| `--api-key` | - | AI 服务 API Key（ENV：`XSQL_AI_API_KEY`，配置：`ai.api_key`） |
+| `--allow-plaintext` | false | 允许配置文件中的明文 AI API Key |
 | `--unsafe-allow-write` | false | 允许写操作（绕过只读保护） |
 
 ---
@@ -568,35 +569,6 @@ xsql mcp server --transport streamable_http --http-addr 127.0.0.1:8787 --http-au
 - query tool 默认只读模式（双重保护：SQL 静态分析 + DB 事务级只读）
 - 写操作需要显式设置 `unsafe_allow_write: true`
 - Streamable HTTP 传输要求鉴权，请在请求中提供 `Authorization: Bearer <token>` 头
-
-### `xsql-ai` 独立程序
-
-`xsql-ai` 为独立的 CLI 可执行程序，提供类似 Chatbot 的交互终端（TUI）。通过自然语言与 AI 对话，由 AI 基于当前数据库的 Schema 结构自动构建 SQL 查询，并在终端进行可视化预览与安全执行。
-
-```bash
-# 启动交互式 TUI 模式
-xsql-ai --profile dev
-
-# 指定 AI 模型和服务地址
-xsql-ai --profile dev --model deepseek-coder --base-url https://api.deepseek.com/v1
-
-# 启动并直接传入初始 Prompt 自动分析执行
-xsql-ai --profile dev "查一下近7天注册的用户数量"
-```
-
-**Flags:**
-| Flag | 默认值 | 说明 |
-|------|--------|------|
-| `--profile` | - | Profile 名称（必需） |
-| `--model` | `gpt-4o` | AI 模型名称（配置项：`ai.model`，ENV：`XSQL_AI_MODEL`） |
-| `--base-url` | `https://api.openai.com/v1` | AI 服务端 Base URL（配置项：`ai.base_url`，ENV：`XSQL_AI_BASE_URL`） |
-| `--api-key` | - | AI 服务 API Key（配置项：`ai.api_key`，ENV：`XSQL_AI_API_KEY`） |
-| `--prompt` | - | 单次自然语言提问 Prompt（也可通过命令行位置参数传入） |
-| `--unsafe-allow-write` | false | 允许写操作（绕过只读保护） |
-
-**安全与只读说明：**
-- 默认启用只读 protection。AI 生成的 SQL 语句在运行（按 `Ctrl+E`）时将统一提交由底层只读策略审计及事务级只读操作校验。
-- API Key 在配置中支持 `keyring:ai_key` 密码存储。
 
 ## 参数来源优先级
 - CLI > ENV > Config

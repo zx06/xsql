@@ -115,6 +115,7 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*A
 					"format": map[string]interface{}{
 						"type":        "string",
 						"description": "Export file format: 'csv', 'json', or 'markdown'.",
+						"enum":        []string{"csv", "json", "markdown"},
 					},
 					"filepath": map[string]interface{}{
 						"type":        "string",
@@ -136,9 +137,10 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*A
 	}
 
 	params := openai.ChatCompletionNewParams{
-		Model:    shared.ChatModel(model),
-		Messages: sdkMessages,
-		Tools:    []openai.ChatCompletionToolParam{sqlToolDef, jsToolDef, exportToolDef},
+		Model:             shared.ChatModel(model),
+		Messages:          sdkMessages,
+		Tools:             []openai.ChatCompletionToolParam{sqlToolDef, jsToolDef, exportToolDef},
+		ParallelToolCalls: openai.Bool(false),
 	}
 	if c.cfg.MaxTokens > 0 {
 		params.MaxTokens = openai.Int(int64(c.cfg.MaxTokens))
@@ -158,32 +160,43 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*A
 	choice := resp.Choices[0]
 	msg := choice.Message
 
-	for _, toolCall := range msg.ToolCalls {
+	if len(msg.ToolCalls) > 1 {
+		return nil, errors.New(errors.CodeInternal, "AI provider returned multiple tool calls while parallel tool calls are disabled", map[string]any{
+			"count": len(msg.ToolCalls),
+		})
+	}
+
+	if len(msg.ToolCalls) == 1 {
+		toolCall := msg.ToolCalls[0]
 		switch toolCall.Function.Name {
 		case "execute_sql":
 			var raw struct {
 				SQL         string `json:"sql"`
 				Explanation string `json:"explanation"`
 			}
-			if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &raw); err == nil {
-				return &AIResponse{
-					Type:        TypeSQL,
-					SQL:         strings.TrimSpace(raw.SQL),
-					Explanation: strings.TrimSpace(raw.Explanation),
-				}, nil
+			if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &raw); err != nil {
+				return nil, invalidToolArguments(toolCall.Function.Name, err)
 			}
+			return &AIResponse{
+				Type:        TypeSQL,
+				SQL:         strings.TrimSpace(raw.SQL),
+				Explanation: strings.TrimSpace(raw.Explanation),
+			}, nil
+
 		case "execute_javascript":
 			var raw struct {
 				JSCode      string `json:"js_code"`
 				Explanation string `json:"explanation"`
 			}
-			if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &raw); err == nil {
-				return &AIResponse{
-					Type:        TypeJS,
-					JSCode:      strings.TrimSpace(raw.JSCode),
-					Explanation: strings.TrimSpace(raw.Explanation),
-				}, nil
+			if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &raw); err != nil {
+				return nil, invalidToolArguments(toolCall.Function.Name, err)
 			}
+			return &AIResponse{
+				Type:        TypeJS,
+				JSCode:      strings.TrimSpace(raw.JSCode),
+				Explanation: strings.TrimSpace(raw.Explanation),
+			}, nil
+
 		case "export_data":
 			var raw struct {
 				DatasetID   string `json:"dataset_id"`
@@ -191,15 +204,21 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*A
 				FilePath    string `json:"filepath"`
 				Explanation string `json:"explanation"`
 			}
-			if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &raw); err == nil {
-				return &AIResponse{
-					Type:        TypeExport,
-					DatasetID:   strings.TrimSpace(raw.DatasetID),
-					Format:      strings.TrimSpace(raw.Format),
-					FilePath:    strings.TrimSpace(raw.FilePath),
-					Explanation: strings.TrimSpace(raw.Explanation),
-				}, nil
+			if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &raw); err != nil {
+				return nil, invalidToolArguments(toolCall.Function.Name, err)
 			}
+			return &AIResponse{
+				Type:        TypeExport,
+				DatasetID:   strings.TrimSpace(raw.DatasetID),
+				Format:      strings.ToLower(strings.TrimSpace(raw.Format)),
+				FilePath:    strings.TrimSpace(raw.FilePath),
+				Explanation: strings.TrimSpace(raw.Explanation),
+			}, nil
+
+		default:
+			return nil, errors.New(errors.CodeInternal, "AI provider returned an unsupported tool call", map[string]any{
+				"tool": toolCall.Function.Name,
+			})
 		}
 	}
 
@@ -209,4 +228,11 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*A
 		SQL:         "",
 		Explanation: content,
 	}, nil
+}
+
+func invalidToolArguments(toolName string, err error) *errors.XError {
+	return errors.New(errors.CodeInternal, "AI provider returned invalid tool arguments", map[string]any{
+		"tool": toolName,
+		"err":  err.Error(),
+	})
 }

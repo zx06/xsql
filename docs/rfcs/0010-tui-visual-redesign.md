@@ -1,9 +1,9 @@
 # RFC 0010: TUI Visual and Interactive Experience Redesign
 
-Status: Proposed
+Status: Implemented
 
 ## 摘要
-本 RFC 提出对 `xsql-ai` 终端 TUI 进行视觉与交互体验的重构。参考 Catppuccin / Tokyo Night 现代调色盘以及 Charm (Bubbletea / Lipgloss) 社区开源工具（如 `mods`、`glow`、`gh-dash`）的设计精髓，全面优化 Pill 胶囊标签、✦ Prompt 输入框、全主题自适应调色盘与按键指引。
+本 RFC 对 `xsql ai` 终端 TUI 进行视觉与交互体验的重构。参考 Catppuccin / Tokyo Night 现代调色盘以及 Charm (Bubbletea / Lipgloss) 社区开源工具（如 `mods`、`glow`、`gh-dash`）的设计精髓，全面优化 Pill 胶囊标签、✦ Prompt 输入框、全主题自适应调色盘与按键指引。
 
 ## 背景 / 动机
 - **当前问题**：
@@ -21,7 +21,7 @@ Status: Proposed
 3. **✦ Prompt 输入框与 Focus 指示器**：
    - 输入框增加 `✦ Ask AI:` 品牌提示前缀，并根据获得焦点状态显示鲜明边框。
 4. **按键 Badge 底部栏**：
-   - 底部提示升级为形如 `[Enter] 发送` `[Tab] 聚焦表格` `[e] 编辑SQL` `[Shift+Tab] 模式切换` `[Esc] 退出` 的精致键盘 Badge。
+   - 底部提示升级为形如 `[Enter] 发送` `[Tab] 聚焦工具` `[Ctrl+O] 展开工具` `[Shift+Tab] 模式切换` `[Esc] 清空` 的精致键盘 Badge。
 5. **Catppuccin / Tokyo Night 调色盘**：
    - 全量采用 `lipgloss.AdaptiveColor` 确保在任何深色/浅色背景终端中均具有符合 WCAG 的高对比度。
 
