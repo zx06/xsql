@@ -229,24 +229,16 @@ jobs:
         working-directory: webui
 
       - name: Build Linux
-        run: |
-          GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o xsql-linux-amd64 ./cmd/xsql
-          GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o xsql-ai-linux-amd64 ./cmd/xsql-ai
+        run: GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o xsql-linux-amd64 ./cmd/xsql
 
       - name: Build Windows
-        run: |
-          GOOS=windows GOARCH=amd64 go build -ldflags "-s -w" -o xsql-windows-amd64.exe ./cmd/xsql
-          GOOS=windows GOARCH=amd64 go build -ldflags "-s -w" -o xsql-ai-windows-amd64.exe ./cmd/xsql-ai
+        run: GOOS=windows GOARCH=amd64 go build -ldflags "-s -w" -o xsql-windows-amd64.exe ./cmd/xsql
 
       - name: Build macOS (amd64)
-        run: |
-          GOOS=darwin GOARCH=amd64 go build -ldflags "-s -w" -o xsql-darwin-amd64 ./cmd/xsql
-          GOOS=darwin GOARCH=amd64 go build -ldflags "-s -w" -o xsql-ai-darwin-amd64 ./cmd/xsql-ai
+        run: GOOS=darwin GOARCH=amd64 go build -ldflags "-s -w" -o xsql-darwin-amd64 ./cmd/xsql
 
       - name: Build macOS (arm64)
-        run: |
-          GOOS=darwin GOARCH=arm64 go build -ldflags "-s -w" -o xsql-darwin-arm64 ./cmd/xsql
-          GOOS=darwin GOARCH=arm64 go build -ldflags "-s -w" -o xsql-ai-darwin-arm64 ./cmd/xsql-ai
+        run: GOOS=darwin GOARCH=arm64 go build -ldflags "-s -w" -o xsql-darwin-arm64 ./cmd/xsql
 
       - name: Upload artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

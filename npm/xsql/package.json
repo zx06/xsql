@@ -9,8 +9,7 @@
   },
   "homepage": "https://github.com/zx06/xsql",
   "bin": {
-    "xsql": "bin/xsql",
-    "xsql-ai": "bin/xsql-ai"
+    "xsql": "bin/xsql"
   },
   "files": [
     "bin",
