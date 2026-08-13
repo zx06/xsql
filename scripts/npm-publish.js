@@ -140,10 +140,13 @@ async function main() {
 
     console.log(`  Extracting to ${p.npm}/bin/...`);
     const binaryName = `xsql${p.ext}`;
+    const aiBinaryName = `xsql-ai${p.ext}`;
     await extractBinary(archivePath, p.archive, binaryName, binDir);
+    await extractBinary(archivePath, p.archive, aiBinaryName, binDir);
 
     if (p.ext === "") {
       fs.chmodSync(path.join(binDir, binaryName), 0o755);
+      fs.chmodSync(path.join(binDir, aiBinaryName), 0o755);
     }
   }
 
