@@ -13,6 +13,9 @@
 - `XSQL_STATS_ENABLED`：是否启用使用统计（`true`/`false`）
 - `XSQL_STATS_LOG_SQL`：是否记录 SQL 内容（`true`/`false`）
 - `XSQL_ATTR`：统计属性（格式：`key1=val1,key2=val2`）
+- `XSQL_AI_MODEL`：AI 模型名称
+- `XSQL_AI_BASE_URL`：OpenAI 兼容服务 Base URL
+- `XSQL_AI_API_KEY`：AI 服务 API Key（明文仅保存在当前进程环境中）
 
 ## 2. 连接参数（计划中，当前未实现）
 > 当前版本连接参数通过 config 文件的 profile 配置，ENV 支持计划在后续版本实现。

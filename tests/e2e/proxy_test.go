@@ -356,18 +356,19 @@ func TestProxy_Help(t *testing.T) {
 }
 
 func TestProxy_MissingProfileFlag(t *testing.T) {
-	// Test that proxy fails when -p flag is not provided
-	stdout, _, exitCode := runXSQL(t, "proxy", "--format", "json")
+	// Test that proxy fails when profile is missing or invalid
+	emptyCfg := createTempConfig(t, "profiles: {}")
+	stdout, _, exitCode := runXSQL(t, "proxy", "--config", emptyCfg, "--format", "json")
 
 	// Should fail with config error
 	if exitCode == 0 {
-		t.Error("expected non-zero exit code when -p flag is not provided")
+		t.Error("expected non-zero exit code when profile is not provided")
 	}
 
 	var resp Response
 	if err := json.Unmarshal([]byte(stdout), &resp); err == nil {
 		if resp.OK {
-			t.Error("expected ok=false when -p flag is missing")
+			t.Error("expected ok=false when profile is missing")
 		}
 	}
 }

@@ -6,6 +6,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/zx06/xsql/internal/config"
+	_ "github.com/zx06/xsql/internal/db/mysql"
+	_ "github.com/zx06/xsql/internal/db/pg"
 	"github.com/zx06/xsql/internal/errors"
 	"github.com/zx06/xsql/internal/stats"
 )
@@ -53,6 +55,9 @@ func NewRootCommand() *cobra.Command {
 				CLIFormatSet:  formatSet,
 				EnvProfile:    os.Getenv("XSQL_PROFILE"),
 				EnvFormat:     os.Getenv("XSQL_FORMAT"),
+				EnvAIModel:    os.Getenv("XSQL_AI_MODEL"),
+				EnvAIBaseURL:  os.Getenv("XSQL_AI_BASE_URL"),
+				EnvAIAPIKey:   os.Getenv("XSQL_AI_API_KEY"),
 				WorkDir:       os.Getenv("XSQL_WORKDIR"),
 				HomeDir:       os.Getenv("XSQL_HOMEDIR"),
 			})
@@ -90,6 +95,9 @@ func NewRootCommand() *cobra.Command {
 			CLIFormatSet:  formatSet,
 			EnvProfile:    os.Getenv("XSQL_PROFILE"),
 			EnvFormat:     os.Getenv("XSQL_FORMAT"),
+			EnvAIModel:    os.Getenv("XSQL_AI_MODEL"),
+			EnvAIBaseURL:  os.Getenv("XSQL_AI_BASE_URL"),
+			EnvAIAPIKey:   os.Getenv("XSQL_AI_API_KEY"),
 			WorkDir:       os.Getenv("XSQL_WORKDIR"),
 			HomeDir:       os.Getenv("XSQL_HOMEDIR"),
 		})

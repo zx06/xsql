@@ -10,6 +10,16 @@ type File struct {
 	MCP        MCPConfig           `yaml:"mcp" json:"mcp"`
 	Web        WebConfig           `yaml:"web" json:"web"`
 	Stats      stats.StatsConfig   `yaml:"stats" json:"stats"`
+	AI         AIConfig            `yaml:"ai" json:"ai"`
+}
+
+// AIConfig defines the AI LLM service configuration.
+type AIConfig struct {
+	Provider  string `yaml:"provider" json:"provider"`     // default "openai"
+	BaseURL   string `yaml:"base_url" json:"base_url"`     // default "https://api.openai.com/v1"
+	APIKey    string `yaml:"api_key" json:"api_key"`       // supports keyring:xxx reference
+	Model     string `yaml:"model" json:"model"`           // default "gpt-4o"
+	MaxTokens int    `yaml:"max_tokens" json:"max_tokens"` // default 2048
 }
 
 // SSHProxy defines a reusable SSH proxy configuration.
@@ -83,7 +93,9 @@ type Resolved struct {
 	ConfigPath  string
 	ProfileName string
 	Format      string
-	Profile     Profile // full profile for query use
+	Profile     Profile            // full profile for query use
+	AllProfiles map[string]Profile // all configured profiles
+	AI          AIConfig
 }
 
 type Options struct {
@@ -96,9 +108,20 @@ type Options struct {
 	CLIFormat     string
 	CLIFormatSet  bool
 
+	// CLI AI
+	CLIAIModel      string
+	CLIAIModelSet   bool
+	CLIAIBaseURL    string
+	CLIAIBaseURLSet bool
+	CLIAIAPIKey     string
+	CLIAIAPIKeySet  bool
+
 	// ENV (injected by caller for testability)
-	EnvProfile string
-	EnvFormat  string
+	EnvProfile   string
+	EnvFormat    string
+	EnvAIModel   string
+	EnvAIBaseURL string
+	EnvAIAPIKey  string
 
 	// HomeDir is used for default path resolution (auto-detected if empty).
 	HomeDir string

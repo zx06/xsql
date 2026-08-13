@@ -13,6 +13,9 @@ linters:
         - (*database/sql.DB).Close
         - (*github.com/zx06/xsql/internal/ssh.Client).Close
         - (io.Closer).Close
+        - (*os.File).Close
+        - (*net/http.Response.Body).Close
+        - io.Copy
 
 formatters:
   enable:

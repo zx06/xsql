@@ -172,6 +172,7 @@ xsql query "<SQL>" -p <profile> -f json
 
 | 命令 | 说明 |
 |------|------|
+| `xsql ai [PROMPT]` | 启动全屏交互式 AI 终端模式（TUI） |
 | `xsql query <SQL>` | 执行 SQL 查询（默认只读） |
 | `xsql schema dump` | 导出数据库结构（表、列、索引、外键） |
 | `xsql profile list` | 列出所有 profile |
