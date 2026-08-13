@@ -7,7 +7,6 @@
 ## 建议目录结构
 ```
 /cmd/xsql              # CLI 主程序入口
-/cmd/xsql-ai           # AI TUI 独立程序入口
 /internal/app          # 应用编排（解析参数->执行->返回结构化结果）
 /internal/config       # 配置加载/合并/校验 + profiles
 /internal/ai           # AI LLM 客户端与 Context Prompt 组装

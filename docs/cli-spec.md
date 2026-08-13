@@ -21,6 +21,29 @@
 
 ## 命令
 
+### `xsql ai [PROMPT]`
+
+启动交互式 AI 终端模式（TUI）。用户可以直接输入自然语言需求（或在参数中指定初始 prompt），AI 自动结合数据库 Schema 生成 SQL，并提供可视化预览与安全执行。
+
+```bash
+# 启动交互式 TUI
+xsql ai -p dev
+
+# 携带初始 Prompt 启动
+xsql ai "查看用户表前 10 条数据" -p dev
+```
+
+**Flags:**
+| Flag | 默认值 | 说明 |
+|------|--------|------|
+| `--profile`, `-p` | - | Profile 名称 |
+| `--model` | - | AI 模型名称 (如 `gpt-4o`) |
+| `--base-url` | - | AI 服务 Base URL |
+| `--api-key` | - | AI 服务 API Key |
+| `--unsafe-allow-write` | false | 允许写操作（绕过只读保护） |
+
+---
+
 ### `xsql query <SQL>`
 
 执行 SQL 查询。
