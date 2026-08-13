@@ -10,19 +10,25 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-func TestCmdXSQL_AICommand(t *testing.T) {
+func stubAICommandProgram(t *testing.T) {
+	t.Helper()
+
 	oldGlobalConfig := GlobalConfig
 	GlobalConfig = &Config{}
-	defer func() { GlobalConfig = oldGlobalConfig }()
+	t.Cleanup(func() { GlobalConfig = oldGlobalConfig })
 
 	oldNewAIProgram := newAIProgramFunc
-	defer func() { newAIProgramFunc = oldNewAIProgram }()
+	t.Cleanup(func() { newAIProgramFunc = oldNewAIProgram })
 
 	newAIProgramFunc = func(model tea.Model) *tea.Program {
 		p := tea.NewProgram(model, tea.WithInput(strings.NewReader("")), tea.WithOutput(os.Stderr), tea.WithoutRenderer())
 		go p.Quit()
 		return p
 	}
+}
+
+func TestCmdXSQL_AICommand(t *testing.T) {
+	stubAICommandProgram(t)
 
 	tmpDir := t.TempDir()
 	cfgPath := filepath.Join(tmpDir, "xsql.yaml")
@@ -139,18 +145,7 @@ func TestCmdXSQL_AICommandAllowsPlaintextAPIKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			oldGlobalConfig := GlobalConfig
-			GlobalConfig = &Config{}
-			defer func() { GlobalConfig = oldGlobalConfig }()
-
-			oldNewAIProgram := newAIProgramFunc
-			defer func() { newAIProgramFunc = oldNewAIProgram }()
-
-			newAIProgramFunc = func(model tea.Model) *tea.Program {
-				p := tea.NewProgram(model, tea.WithInput(strings.NewReader("")), tea.WithOutput(os.Stderr), tea.WithoutRenderer())
-				go p.Quit()
-				return p
-			}
+			stubAICommandProgram(t)
 
 			tmpDir := t.TempDir()
 			cfgPath := filepath.Join(tmpDir, "xsql.yaml")
