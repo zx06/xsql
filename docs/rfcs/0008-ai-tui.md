@@ -28,13 +28,14 @@ Status: Implemented
      provider: openai
      base_url: https://api.openai.com/v1
      api_key: keyring:ai_key
+     allow_plaintext: false
      model: gpt-4o
      max_tokens: 2048
    ```
 3. **优先级与凭据**：
    - 合并优先级：`CLI flags > ENV (XSQL_AI_API_KEY, XSQL_AI_BASE_URL, XSQL_AI_MODEL) > Config`。
    - API Key 支持 `keyring:` 引用。
-   - 配置文件中的明文 API Key 默认拒绝；仅 `--allow-plaintext`、CLI `--api-key` 或 `XSQL_AI_API_KEY` 可显式提供明文值。
+   - 配置文件中的明文 API Key 默认拒绝；设置 `ai.allow_plaintext: true` 或使用 `--allow-plaintext` 可显式放行。CLI `--api-key` 和 `XSQL_AI_API_KEY` 本身属于显式运行时输入。
 
 ### 技术设计（Architecture）
 - **涉及模块**：

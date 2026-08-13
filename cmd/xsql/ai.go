@@ -63,10 +63,10 @@ func NewAICommand() *cobra.Command {
 			}
 
 			// Runtime CLI/ENV values are explicit plaintext inputs. Plaintext from
-			// the config file still requires --allow-plaintext.
+			// the config file requires an explicit config or CLI opt-in.
 			apiKey := resolved.AI.APIKey
 			if apiKey != "" {
-				allowAPIKeyPlaintext := allowPlaintext || apiKeyFromCLI || os.Getenv("XSQL_AI_API_KEY") != ""
+				allowAPIKeyPlaintext := allowPlaintext || resolved.AI.AllowPlaintext || apiKeyFromCLI || os.Getenv("XSQL_AI_API_KEY") != ""
 				resolvedKey, xe := secret.Resolve(apiKey, secret.Options{AllowPlaintext: allowAPIKeyPlaintext})
 				if xe != nil {
 					return xe

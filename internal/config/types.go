@@ -15,11 +15,12 @@ type File struct {
 
 // AIConfig defines the AI LLM service configuration.
 type AIConfig struct {
-	Provider  string `yaml:"provider" json:"provider"`     // default "openai"
-	BaseURL   string `yaml:"base_url" json:"base_url"`     // default "https://api.openai.com/v1"
-	APIKey    string `yaml:"api_key" json:"api_key"`       // supports keyring:xxx reference
-	Model     string `yaml:"model" json:"model"`           // default "gpt-4o"
-	MaxTokens int    `yaml:"max_tokens" json:"max_tokens"` // default 2048
+	Provider       string `yaml:"provider" json:"provider"`               // default "openai"
+	BaseURL        string `yaml:"base_url" json:"base_url"`               // default "https://api.openai.com/v1"
+	APIKey         string `yaml:"api_key" json:"api_key"`                 // supports keyring:xxx reference
+	AllowPlaintext bool   `yaml:"allow_plaintext" json:"allow_plaintext"` // allow plaintext API key
+	Model          string `yaml:"model" json:"model"`                     // default "gpt-4o"
+	MaxTokens      int    `yaml:"max_tokens" json:"max_tokens"`           // default 2048
 }
 
 // SSHProxy defines a reusable SSH proxy configuration.
