@@ -223,6 +223,7 @@ func TestResolve_AIConfigPrecedence(t *testing.T) {
   base_url: "https://config.api.com"
   model: "config-model"
   api_key: "config-key"
+  allow_plaintext: true
 `)
 	path := filepath.Join(tmp, "xsql.yaml")
 	if err := os.WriteFile(path, cfg, 0o600); err != nil {
@@ -234,7 +235,7 @@ func TestResolve_AIConfigPrecedence(t *testing.T) {
 	if xe != nil {
 		t.Fatal(xe)
 	}
-	if got.AI.BaseURL != "https://config.api.com" || got.AI.Model != "config-model" || got.AI.APIKey != "config-key" {
+	if got.AI.BaseURL != "https://config.api.com" || got.AI.Model != "config-model" || got.AI.APIKey != "config-key" || !got.AI.AllowPlaintext {
 		t.Fatalf("unexpected AI config from yaml: %+v", got.AI)
 	}
 
@@ -272,5 +273,17 @@ func TestResolve_AIConfigPrecedence(t *testing.T) {
 	}
 	if got.AI.BaseURL != "https://cli.api.com" || got.AI.Model != "cli-model" || got.AI.APIKey != "cli-key" {
 		t.Fatalf("unexpected AI config from cli: %+v", got.AI)
+	}
+}
+
+func TestResolve_AIAllowPlaintextDefaultsFalse(t *testing.T) {
+	tmp := t.TempDir()
+
+	got, xe := Resolve(Options{WorkDir: tmp, HomeDir: tmp})
+	if xe != nil {
+		t.Fatal(xe)
+	}
+	if got.AI.AllowPlaintext {
+		t.Fatal("expected AI allow_plaintext to default to false")
 	}
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,19 +10,25 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-func TestCmdXSQL_AICommand(t *testing.T) {
+func stubAICommandProgram(t *testing.T) {
+	t.Helper()
+
 	oldGlobalConfig := GlobalConfig
 	GlobalConfig = &Config{}
-	defer func() { GlobalConfig = oldGlobalConfig }()
+	t.Cleanup(func() { GlobalConfig = oldGlobalConfig })
 
 	oldNewAIProgram := newAIProgramFunc
-	defer func() { newAIProgramFunc = oldNewAIProgram }()
+	t.Cleanup(func() { newAIProgramFunc = oldNewAIProgram })
 
 	newAIProgramFunc = func(model tea.Model) *tea.Program {
 		p := tea.NewProgram(model, tea.WithInput(strings.NewReader("")), tea.WithOutput(os.Stderr), tea.WithoutRenderer())
 		go p.Quit()
 		return p
 	}
+}
+
+func TestCmdXSQL_AICommand(t *testing.T) {
+	stubAICommandProgram(t)
 
 	tmpDir := t.TempDir()
 	cfgPath := filepath.Join(tmpDir, "xsql.yaml")
@@ -109,6 +116,7 @@ profiles:
     db: mysql
 ai:
   api_key: plaintext-config-key
+  allow_plaintext: false
 `
 	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0600); err != nil {
 		t.Fatalf("failed to write temp config: %v", err)
@@ -121,5 +129,46 @@ ai:
 	err := root.Execute()
 	if err == nil || !strings.Contains(err.Error(), "plaintext secret not allowed") {
 		t.Fatalf("expected plaintext API key rejection, got %v", err)
+	}
+}
+
+func TestCmdXSQL_AICommandAllowsPlaintextAPIKey(t *testing.T) {
+	tests := []struct {
+		name           string
+		allowPlaintext bool
+		extraArgs      []string
+	}{
+		{name: "config opt-in", allowPlaintext: true},
+		{name: "CLI opt-in", extraArgs: []string{"--allow-plaintext"}},
+		{name: "CLI API key", extraArgs: []string{"--api-key", "cli-key"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stubAICommandProgram(t)
+
+			tmpDir := t.TempDir()
+			cfgPath := filepath.Join(tmpDir, "xsql.yaml")
+			cfgContent := fmt.Sprintf(`
+profiles:
+  default:
+    db: mysql
+ai:
+  api_key: plaintext-config-key
+  allow_plaintext: %t
+`, tt.allowPlaintext)
+			if err := os.WriteFile(cfgPath, []byte(cfgContent), 0600); err != nil {
+				t.Fatalf("failed to write temp config: %v", err)
+			}
+
+			root := NewRootCommand()
+			root.AddCommand(NewAICommand())
+			args := []string{"ai", "--config", cfgPath}
+			root.SetArgs(append(args, tt.extraArgs...))
+
+			if err := root.Execute(); err != nil {
+				t.Fatalf("expected plaintext API key to be allowed, got %v", err)
+			}
+		})
 	}
 }
