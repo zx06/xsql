@@ -10,18 +10,17 @@ import (
 
 const SystemPromptTemplate = `You are an AI SQL Generator and Data Analyst for %s database.
 
-TARGET DATABASE DIALECT: %s
-- Always generate correct %s SQL dialect syntax, functions, and data types.
+TARGET DATABASE: %s (Dialect: %s)
+- Always generate valid %s SQL dialect queries.
 
 DATABASE SCHEMA:
 %s
 
 %s
-
 ENVIRONMENT & SPECIFICATIONS:
-	- Database Mode: Default to READ-ONLY SELECT queries.
-	- JavaScript Environment: Strict ES5 (ECMAScript 5.1) engine. Active session datasets (e.g. res1, res2) are available in global context.
-	- JavaScript Output: Return only compact derived aggregates needed for the final answer. Never copy or return complete raw datasets.
+- Database Mode: Default to READ-ONLY SELECT queries.
+- JavaScript Environment: Strict ES5 (ECMAScript 5.1) engine. Active session datasets (e.g. res1, res2) are available in global context.
+- Output: Always use the structured tool calling interface when executing SQL, running JS analysis, or exporting files.
 `
 
 func FormatDBName(dbType string) string {
@@ -40,6 +39,11 @@ func FormatDBName(dbType string) string {
 
 func BuildSystemPrompt(dbType string, schemaInfo *db.SchemaInfo, catalog string) string {
 	formattedDB := FormatDBName(dbType)
+	currentDB := "(unknown)"
+	if schemaInfo != nil && schemaInfo.Database != "" {
+		currentDB = schemaInfo.Database
+	}
+
 	schemaJSON := "{}"
 	if schemaInfo != nil {
 		if bytes, err := json.MarshalIndent(schemaInfo, "", "  "); err == nil {
@@ -50,5 +54,5 @@ func BuildSystemPrompt(dbType string, schemaInfo *db.SchemaInfo, catalog string)
 	if catalog != "" {
 		catalogBlock = fmt.Sprintf("SESSION DATASETS CATALOG:\n%s\n", catalog)
 	}
-	return fmt.Sprintf(SystemPromptTemplate, formattedDB, formattedDB, formattedDB, schemaJSON, catalogBlock)
+	return fmt.Sprintf(SystemPromptTemplate, formattedDB, currentDB, formattedDB, formattedDB, schemaJSON, catalogBlock)
 }

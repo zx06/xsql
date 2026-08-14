@@ -160,66 +160,77 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*A
 	choice := resp.Choices[0]
 	msg := choice.Message
 
-	if len(msg.ToolCalls) > 1 {
-		return nil, errors.New(errors.CodeInternal, "AI provider returned multiple tool calls while parallel tool calls are disabled", map[string]any{
-			"count": len(msg.ToolCalls),
-		})
-	}
+	if len(msg.ToolCalls) > 0 {
+		actions := make([]ToolAction, 0, len(msg.ToolCalls))
+		for _, toolCall := range msg.ToolCalls {
+			switch toolCall.Function.Name {
+			case "execute_sql":
+				var raw struct {
+					SQL         string `json:"sql"`
+					Explanation string `json:"explanation"`
+				}
+				if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &raw); err != nil {
+					return nil, invalidToolArguments(toolCall.Function.Name, err)
+				}
+				actions = append(actions, ToolAction{
+					ID:          toolCall.ID,
+					Type:        TypeSQL,
+					SQL:         strings.TrimSpace(raw.SQL),
+					Explanation: strings.TrimSpace(raw.Explanation),
+				})
 
-	if len(msg.ToolCalls) == 1 {
-		toolCall := msg.ToolCalls[0]
-		switch toolCall.Function.Name {
-		case "execute_sql":
-			var raw struct {
-				SQL         string `json:"sql"`
-				Explanation string `json:"explanation"`
-			}
-			if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &raw); err != nil {
-				return nil, invalidToolArguments(toolCall.Function.Name, err)
-			}
-			return &AIResponse{
-				Type:        TypeSQL,
-				SQL:         strings.TrimSpace(raw.SQL),
-				Explanation: strings.TrimSpace(raw.Explanation),
-			}, nil
+			case "execute_javascript":
+				var raw struct {
+					JSCode      string `json:"js_code"`
+					Explanation string `json:"explanation"`
+				}
+				if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &raw); err != nil {
+					return nil, invalidToolArguments(toolCall.Function.Name, err)
+				}
+				actions = append(actions, ToolAction{
+					ID:          toolCall.ID,
+					Type:        TypeJS,
+					JSCode:      strings.TrimSpace(raw.JSCode),
+					Explanation: strings.TrimSpace(raw.Explanation),
+				})
 
-		case "execute_javascript":
-			var raw struct {
-				JSCode      string `json:"js_code"`
-				Explanation string `json:"explanation"`
-			}
-			if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &raw); err != nil {
-				return nil, invalidToolArguments(toolCall.Function.Name, err)
-			}
-			return &AIResponse{
-				Type:        TypeJS,
-				JSCode:      strings.TrimSpace(raw.JSCode),
-				Explanation: strings.TrimSpace(raw.Explanation),
-			}, nil
+			case "export_data":
+				var raw struct {
+					DatasetID   string `json:"dataset_id"`
+					Format      string `json:"format"`
+					FilePath    string `json:"filepath"`
+					Explanation string `json:"explanation"`
+				}
+				if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &raw); err != nil {
+					return nil, invalidToolArguments(toolCall.Function.Name, err)
+				}
+				actions = append(actions, ToolAction{
+					ID:          toolCall.ID,
+					Type:        TypeExport,
+					DatasetID:   strings.TrimSpace(raw.DatasetID),
+					Format:      strings.ToLower(strings.TrimSpace(raw.Format)),
+					FilePath:    strings.TrimSpace(raw.FilePath),
+					Explanation: strings.TrimSpace(raw.Explanation),
+				})
 
-		case "export_data":
-			var raw struct {
-				DatasetID   string `json:"dataset_id"`
-				Format      string `json:"format"`
-				FilePath    string `json:"filepath"`
-				Explanation string `json:"explanation"`
+			default:
+				return nil, errors.New(errors.CodeInternal, "AI provider returned an unsupported tool call", map[string]any{
+					"tool": toolCall.Function.Name,
+				})
 			}
-			if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &raw); err != nil {
-				return nil, invalidToolArguments(toolCall.Function.Name, err)
-			}
-			return &AIResponse{
-				Type:        TypeExport,
-				DatasetID:   strings.TrimSpace(raw.DatasetID),
-				Format:      strings.ToLower(strings.TrimSpace(raw.Format)),
-				FilePath:    strings.TrimSpace(raw.FilePath),
-				Explanation: strings.TrimSpace(raw.Explanation),
-			}, nil
-
-		default:
-			return nil, errors.New(errors.CodeInternal, "AI provider returned an unsupported tool call", map[string]any{
-				"tool": toolCall.Function.Name,
-			})
 		}
+
+		first := actions[0]
+		return &AIResponse{
+			Type:        first.Type,
+			SQL:         first.SQL,
+			JSCode:      first.JSCode,
+			DatasetID:   first.DatasetID,
+			Format:      first.Format,
+			FilePath:    first.FilePath,
+			Explanation: first.Explanation,
+			Actions:     actions,
+		}, nil
 	}
 
 	content := strings.TrimSpace(msg.Content)
