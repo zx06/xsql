@@ -116,7 +116,7 @@ func TestGenerateSQL_MockHTTP_ToolCall(t *testing.T) {
 	}
 }
 
-func TestChatCompletionRejectsMultipleToolCalls(t *testing.T) {
+func TestChatCompletionParsesMultipleToolCalls(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respBody := `{
 			"id":"chatcmpl-multi",
@@ -127,7 +127,7 @@ func TestChatCompletionRejectsMultipleToolCalls(t *testing.T) {
 				"index":0,
 				"message":{"role":"assistant","content":null,"tool_calls":[
 					{"id":"call_1","type":"function","function":{"name":"execute_sql","arguments":"{\"sql\":\"SELECT 1\",\"explanation\":\"one\"}"}},
-					{"id":"call_2","type":"function","function":{"name":"execute_sql","arguments":"{\"sql\":\"SELECT 2\",\"explanation\":\"two\"}"}}
+					{"id":"call_2","type":"function","function":{"name":"execute_javascript","arguments":"{\"js_code\":\"console.log(1);\",\"explanation\":\"two\"}"}}
 				]},
 				"finish_reason":"tool_calls"
 			}]
@@ -139,9 +139,18 @@ func TestChatCompletionRejectsMultipleToolCalls(t *testing.T) {
 
 	cfg := config.AIConfig{BaseURL: mockServer.URL, APIKey: "test-key", Model: "gpt-4o"}
 	client := NewClient(cfg, mockServer.Client())
-	_, xe := client.ChatCompletion(context.Background(), []ChatMessage{{Role: "user", Content: "run two queries"}})
-	if xe == nil || !strings.Contains(xe.Message, "multiple tool calls") {
-		t.Fatalf("expected explicit multiple-tool-call error, got %v", xe)
+	resp, xe := client.ChatCompletion(context.Background(), []ChatMessage{{Role: "user", Content: "run two actions"}})
+	if xe != nil {
+		t.Fatalf("unexpected error for multiple tool calls: %v", xe)
+	}
+	if len(resp.Actions) != 2 {
+		t.Fatalf("expected 2 actions, got %d", len(resp.Actions))
+	}
+	if resp.Actions[0].Type != TypeSQL || resp.Actions[0].SQL != "SELECT 1" {
+		t.Errorf("unexpected first action: %+v", resp.Actions[0])
+	}
+	if resp.Actions[1].Type != TypeJS || resp.Actions[1].JSCode != "console.log(1);" {
+		t.Errorf("unexpected second action: %+v", resp.Actions[1])
 	}
 }
 

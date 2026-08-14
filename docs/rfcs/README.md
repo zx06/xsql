@@ -18,6 +18,7 @@
 | [0010](0010-openai-sdk-tool-call.md) | OpenAI SDK & Tool Call | Implemented |
 | [0011](0011-tui-visual-redesign.md) | TUI Visual Redesign | Implemented |
 | [0012](0012-goja-js-data-analysis.md) | goja Data Analysis & ReAct Loop | Implemented |
+| [0013](0013-ai-multi-tool-calls-sequential-execution.md) | AI Multi Tool Call Sequential Execution & Dialect Guidance | Implemented |
 
 ## 何时需要 RFC
 当变更会影响以下任一项时，必须先提交/更新 RFC（并同步更新对应 `docs/*`）：

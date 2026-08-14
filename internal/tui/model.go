@@ -95,13 +95,14 @@ type Model struct {
 	initialPrompt    string
 	autoExecute      bool
 
-	sessionStore  *session.SessionDataStore
-	jsEngine      *js.JSEngine
-	chatHistory   []ai.ChatMessage
-	pendingExport *PendingExport
-	jsRetryCount  int
-	maxJSRetries  int
-	lastCtrlCTime time.Time
+	sessionStore   *session.SessionDataStore
+	jsEngine       *js.JSEngine
+	chatHistory    []ai.ChatMessage
+	pendingActions []ai.ToolAction
+	pendingExport  *PendingExport
+	jsRetryCount   int
+	maxJSRetries   int
+	lastCtrlCTime  time.Time
 
 	confirmOption int // 0: Confirm/Execute, 1: Adjust Prompt, 2: Cancel/Deny
 
@@ -347,6 +348,155 @@ func (m *Model) renderToolCall(idx int) {
 	m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 }
 
+func (m *Model) executeNextPendingAction() (tea.Model, tea.Cmd) {
+	if len(m.pendingActions) == 0 {
+		m.state = StateThinking
+		m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+		m.viewport.GotoBottom()
+		return *m, m.runAgentStepCmd()
+	}
+
+	act := m.pendingActions[0]
+	m.pendingActions = m.pendingActions[1:]
+
+	switch act.Type {
+	case ai.TypeJS:
+		m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+			Role:    "assistant",
+			Content: fmt.Sprintf("Call tool 'execute_javascript':\n%s", act.JSCode),
+		})
+
+		lineCount := len(strings.Split(act.JSCode, "\n"))
+		tc := ToolCallItem{
+			ID:              fmt.Sprintf("tc_%d", len(m.toolCalls)+1),
+			Name:            "execute_javascript",
+			Summary:         fmt.Sprintf("Executing %d lines of JS data analysis", lineCount),
+			Detail:          act.JSCode,
+			TableStateIndex: -1,
+			MsgIndex:        len(m.messages),
+			IsExpanded:      false,
+		}
+
+		m.messages = append(m.messages, "")
+		m.toolCalls = append(m.toolCalls, tc)
+		toolIdx := len(m.toolCalls) - 1
+		m.focusToolCall(toolIdx)
+
+		ctx := context.Background()
+		jsRes, jsErr := m.jsEngine.Execute(ctx, act.JSCode, m.sessionStore)
+		if jsErr != nil {
+			m.jsRetryCount++
+			m.toolCalls[toolIdx].Result = fmt.Sprintf("❌ Failed: %v", jsErr.Message)
+			m.renderToolCall(toolIdx)
+
+			if m.jsRetryCount <= m.maxJSRetries {
+				retryWarn := ErrorMsgStyle.Render(fmt.Sprintf("⚠️ JS Execution Failed (Attempt %d/%d): %v", m.jsRetryCount, m.maxJSRetries, jsErr.Message))
+				m.messages = append(m.messages, retryWarn)
+
+				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+					Role:    "user",
+					Content: fmt.Sprintf("Tool 'execute_javascript' failed with error: %s. Please fix the code and call 'execute_javascript' again.", jsErr.Message),
+				})
+
+				m.pendingActions = nil
+				m.state = StateThinking
+				m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+				m.viewport.GotoBottom()
+				return *m, m.runAgentStepCmd()
+			}
+			m.messages = append(m.messages, ErrorMsgStyle.Render(fmt.Sprintf("❌ JS Execution Error (after %d retries): %v", m.maxJSRetries, jsErr.Message)))
+			m.jsRetryCount = 0
+			m.pendingActions = nil
+			m.state = StateIdle
+			m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+			m.viewport.GotoBottom()
+			return *m, nil
+		}
+
+		m.jsRetryCount = 0
+		m.toolCalls[toolIdx].Result = "✓ JavaScript executed successfully"
+		m.toolCalls[toolIdx].RawOutput = jsRes.SummaryText
+		m.renderToolCall(toolIdx)
+
+		feedback := ai.BoundToolFeedback(jsRes.SummaryText)
+		m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+			Role:    "user",
+			Content: fmt.Sprintf("Tool 'execute_javascript' executed successfully. Bounded derived output:\n%s", feedback),
+		})
+
+		return m.executeNextPendingAction()
+
+	case ai.TypeSQL:
+		m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+			Role:    "assistant",
+			Content: fmt.Sprintf("Call tool 'execute_sql': %s", act.SQL),
+		})
+
+		m.currentSQL = act.SQL
+
+		tc := ToolCallItem{
+			ID:              fmt.Sprintf("tc_%d", len(m.toolCalls)+1),
+			Name:            "execute_sql",
+			Summary:         m.currentSQL,
+			Detail:          m.currentSQL,
+			TableStateIndex: -1,
+			MsgIndex:        len(m.messages),
+			IsExpanded:      false,
+		}
+		m.messages = append(m.messages, "")
+		m.toolCalls = append(m.toolCalls, tc)
+		toolIdx := len(m.toolCalls) - 1
+		m.focusToolCall(toolIdx)
+
+		if m.autoExecute {
+			m.state = StateExecuting
+			m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+			m.viewport.GotoBottom()
+			return *m, m.executeSQLCmd(m.currentSQL)
+		}
+		m.confirmOption = 0
+		m.state = StateSQLReady
+		m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+		m.viewport.GotoBottom()
+		return *m, nil
+
+	case ai.TypeExport:
+		m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+			Role:    "assistant",
+			Content: fmt.Sprintf("Call tool 'export_data': dataset_id=%s, format=%s, filepath=%s", act.DatasetID, act.Format, act.FilePath),
+		})
+
+		tc := ToolCallItem{
+			ID:              fmt.Sprintf("tc_%d", len(m.toolCalls)+1),
+			Name:            "export_data",
+			Summary:         fmt.Sprintf("Export %s to %s (%s) [Pending User Confirmation]", act.DatasetID, act.FilePath, strings.ToUpper(act.Format)),
+			Detail:          fmt.Sprintf("Dataset: %s | FilePath: %s | Format: %s", act.DatasetID, act.FilePath, act.Format),
+			Result:          "⏳ Pending Human Confirmation",
+			TableStateIndex: -1,
+			MsgIndex:        len(m.messages),
+			IsExpanded:      false,
+		}
+		m.messages = append(m.messages, "")
+		m.toolCalls = append(m.toolCalls, tc)
+		toolIdx := len(m.toolCalls) - 1
+		m.focusToolCall(toolIdx)
+
+		m.pendingExport = &PendingExport{
+			DatasetID: act.DatasetID,
+			Format:    act.Format,
+			FilePath:  act.FilePath,
+			ToolIdx:   toolIdx,
+		}
+		m.confirmOption = 0
+		m.state = StateExportReady
+		m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+		m.viewport.GotoBottom()
+		return *m, nil
+	}
+
+	return *m, nil
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
@@ -390,161 +540,46 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.messages = append(m.messages, ErrorMsgStyle.Render(fmt.Sprintf("AI Error: %v", msg.err)))
 			m.state = StateIdle
-		} else {
-			m.explanation = msg.response.Explanation
+			m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+			m.viewport.GotoBottom()
+			return m, nil
+		}
 
+		m.explanation = msg.response.Explanation
+
+		actions := msg.response.Actions
+		if len(actions) == 0 {
+			// Backwards compatibility if single response fields are set without Actions slice
 			if msg.response.Type == ai.TypeJS && msg.response.JSCode != "" {
-				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
-					Role:    "assistant",
-					Content: fmt.Sprintf("Call tool 'execute_javascript':\n%s", msg.response.JSCode),
-				})
-
-				lineCount := len(strings.Split(msg.response.JSCode, "\n"))
-				tc := ToolCallItem{
-					ID:              fmt.Sprintf("tc_%d", len(m.toolCalls)+1),
-					Name:            "execute_javascript",
-					Summary:         fmt.Sprintf("Executing %d lines of JS data analysis", lineCount),
-					Detail:          msg.response.JSCode,
-					TableStateIndex: -1,
-					MsgIndex:        len(m.messages),
-					IsExpanded:      false,
-				}
-
-				m.messages = append(m.messages, "")
-				m.toolCalls = append(m.toolCalls, tc)
-				toolIdx := len(m.toolCalls) - 1
-				m.focusToolCall(toolIdx)
-
-				ctx := context.Background()
-				jsRes, jsErr := m.jsEngine.Execute(ctx, msg.response.JSCode, m.sessionStore)
-				if jsErr != nil {
-					m.jsRetryCount++
-					m.toolCalls[toolIdx].Result = fmt.Sprintf("❌ Failed: %v", jsErr.Message)
-					m.renderToolCall(toolIdx)
-
-					if m.jsRetryCount <= m.maxJSRetries {
-						retryWarn := ErrorMsgStyle.Render(fmt.Sprintf("⚠️ JS Execution Failed (Attempt %d/%d): %v", m.jsRetryCount, m.maxJSRetries, jsErr.Message))
-						m.messages = append(m.messages, retryWarn)
-
-						m.chatHistory = append(m.chatHistory, ai.ChatMessage{
-							Role:    "user",
-							Content: fmt.Sprintf("Tool 'execute_javascript' failed with error: %s. Please fix the code and call 'execute_javascript' again.", jsErr.Message),
-						})
-
-						m.state = StateThinking
-						m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
-						m.viewport.GotoBottom()
-						return m, m.runAgentStepCmd()
-					}
-					m.messages = append(m.messages, ErrorMsgStyle.Render(fmt.Sprintf("❌ JS Execution Error (after %d retries): %v", m.maxJSRetries, jsErr.Message)))
-					m.jsRetryCount = 0
-					m.state = StateIdle
-				} else {
-					m.jsRetryCount = 0
-					m.toolCalls[toolIdx].Result = "✓ JavaScript executed successfully"
-					m.toolCalls[toolIdx].RawOutput = jsRes.SummaryText // Display raw JS output inside tool call container!
-					m.renderToolCall(toolIdx)
-
-					feedback := ai.BoundToolFeedback(jsRes.SummaryText)
-					m.chatHistory = append(m.chatHistory, ai.ChatMessage{
-						Role:    "user",
-						Content: fmt.Sprintf("Tool 'execute_javascript' executed successfully. Bounded derived output:\n%s", feedback),
-					})
-
-					m.state = StateThinking
-					m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
-					m.viewport.GotoBottom()
-					return m, m.runAgentStepCmd()
-				}
-			} else if msg.response.Type == ai.TypeExport && msg.response.DatasetID != "" {
-				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
-					Role:    "assistant",
-					Content: fmt.Sprintf("Call tool 'export_data': dataset_id=%s, format=%s, filepath=%s", msg.response.DatasetID, msg.response.Format, msg.response.FilePath),
-				})
-
-				tc := ToolCallItem{
-					ID:              fmt.Sprintf("tc_%d", len(m.toolCalls)+1),
-					Name:            "export_data",
-					Summary:         fmt.Sprintf("Export %s to %s (%s) [Pending User Confirmation]", msg.response.DatasetID, msg.response.FilePath, strings.ToUpper(msg.response.Format)),
-					Detail:          fmt.Sprintf("Dataset: %s | FilePath: %s | Format: %s", msg.response.DatasetID, msg.response.FilePath, msg.response.Format),
-					Result:          "⏳ Pending Human Confirmation",
-					TableStateIndex: -1,
-					MsgIndex:        len(m.messages),
-					IsExpanded:      false,
-				}
-				m.messages = append(m.messages, "")
-				m.toolCalls = append(m.toolCalls, tc)
-				toolIdx := len(m.toolCalls) - 1
-				m.focusToolCall(toolIdx)
-
-				m.pendingExport = &PendingExport{
-					DatasetID: msg.response.DatasetID,
-					Format:    msg.response.Format,
-					FilePath:  msg.response.FilePath,
-					ToolIdx:   toolIdx,
-				}
-				m.confirmOption = 0
-				m.state = StateExportReady
+				actions = []ai.ToolAction{{Type: ai.TypeJS, JSCode: msg.response.JSCode, Explanation: msg.response.Explanation}}
 			} else if msg.response.Type == ai.TypeSQL && msg.response.SQL != "" {
-				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
-					Role:    "assistant",
-					Content: fmt.Sprintf("Call tool 'execute_sql': %s", msg.response.SQL),
-				})
-
-				m.currentSQL = msg.response.SQL
-
-				tc := ToolCallItem{
-					ID:              fmt.Sprintf("tc_%d", len(m.toolCalls)+1),
-					Name:            "execute_sql",
-					Summary:         m.currentSQL,
-					Detail:          m.currentSQL,
-					TableStateIndex: -1,
-					MsgIndex:        len(m.messages),
-					IsExpanded:      false,
-				}
-				m.messages = append(m.messages, "")
-				m.toolCalls = append(m.toolCalls, tc)
-				toolIdx := len(m.toolCalls) - 1
-				m.focusToolCall(toolIdx)
-
-				if m.autoExecute {
-					m.state = StateExecuting
-					m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
-					m.viewport.GotoBottom()
-					return m, m.executeSQLCmd(m.currentSQL)
-				}
-				m.confirmOption = 0
-				m.state = StateSQLReady
-			} else {
-				// FINAL LLM AGENT OUTPUT (No Tool Call)
-				exp := msg.response.Explanation
-
-				// Defensive guard: If LLM mistakenly output raw JS code in text instead of tool call, intercept it!
-				if strings.Contains(exp, "Call tool 'execute_javascript'") || (strings.Contains(exp, "var data =") && strings.Contains(exp, "stats")) {
-					jsCode := exp
-					if idx := strings.Index(exp, "var "); idx >= 0 {
-						jsCode = exp[idx:]
-					}
-					msg.response.Type = ai.TypeJS
-					msg.response.JSCode = jsCode
-					return m.Update(msg)
-				}
-
-				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
-					Role:    "assistant",
-					Content: exp,
-				})
-
-				if exp != "" {
-					renderedMD := RenderMarkdown(exp, m.width)
-					aiMsg := AITagStyle.Render("🤖 AI") + "\n" + renderedMD
-					m.messages = append(m.messages, aiMsg)
-				}
-				m.state = StateIdle
+				actions = []ai.ToolAction{{Type: ai.TypeSQL, SQL: msg.response.SQL, Explanation: msg.response.Explanation}}
+			} else if msg.response.Type == ai.TypeExport && msg.response.DatasetID != "" {
+				actions = []ai.ToolAction{{Type: ai.TypeExport, DatasetID: msg.response.DatasetID, Format: msg.response.Format, FilePath: msg.response.FilePath, Explanation: msg.response.Explanation}}
 			}
 		}
+
+		if len(actions) > 0 {
+			m.pendingActions = append(m.pendingActions, actions...)
+			return m.executeNextPendingAction()
+		}
+
+		// FINAL LLM AGENT OUTPUT (No Tool Call)
+		exp := msg.response.Explanation
+		m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+			Role:    "assistant",
+			Content: exp,
+		})
+
+		if exp != "" {
+			renderedMD := RenderMarkdown(exp, m.width)
+			aiMsg := AITagStyle.Render("🤖 AI") + "\n" + renderedMD
+			m.messages = append(m.messages, aiMsg)
+		}
+		m.state = StateIdle
 		m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 		m.viewport.GotoBottom()
+		return m, nil
 
 	case queryExecutedMsg:
 		if msg.err != nil {
@@ -556,6 +591,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				Content: fmt.Sprintf("Tool 'execute_sql' failed with error: %s", errText),
 			})
 
+			m.pendingActions = nil
 			m.state = StateThinking
 			m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 			m.viewport.GotoBottom()
@@ -599,14 +635,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				Content: fmt.Sprintf("Tool 'execute_sql' executed successfully. Returned %d rows (columns: %v). Dataset saved as '%s'.", len(msg.result.Rows), msg.result.Columns, datasetID),
 			})
 
-			m.state = StateThinking
-			m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
-			m.viewport.GotoBottom()
-			return m, m.runAgentStepCmd()
+			return m.executeNextPendingAction()
 		}
 		m.state = StateIdle
 		m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 		m.viewport.GotoBottom()
+		return m, nil
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -683,15 +717,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 				m.pendingExport = nil
-				m.state = StateThinking
-				m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
-				m.viewport.GotoBottom()
-				return m, m.runAgentStepCmd()
+				return m.executeNextPendingAction()
 
 			case 1:
 				// Option 2: Adjust Prompt
 				m.state = StateIdle
 				m.pendingExport = nil
+				m.pendingActions = nil
 				m.textarea.Focus()
 				return m, nil
 
@@ -705,6 +737,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					Content: "Tool 'export_data' was denied by user.",
 				})
 				m.pendingExport = nil
+				m.pendingActions = nil
 				m.state = StateThinking
 				m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 				m.viewport.GotoBottom()
@@ -746,12 +779,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case 1:
 				// Option 2: Adjust Prompt / Re-generate
 				m.state = StateIdle
+				m.pendingActions = nil
 				m.textarea.Focus()
 				return m, nil
 
 			case 2:
 				// Option 3: Cancel Execution
 				m.state = StateIdle
+				m.pendingActions = nil
 				m.textarea.Focus()
 				return m, nil
 			}

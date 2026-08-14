@@ -21,6 +21,17 @@ const (
 	TypeText   ResponseType = "text"
 )
 
+type ToolAction struct {
+	ID          string       `json:"id,omitempty"`
+	Type        ResponseType `json:"type"`
+	SQL         string       `json:"sql,omitempty"`
+	JSCode      string       `json:"js_code,omitempty"`
+	DatasetID   string       `json:"dataset_id,omitempty"`
+	Format      string       `json:"format,omitempty"`
+	FilePath    string       `json:"filepath,omitempty"`
+	Explanation string       `json:"explanation,omitempty"`
+}
+
 type AIResponse struct {
 	Type        ResponseType `json:"type"`
 	SQL         string       `json:"sql,omitempty"`
@@ -29,6 +40,7 @@ type AIResponse struct {
 	Format      string       `json:"format,omitempty"`
 	FilePath    string       `json:"filepath,omitempty"`
 	Explanation string       `json:"explanation"`
+	Actions     []ToolAction `json:"actions,omitempty"`
 }
 
 type SQLResponse = AIResponse

@@ -609,3 +609,89 @@ func TestTUI_Model_ViewAndAllStatesCoverage(t *testing.T) {
 	m.renderTableState(-1, false)
 	m.renderTableState(999, false)
 }
+
+func TestModel_MultipleToolCalls_SequentialExecution(t *testing.T) {
+	opts := config.Options{
+		CLIAIModel: "test-model",
+	}
+	resolved := config.Resolved{
+		Profile: config.Profile{
+			DB: "mysql",
+		},
+		ProfileName: "default",
+	}
+	aiClient := ai.NewClient(config.AIConfig{Provider: "openai", APIKey: "test"}, nil)
+	aiService := ai.NewService(config.AIConfig{Provider: "openai", APIKey: "test"}, aiClient)
+
+	m := NewModel(opts, resolved, aiService, "", false)
+	m.autoExecute = true // Auto-execute SQL so actions flow automatically
+
+	// 1. Initial schema loaded
+	updated, _ := m.Update(schemaLoadedMsg{
+		schema: &db.SchemaInfo{Database: "testdb"},
+	})
+	m = updated.(Model)
+
+	// 2. Receive aiResponseMsg with 2 actions: SQL + JS
+	multiResp := &ai.AIResponse{
+		Actions: []ai.ToolAction{
+			{
+				Type:        ai.TypeSQL,
+				SQL:         "SELECT id, val FROM metrics;",
+				Explanation: "Query metrics",
+			},
+			{
+				Type:        ai.TypeJS,
+				JSCode:      "var sum = res1.rows.reduce(function(acc, r) { return acc + r.val; }, 0); ({ sum: sum });",
+				Explanation: "Sum metrics",
+			},
+		},
+	}
+
+	updated, cmd := m.Update(aiResponseMsg{response: multiResp})
+	m = updated.(Model)
+	if m.state != StateExecuting {
+		t.Fatalf("expected StateExecuting after 1st SQL action, got %v", m.state)
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil Cmd for executeSQLCmd")
+	}
+
+	// 3. Query finishes execution -> should trigger the next pending JS action!
+	updated, cmd = m.Update(queryExecutedMsg{
+		result: &db.QueryResult{
+			Columns: []string{"id", "val"},
+			Rows: []map[string]any{
+				{"id": 1, "val": 10},
+				{"id": 2, "val": 20},
+			},
+		},
+	})
+	m = updated.(Model)
+
+	// Since JS executes synchronously and there are no more actions, state should transition to StateThinking with runAgentStepCmd
+	if m.state != StateThinking {
+		t.Fatalf("expected StateThinking after completing all actions in queue, got %v", m.state)
+	}
+	if cmd == nil {
+		t.Fatal("expected runAgentStepCmd after all actions finish")
+	}
+	if len(m.toolCalls) != 2 {
+		t.Fatalf("expected 2 tool calls rendered, got %d", len(m.toolCalls))
+	}
+	if m.toolCalls[0].Name != "execute_sql" || m.toolCalls[1].Name != "execute_javascript" {
+		t.Errorf("unexpected tool call names: %s, %s", m.toolCalls[0].Name, m.toolCalls[1].Name)
+	}
+
+	// 4. Send final AI answer
+	updated, _ = m.Update(aiResponseMsg{
+		response: &ai.AIResponse{
+			Type:        ai.TypeText,
+			Explanation: "The total sum is 30.",
+		},
+	})
+	m = updated.(Model)
+	if m.state != StateIdle {
+		t.Fatalf("expected StateIdle after final text response, got %v", m.state)
+	}
+}
