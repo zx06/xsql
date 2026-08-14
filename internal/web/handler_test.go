@@ -713,6 +713,15 @@ func TestHandler_ConfigAIAndTesting(t *testing.T) {
 		if recBadSSH.Code != http.StatusBadRequest {
 			t.Errorf("expected 400 for nonexistent ssh proxy, got %d", recBadSSH.Code)
 		}
+
+		// Valid ssh proxy reference and inherited password with connection failure (port 1)
+		reqSSHTest := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/profile", strings.NewReader(`{"profile":{"name":"dev","db":"mysql","host":"127.0.0.1","port":1,"ssh_proxy":"bastion"}}`))
+		recSSHTest := httptest.NewRecorder()
+		h.ServeHTTP(recSSHTest, reqSSHTest)
+		// Should fail to connect to port 1, returning an error response
+		if recSSHTest.Code == http.StatusOK {
+			t.Errorf("expected non-200 connection error for closed port, got 200")
+		}
 	}
 
 	// 4. POST /api/v1/config/test/ssh-proxy
@@ -731,6 +740,14 @@ func TestHandler_ConfigAIAndTesting(t *testing.T) {
 		h.ServeHTTP(recNoHost, reqNoHost)
 		if recNoHost.Code != http.StatusBadRequest {
 			t.Errorf("expected 400 for missing host, got %d", recNoHost.Code)
+		}
+
+		// Inherited passphrase and connection attempt to closed port
+		reqProxyTest := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/ssh-proxy", strings.NewReader(`{"name":"bastion","ssh_proxy":{"host":"127.0.0.1","port":1}}`))
+		recProxyTest := httptest.NewRecorder()
+		h.ServeHTTP(recProxyTest, reqProxyTest)
+		if recProxyTest.Code == http.StatusOK {
+			t.Errorf("expected non-200 connection error for closed port, got 200")
 		}
 	}
 

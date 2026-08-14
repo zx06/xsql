@@ -1130,3 +1130,55 @@ func TestTestAIConnection_SuccessMock(t *testing.T) {
 		t.Fatalf("expected ok=true, got: %v", res)
 	}
 }
+
+func TestTestProfileConnection_InvalidHost(t *testing.T) {
+	ctx := context.Background()
+	_, xe := TestProfileConnection(ctx, config.Profile{
+		DB:   "mysql",
+		Host: "127.0.0.1",
+		Port: 1, // Closed port
+	}, false, false)
+	if xe == nil {
+		t.Fatal("expected error connecting to closed port")
+	}
+}
+
+func TestTestSSHProxyConnection_Branches(t *testing.T) {
+	ctx := context.Background()
+
+	// Passphrase resolution error
+	_, xe := TestSSHProxyConnection(ctx, config.SSHProxy{
+		Host:       "127.0.0.1",
+		Passphrase: "secret://vault/nonexistent",
+	}, false, false)
+	if xe == nil {
+		t.Fatal("expected error for unresolvable secret passphrase")
+	}
+
+	// Connection failure to closed port with plaintext passphrase
+	_, xe = TestSSHProxyConnection(ctx, config.SSHProxy{
+		Host:       "127.0.0.1",
+		Port:       1,
+		Passphrase: "plaintext-pass",
+	}, true, true)
+	if xe == nil {
+		t.Fatal("expected error connecting to closed port")
+	}
+}
+
+func TestTestAIConnection_HttpError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"error":"invalid_api_key"}`, http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	_, xe := TestAIConnection(ctx, config.AIConfig{
+		APIKey:  "bad-key",
+		BaseURL: srv.URL,
+		Model:   "gpt-4o",
+	})
+	if xe == nil {
+		t.Fatal("expected error for 401 response")
+	}
+}
