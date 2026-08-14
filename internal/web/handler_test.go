@@ -633,3 +633,126 @@ func TestHandler_ConfigManagementErrors(t *testing.T) {
 	}
 }
 
+func TestHandler_ConfigAIAndTesting(t *testing.T) {
+	tempConfig := createConfigFile(t, "profiles:\n  dev:\n    db: mysql\n    host: 127.0.0.1\n    port: 3306\nssh_proxies:\n  bastion:\n    host: 127.0.0.1\n    port: 22\nai:\n  provider: openai\n  base_url: https://api.openai.com/v1\n  api_key: sk-test\n  model: gpt-4o\n")
+	h := NewHandler(HandlerOptions{ConfigPath: tempConfig})
+
+	// 1. GET /api/v1/config returns ai
+	{
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/config", nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 for GET config, got %d", rec.Code)
+		}
+		var env envelope
+		_ = json.NewDecoder(rec.Body).Decode(&env)
+		dataMap, ok := env.Data.(map[string]any)
+		if !ok || dataMap["ai"] == nil {
+			t.Fatalf("expected ai section in config response, got: %v", env.Data)
+		}
+	}
+
+	// 2. POST /api/v1/config/ai saves AI
+	{
+		body := `{"ai":{"provider":"deepseek","model":"deepseek-chat","base_url":"https://api.deepseek.com","api_key":"sk-deepseek"}}`
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/config/ai", strings.NewReader(body))
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 for POST /api/v1/config/ai, got %d: %s", rec.Code, rec.Body.String())
+		}
+
+		// Invalid method
+		reqGet := httptest.NewRequest(http.MethodGet, "/api/v1/config/ai", nil)
+		recGet := httptest.NewRecorder()
+		h.ServeHTTP(recGet, reqGet)
+		if recGet.Code != http.StatusMethodNotAllowed {
+			t.Errorf("expected 405 for GET /api/v1/config/ai, got %d", recGet.Code)
+		}
+
+		// Invalid json
+		reqBad := httptest.NewRequest(http.MethodPost, "/api/v1/config/ai", strings.NewReader("{invalid"))
+		recBad := httptest.NewRecorder()
+		h.ServeHTTP(recBad, reqBad)
+		if recBad.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for invalid json, got %d", recBad.Code)
+		}
+	}
+
+	// 3. POST /api/v1/config/test/profile
+	{
+		// Invalid method
+		reqGet := httptest.NewRequest(http.MethodGet, "/api/v1/config/test/profile", nil)
+		recGet := httptest.NewRecorder()
+		h.ServeHTTP(recGet, reqGet)
+		if recGet.Code != http.StatusMethodNotAllowed {
+			t.Errorf("expected 405 for GET test profile, got %d", recGet.Code)
+		}
+
+		// Invalid json
+		reqBad := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/profile", strings.NewReader("{bad"))
+		recBad := httptest.NewRecorder()
+		h.ServeHTTP(recBad, reqBad)
+		if recBad.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for bad json, got %d", recBad.Code)
+		}
+
+		// Missing db
+		reqNoDB := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/profile", strings.NewReader(`{"profile":{"host":"127.0.0.1"}}`))
+		recNoDB := httptest.NewRecorder()
+		h.ServeHTTP(recNoDB, reqNoDB)
+		if recNoDB.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for missing db, got %d", recNoDB.Code)
+		}
+
+		// Unknown ssh proxy
+		reqBadSSH := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/profile", strings.NewReader(`{"profile":{"db":"mysql","host":"127.0.0.1","ssh_proxy":"nonexistent"}}`))
+		recBadSSH := httptest.NewRecorder()
+		h.ServeHTTP(recBadSSH, reqBadSSH)
+		if recBadSSH.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for nonexistent ssh proxy, got %d", recBadSSH.Code)
+		}
+	}
+
+	// 4. POST /api/v1/config/test/ssh-proxy
+	{
+		// Invalid method
+		reqGet := httptest.NewRequest(http.MethodGet, "/api/v1/config/test/ssh-proxy", nil)
+		recGet := httptest.NewRecorder()
+		h.ServeHTTP(recGet, reqGet)
+		if recGet.Code != http.StatusMethodNotAllowed {
+			t.Errorf("expected 405 for GET test ssh proxy, got %d", recGet.Code)
+		}
+
+		// Missing host
+		reqNoHost := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/ssh-proxy", strings.NewReader(`{"ssh_proxy":{"port":22}}`))
+		recNoHost := httptest.NewRecorder()
+		h.ServeHTTP(recNoHost, reqNoHost)
+		if recNoHost.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for missing host, got %d", recNoHost.Code)
+		}
+	}
+
+	// 5. POST /api/v1/config/test/ai
+	{
+		// Invalid method
+		reqGet := httptest.NewRequest(http.MethodGet, "/api/v1/config/test/ai", nil)
+		recGet := httptest.NewRecorder()
+		h.ServeHTTP(recGet, reqGet)
+		if recGet.Code != http.StatusMethodNotAllowed {
+			t.Errorf("expected 405 for GET test ai, got %d", recGet.Code)
+		}
+
+		// Missing API key
+		reqNoKey := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/ai", strings.NewReader(`{"ai":{"base_url":"https://api.openai.com/v1"}}`))
+		recNoKey := httptest.NewRecorder()
+		// Overwrite temp config with empty key
+		hEmptyKey := NewHandler(HandlerOptions{ConfigPath: createConfigFile(t, "profiles: {}\nssh_proxies: {}\nai:\n  api_key: \"\"\n")})
+		hEmptyKey.ServeHTTP(recNoKey, reqNoKey)
+		if recNoKey.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for missing api key, got %d", recNoKey.Code)
+		}
+	}
+}
+

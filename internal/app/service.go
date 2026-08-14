@@ -373,4 +373,3 @@ func TestAIConnection(ctx context.Context, aiCfg config.AIConfig) (map[string]an
 		"response":   resp.Explanation,
 	}, nil
 }
-

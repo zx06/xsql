@@ -247,7 +247,10 @@ export function exportToMarkdownTable(columns, rows) {
     .map((row) => `| ${columns.map((col) => {
       const val = row[col];
       if (val === null || val === undefined) return 'NULL';
-      return String(val).replace(/\|/g, '\\|').replace(/\n/g, ' ');
+      return String(val)
+        .replace(/\\/g, '\\\\')
+        .replace(/\|/g, '\\|')
+        .replace(/\r?\n/g, ' ');
     }).join(' | ')} |`)
     .join('\n');
 
@@ -264,8 +267,12 @@ export function exportToInsertSQL(tableName, columns, rows) {
     if (v === null || v === undefined) return 'NULL';
     if (typeof v === 'number') return String(v);
     if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
-    if (typeof v === 'object') return `'${JSON.stringify(v).replace(/'/g, "''")}'`;
-    return `'${String(v).replace(/'/g, "''")}'`;
+    if (typeof v === 'object') {
+      const jsonStr = JSON.stringify(v).replace(/\\/g, '\\\\').replace(/'/g, "''");
+      return `'${jsonStr}'`;
+    }
+    const escaped = String(v).replace(/\\/g, '\\\\').replace(/'/g, "''");
+    return `'${escaped}'`;
   };
 
   const valuesLines = rows.map((row) => `  (${columns.map((c) => formatVal(row[c])).join(', ')})`).join(',\n');

@@ -1061,3 +1061,36 @@ func TestDescribeTable_NoDB(t *testing.T) {
 		t.Errorf("expected CodeCfgInvalid, got %q", xe.Code)
 	}
 }
+
+func TestTestProfileConnection_NoDB(t *testing.T) {
+	ctx := context.Background()
+	_, xe := TestProfileConnection(ctx, config.Profile{DB: ""}, false, false)
+	if xe == nil {
+		t.Fatal("expected error for missing DB type")
+	}
+	if xe.Code != errors.CodeCfgInvalid {
+		t.Errorf("expected CodeCfgInvalid, got %s", xe.Code)
+	}
+}
+
+func TestTestSSHProxyConnection_Validation(t *testing.T) {
+	ctx := context.Background()
+	_, xe := TestSSHProxyConnection(ctx, config.SSHProxy{Host: ""}, false, false)
+	if xe == nil {
+		t.Fatal("expected error for missing host")
+	}
+	if xe.Code != errors.CodeCfgInvalid {
+		t.Errorf("expected CodeCfgInvalid, got %s", xe.Code)
+	}
+}
+
+func TestTestAIConnection_Validation(t *testing.T) {
+	ctx := context.Background()
+	_, xe := TestAIConnection(ctx, config.AIConfig{APIKey: ""})
+	if xe == nil {
+		t.Fatal("expected error for missing api key")
+	}
+	if xe.Code != errors.CodeCfgInvalid {
+		t.Errorf("expected CodeCfgInvalid, got %s", xe.Code)
+	}
+}

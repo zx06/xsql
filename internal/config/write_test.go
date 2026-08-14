@@ -688,4 +688,34 @@ func TestSaveAndDeleteSSHProxy(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
+
+	t.Run("SaveAI creates and updates AI configuration", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "xsql.yaml")
+		if err := os.WriteFile(path, []byte("profiles: {}\nssh_proxies: {}\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		aiCfg := AIConfig{
+			Provider:       "openai",
+			BaseURL:        "https://api.openai.com/v1",
+			APIKey:         "sk-test-key",
+			Model:          "gpt-4o",
+			MaxTokens:      4096,
+			AllowPlaintext: true,
+		}
+
+		if err := SaveAI(path, aiCfg); err != nil {
+			t.Fatalf("failed to save AI config: %v", err)
+		}
+
+		f, xe := readFile(path)
+		if xe != nil {
+			t.Fatalf("failed to read back config: %v", xe)
+		}
+
+		if f.AI.Provider != "openai" || f.AI.Model != "gpt-4o" || f.AI.APIKey != "sk-test-key" || f.AI.MaxTokens != 4096 || !f.AI.AllowPlaintext {
+			t.Errorf("AI config mismatch: %+v", f.AI)
+		}
+	})
 }
