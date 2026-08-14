@@ -49,7 +49,7 @@ type Profile struct {
 
 	// Security options
 	AllowPlaintext   bool `yaml:"allow_plaintext" json:"allow_plaintext"`       // allow plaintext password
-	UnsafeAllowWrite bool `yaml:"unsafe_allow_write" json:"unsafe_allow_write"` // allow write operations (bypass read-only protection)
+	UnsafeAllowWrite bool `yaml:"unsafe_allow_write" json:"unsafe_allow_write"` // permit write-capable entrypoints; CLI also requires its runtime flag
 
 	// Timeout settings (seconds)
 	QueryTimeout  int `yaml:"query_timeout" json:"query_timeout"`   // query timeout, default 30s

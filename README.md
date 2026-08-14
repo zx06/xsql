@@ -4,7 +4,7 @@
 [![codecov](https://codecov.io/github/zx06/xsql/graph/badge.svg?token=LrcR0pifCj)](https://codecov.io/github/zx06/xsql)
 [![Go Reference](https://pkg.go.dev/badge/github.com/zx06/xsql.svg)](https://pkg.go.dev/github.com/zx06/xsql)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/zx06/xsql)](https://github.com/zx06/xsql/blob/main/go.mod)
-[![Go Report Card](https://goreportcard.com/badge/github.com/zx06/xsql)](https://goreportcard.com/report/github.com/zx06/xsql)
+[![GitHub Stars](https://img.shields.io/github/stars/zx06/xsql)](https://github.com/zx06/xsql/stargazers)
 [![License](https://img.shields.io/github/license/zx06/xsql)](https://github.com/zx06/xsql/blob/main/LICENSE)
 [![Release](https://img.shields.io/github/v/release/zx06/xsql)](https://github.com/zx06/xsql/releases/latest)
 [![GitHub Downloads](https://img.shields.io/github/downloads/zx06/xsql/total)](https://github.com/zx06/xsql/releases)
@@ -19,7 +19,7 @@ xsql is a cross-database CLI tool designed for AI agents. Read-only by default, 
 
 ```bash
 # AI can query your database like this
-xsql query "SELECT * FROM users WHERE created_at > '2024-01-01'" -p prod -f json
+xsql query "SELECT * FROM users WHERE created_at > '2024-01-01'" -p prod -f json --attr source=codex-cli --attr agent=codex --attr env=prod --attr task=targeted-query
 ```
 
 ## ✨ Why xsql?
@@ -108,23 +108,24 @@ Send the following to your AI assistant (ChatGPT/Claude/Cursor, etc.):
 You can now use the xsql tool to query databases.
 
 ## Basic Usage
-xsql query "<SQL>" -p <profile> -f json
+xsql query "<SQL>" -p <profile> -f json --attr source=codex-cli --attr agent=codex --attr env=<env> --attr task=<task>
 
 ## Available Commands
-- xsql query "SQL" -p <profile> -f json  # Execute query
-- xsql schema dump -p <profile> -f json  # Export database schema
-- xsql profile list -f json               # List all profiles
-- xsql profile show <name> -f json        # Show profile details
+- xsql query "SQL" -p <profile> -f json --attr source=codex-cli --attr agent=codex --attr env=<env> --attr task=<task> # Execute query
+- xsql schema dump -p <profile> -f json --attr source=codex-cli --attr agent=codex --attr env=<env> --attr task=schema-discovery # Export database schema
+- xsql profile list -f json --attr source=codex-cli --attr agent=codex --attr task=profile-discovery # List all profiles
+- xsql profile show <name> -f json --attr source=codex-cli --attr agent=codex --attr task=profile-discovery # Show profile details
 
 ## Output Format
 Success: {"ok":true,"schema_version":1,"data":{"columns":[...],"rows":[...]}}
 Failure: {"ok":false,"schema_version":1,"error":{"code":"XSQL_...","message":"..."}}
 
 ## Important Rules
-1. Read-only mode by default — cannot execute INSERT/UPDATE/DELETE
+1. Read-only mode by default — writes require both profile `unsafe_allow_write: true` and the current `--unsafe-allow-write` flag
 2. Always use -f json for structured output
-3. Use profile list to see available database configurations
-4. Check the ok field to determine execution success
+3. Add `--attr source=codex-cli` to every Codex-driven xsql invocation; add `agent`, `env`, `team`, and `task` when known
+4. Use profile list to see available database configurations
+5. Check the ok field to determine execution success
 
 ## Exit Codes
 0=success, 2=config error, 3=connection error, 4=read-only violation, 5=SQL execution error
@@ -141,7 +142,7 @@ Add the xsql MCP server to your Claude Desktop configuration:
   "mcpServers": {
     "xsql": {
       "command": "xsql",
-      "args": ["mcp", "server", "--config", "/path/to/xsql.yaml"]
+      "args": ["mcp", "server", "--config", "/path/to/xsql.yaml", "--attr", "source=codex-cli", "--attr", "agent=codex"]
     }
   }
 }
@@ -157,11 +158,11 @@ Create `.cursor/rules` or edit `AGENTS.md` in your project root:
 ## Database Queries
 
 Use xsql to query databases:
-- Query: `xsql query "SELECT ..." -p <profile> -f json`
-- Export schema: `xsql schema dump -p <profile> -f json`
-- List profiles: `xsql profile list -f json`
+- Query: `xsql query "SELECT ..." -p <profile> -f json --attr source=codex-cli --attr agent=codex --attr env=<env> --attr task=targeted-query`
+- Export schema: `xsql schema dump -p <profile> -f json --attr source=codex-cli --attr agent=codex --attr env=<env> --attr task=schema-discovery`
+- List profiles: `xsql profile list -f json --attr source=codex-cli --attr agent=codex --attr task=profile-discovery`
 
-Note: Read-only mode by default. Write operations require the --unsafe-allow-write flag.
+Note: Read-only mode by default. Writes require both profile `unsafe_allow_write: true` and `--unsafe-allow-write` on the current CLI invocation.
 ```
 
 ---
@@ -178,6 +179,10 @@ Note: Read-only mode by default. Write operations require the --unsafe-allow-wri
 | `xsql profile list` | List all profiles |
 | `xsql profile show <name>` | Show profile details (passwords are masked) |
 | `xsql mcp server` | Start MCP Server (AI assistant integration) |
+| `xsql config init/set` | Create or update the configuration file |
+| `xsql proxy` | Start an SSH local port-forwarding proxy |
+| `xsql serve` / `xsql web` | Start the local Web UI |
+| `xsql stats` | Show usage statistics and audit attributes |
 | `xsql spec` | Export AI Tool Spec (supports `--format yaml`) |
 | `xsql version` | Show version information |
 
@@ -261,6 +266,7 @@ xsql proxy -p prod --local-port 13306
 ### Security Features
 
 - **Dual-layer Read-only Protection**: SQL static analysis + database transaction-level read-only
+- **Dual Write Authorization**: CLI writes require both profile permission and a per-invocation flag
 - **Keyring Integration**: `password: "keyring:prod/password"`
 - **Password Masking**: `profile show` never exposes passwords
 - **SSH Security**: known_hosts verification enabled by default

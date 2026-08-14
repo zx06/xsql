@@ -1,6 +1,6 @@
 # RFC 0003: MCP Server 实现
 
-Status: Draft
+Status: Implemented
 
 ## 摘要
 为 xsql 实现 MCP (Model Context Protocol) Server，提供数据库查询能力作为 MCP tools，使 AI 助手能够通过标准 MCP 协议访问 MySQL/PostgreSQL 数据库。MCP Server 将复用现有的配置、db、ssh、输出等核心能力，保持与 CLI 的一致性和兼容性。
@@ -18,7 +18,6 @@ Status: Draft
 - 新增配置项（可选，在配置文件中）：
   ```yaml
   mcp:
-    enabled: true
     transport: stdio  # 默认使用 stdio 传输
     http:
       addr: 127.0.0.1:8787
@@ -36,7 +35,7 @@ Status: Draft
     - `server.go`: MCP server 主逻辑
     - `transport.go`: stdio 传输实现
     - `tools.go`: MCP tools 定义和处理
-  - `cmd/xsql/mcp`: MCP server CLI 命令入口
+  - `cmd/xsql/mcp.go`: MCP server CLI 命令入口
 - 数据结构/接口：
   - MCP Protocol: 遵循 [Model Context Protocol](https://modelcontextprotocol.io/) 规范
   - Tool 输入/输出：复用 xsql 现有的 JSON 输出格式（`ok`、`schema_version`、`data`/`error`）

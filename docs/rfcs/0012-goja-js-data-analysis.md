@@ -1,4 +1,4 @@
-# RFC 0011: Integration of goja JS Engine, Session DataStore, and ReAct Tool Agent Loop
+# RFC 0012: Integration of goja JS Engine, Session DataStore, and ReAct Tool Agent Loop
 
 Status: Implemented
 

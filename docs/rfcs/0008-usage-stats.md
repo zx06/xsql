@@ -1,6 +1,6 @@
 # RFC 0008: Usage Stats & Global Attributes
 
-Status: Draft
+Status: Implemented
 
 ## 摘要
 
@@ -21,10 +21,12 @@ Status: Draft
 **全局 `--attr` flag：**
 
 ```bash
-xsql query "SELECT * FROM users" -p prod --attr env=prod --attr team=ai
-export XSQL_ATTR='env=prod,team=ai'
+xsql query "SELECT * FROM users" -p prod --attr source=codex-cli --attr agent=codex --attr env=prod --attr task=targeted-query
+export XSQL_ATTR='source=codex-cli,agent=codex,env=prod,team=data'
 xsql query "SELECT * FROM users" -p prod
 ```
+
+Codex 发起的 CLI 调用统一附带 `--attr source=codex-cli`，并可继续追加 `agent`、`env`、`team`、`task` 等属性；`source` 不应被覆盖。其他 AI 客户端应使用自己的稳定 source 值。
 
 **stats 命令：**
 
@@ -51,7 +53,7 @@ stats:
 ```bash
 XSQL_STATS_ENABLED=true
 XSQL_STATS_LOG_SQL=true
-XSQL_ATTR='env=prod,team=ai'
+XSQL_ATTR='source=codex-cli,agent=codex,env=prod,team=data,task=health-check'
 ```
 
 ### 技术设计（Architecture）

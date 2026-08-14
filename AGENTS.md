@@ -71,7 +71,8 @@
 - 目标数据库：MySQL + PostgreSQL。
 - 可扩展性：通过 driver registry 扩展新 DB。
 - **默认只读**：防止误操作，默认启用双重只读保护（SQL 静态分析 + 数据库事务级只读）。
-- **可启用写操作**：使用 `--unsafe-allow-write` 或配置 `unsafe_allow_write: true`。
+- **CLI 写入双重授权**：profile 必须配置 `unsafe_allow_write: true`，且当前 `query` / `ai` 命令必须同时携带 `--unsafe-allow-write`；任一条件缺失都保持只读。
+- **AI 调用标记**：Codex 发起的 xsql CLI 调用必须携带 `--attr source=codex-cli`，建议同时追加 `agent`、`env`、`team`、`task` 等 attr；其他 AI 客户端应使用自己的稳定 source 值，且不得覆盖 source。
 - 只读拦截必须返回明确错误码（退出码=4）。
 
 ## 7. SSH Proxy（必须支持）

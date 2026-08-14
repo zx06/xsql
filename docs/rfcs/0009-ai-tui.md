@@ -1,4 +1,4 @@
-# RFC 0008: AI TUI Interactive Mode
+# RFC 0009: AI TUI Interactive Mode
 
 Status: Implemented
 
@@ -20,7 +20,7 @@ Status: Implemented
 
 ### 用户视角（CLI/配置/输出）
 1. **CLI 命令**：
-   - 交互式入口：`xsql ai -p <profile> [PROMPT]`
+   - 交互式入口：`xsql ai -p <profile> [PROMPT] --attr source=codex-cli --attr agent=codex --attr task=interactive-analysis`
 2. **配置文件扩展**：
    在 `xsql.yaml` 中新增 `ai` 配置块：
    ```yaml
@@ -46,7 +46,7 @@ Status: Implemented
   - `internal/app`：复用 `DumpSchema` 与 `Query`。
 
 ### 安全与隐私（Security/Privacy）
-- 默认严格只读策略，除非显式设置 `--unsafe-allow-write`，否则不允许写 SQL 执行。
+- 默认严格只读策略。只有 profile 配置 `unsafe_allow_write: true`，且本次启动同时携带 `--unsafe-allow-write` 时才允许写 SQL；切换 profile 后重新校验这两个条件。
 - 不会把明文 API Key 输出在日志或错细节中。
 
 ### 测试计划（Test Plan）

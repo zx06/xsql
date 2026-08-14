@@ -92,7 +92,7 @@ func NewAICommand() *cobra.Command {
 	cmd.Flags().StringVar(&baseURLStr, "base-url", "", "AI service base URL")
 	cmd.Flags().StringVar(&apiKeyStr, "api-key", "", "AI service API key")
 	cmd.Flags().BoolVar(&allowPlaintext, "allow-plaintext", false, "Allow plaintext AI API key in config")
-	cmd.Flags().BoolVar(&unsafeAllowWrite, "unsafe-allow-write", false, "Allow write operations (bypasses read-only protection)")
+	cmd.Flags().BoolVar(&unsafeAllowWrite, "unsafe-allow-write", false, "Allow writes when the profile also sets unsafe_allow_write: true")
 
 	return cmd
 }

@@ -169,13 +169,15 @@ profiles:
 | `user` | string | 数据库用户名 |
 | `password` | string | 密码（支持 `keyring:` 引用） |
 | `database` | string | 数据库名 |
-| `unsafe_allow_write` | bool | 允许写操作，绕过只读保护（默认 false） |
+| `unsafe_allow_write` | bool | 允许该 profile 进入写模式（默认 false）；CLI 仍需本次命令携带 `--unsafe-allow-write` |
 | `allow_plaintext` | bool | 允许明文密码（默认 false） |
 | `format` | string | 输出格式：json/yaml/table/csv/auto |
 | `local_port` | int | proxy 本地监听端口（默认 0，自动分配） |
 | `ssh_proxy` | string | SSH 代理名称（引用 `ssh_proxies` 中定义的名称） |
 | `query_timeout` | int | 查询超时秒数（默认 30 秒） |
 | `schema_timeout` | int | Schema 导出超时秒数（默认 60 秒） |
+
+> **CLI 写入双重授权**：`xsql query` 和 `xsql ai` 只有在所选 profile 配置 `unsafe_allow_write: true` 且当前命令同时携带 `--unsafe-allow-write` 时才会绕过只读保护。配置或 flag 单独开启都不会允许 CLI 写入。MCP 仍由 profile 配置控制，Web 始终只读。
 
 ## Stats 配置项
 

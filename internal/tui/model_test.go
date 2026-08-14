@@ -110,6 +110,43 @@ func TestTUI_Model_StateTransitions(t *testing.T) {
 	}
 }
 
+func TestTUI_Model_WriteGate(t *testing.T) {
+	tests := []struct {
+		name               string
+		profileAllowsWrite bool
+		cliAllowsWrite     bool
+		wantWrite          bool
+	}{
+		{name: "neither enabled"},
+		{name: "CLI only", cliAllowsWrite: true},
+		{name: "profile only", profileAllowsWrite: true},
+		{name: "both enabled", profileAllowsWrite: true, cliAllowsWrite: true, wantWrite: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resolved := config.Resolved{
+				ProfileName: "dev",
+				Profile: config.Profile{
+					DB:               "mysql",
+					UnsafeAllowWrite: tt.profileAllowsWrite,
+				},
+			}
+			m := NewModel(config.Options{}, resolved, ai.NewService(config.AIConfig{}, nil), "", tt.cliAllowsWrite)
+
+			if m.unsafeAllowWrite != tt.wantWrite {
+				t.Fatalf("unsafeAllowWrite = %v, want %v", m.unsafeAllowWrite, tt.wantWrite)
+			}
+			if tt.wantWrite && !strings.Contains(m.View(), "READ-WRITE") {
+				t.Fatalf("expected READ-WRITE badge, got:\n%s", m.View())
+			}
+			if !tt.wantWrite && !strings.Contains(m.View(), "READ-ONLY") {
+				t.Fatalf("expected READ-ONLY badge, got:\n%s", m.View())
+			}
+		})
+	}
+}
+
 func TestFormatTableResult(t *testing.T) {
 	res := &db.QueryResult{
 		Columns: []string{"id", "username", "extra_json"},
@@ -270,7 +307,7 @@ func TestTUI_Model_EscClearsTextarea(t *testing.T) {
 
 func TestTUI_Model_CtrlPProfileSwitching(t *testing.T) {
 	allProfiles := map[string]config.Profile{
-		"dev":  {DB: "mysql"},
+		"dev":  {DB: "mysql", UnsafeAllowWrite: true},
 		"prod": {DB: "pg"},
 	}
 	resolved := config.Resolved{
@@ -280,6 +317,9 @@ func TestTUI_Model_CtrlPProfileSwitching(t *testing.T) {
 	}
 	aiService := ai.NewService(config.AIConfig{}, nil)
 	m := NewModel(config.Options{}, resolved, aiService, "", true)
+	if !m.unsafeAllowWrite {
+		t.Fatal("expected write mode when both CLI and initial profile allow writes")
+	}
 
 	// Press Ctrl+P -> switches profile to 'prod'
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
@@ -290,8 +330,8 @@ func TestTUI_Model_CtrlPProfileSwitching(t *testing.T) {
 	if m.profile.DB != "pg" {
 		t.Fatalf("expected profile DB to be 'pg', got %q", m.profile.DB)
 	}
-	if !m.unsafeAllowWrite {
-		t.Fatal("expected CLI write override to remain active after profile switch")
+	if m.unsafeAllowWrite {
+		t.Fatal("expected write mode to be disabled after switching to a profile that does not allow writes")
 	}
 	if cmd == nil {
 		t.Fatal("expected loadSchemaCmd after switching profile")
@@ -500,7 +540,7 @@ func TestTUI_Model_FullCoverage(t *testing.T) {
 func TestTUI_Model_ViewAndAllStatesCoverage(t *testing.T) {
 	resolved := config.Resolved{
 		ProfileName: "dev",
-		Profile:     config.Profile{DB: "mysql"},
+		Profile:     config.Profile{DB: "mysql", UnsafeAllowWrite: true},
 	}
 	aiService := ai.NewService(config.AIConfig{}, nil)
 	m := NewModel(config.Options{}, resolved, aiService, "", true) // unsafeAllowWrite = true

@@ -27,10 +27,10 @@
 
 ```bash
 # 启动交互式 TUI
-xsql ai -p dev
+xsql ai -p dev --attr source=codex-cli --attr agent=codex --attr env=dev --attr task=interactive-analysis
 
 # 携带初始 Prompt 启动
-xsql ai "查看用户表前 10 条数据" -p dev
+xsql ai "查看用户表前 10 条数据" -p dev --attr source=codex-cli --attr agent=codex --attr env=dev --attr task=targeted-query
 ```
 
 **Flags:**
@@ -41,7 +41,7 @@ xsql ai "查看用户表前 10 条数据" -p dev
 | `--base-url` | `https://api.openai.com/v1` | AI 服务 Base URL（ENV：`XSQL_AI_BASE_URL`，配置：`ai.base_url`） |
 | `--api-key` | - | AI 服务 API Key（ENV：`XSQL_AI_API_KEY`，配置：`ai.api_key`） |
 | `--allow-plaintext` | false | 允许配置文件中的明文 AI API Key（也可设置 `ai.allow_plaintext: true`） |
-| `--unsafe-allow-write` | false | 允许写操作（绕过只读保护） |
+| `--unsafe-allow-write` | false | 本次命令申请写入；仅当 profile 同时设置 `unsafe_allow_write: true` 时生效 |
 
 ---
 
@@ -49,7 +49,7 @@ xsql ai "查看用户表前 10 条数据" -p dev
 
 执行 SQL 查询。
 
-**默认只读模式**：为防止误操作，默认启用只读保护。如需执行写操作，使用 `--unsafe-allow-write` 标志。
+**默认只读模式**：为防止误操作，默认启用只读保护。CLI 写入采用双重授权：profile 必须设置 `unsafe_allow_write: true`，且本次命令必须同时携带 `--unsafe-allow-write`；任一条件缺失都保持只读。
 
 **只读保护机制（双重保护）：**
 1. **SQL 静态分析**：客户端检测 INSERT/UPDATE/DELETE/DROP 等写操作关键词
@@ -62,7 +62,7 @@ xsql query "SELECT * FROM users LIMIT 10" --profile dev
 # 输出 JSON
 xsql query "SELECT id, name FROM users" --profile dev --format json
 
-# 允许写操作
+# 允许写操作（profile 中还需配置 unsafe_allow_write: true）
 xsql query "INSERT INTO logs (msg) VALUES ('test')" --profile dev --unsafe-allow-write
 ```
 
@@ -71,7 +71,7 @@ xsql query "INSERT INTO logs (msg) VALUES ('test')" --profile dev --unsafe-allow
 |------|--------|------|
 | `--profile` | - | Profile 名称 |
 | `--format` | auto | 输出格式：json/yaml/table/csv/auto |
-| `--unsafe-allow-write` | false | 允许写操作（绕过只读保护） |
+| `--unsafe-allow-write` | false | 本次命令申请写入；仅当 profile 同时设置 `unsafe_allow_write: true` 时生效 |
 | `--allow-plaintext` | false | 允许配置中使用明文密码（也可在配置文件中设置 `allow_plaintext: true`） |
 | `--ssh-skip-known-hosts-check` | false | 跳过 SSH 主机密钥验证（危险） |
 
@@ -572,6 +572,7 @@ xsql mcp server --transport streamable_http --http-addr 127.0.0.1:8787 --http-au
 
 ## 参数来源优先级
 - CLI > ENV > Config
+- `unsafe_allow_write` 是安全策略例外，不按覆盖优先级合并：CLI 的 `--unsafe-allow-write` 与 profile 的 `unsafe_allow_write: true` 必须同时满足。
 
 ### `xsql stats`
 
@@ -651,14 +652,14 @@ schema   prod-mysql  env=prod                 3     0      210
 在执行命令时标记自定义属性，用于按维度统计。
 
 ```bash
-# 单个属性
-xsql query "SELECT * FROM users" -p prod --attr env=prod
+# AI 来源和环境
+xsql query "SELECT * FROM users" -p prod --attr source=codex-cli --attr agent=codex --attr env=prod
 
 # 多个属性
-xsql query "SELECT * FROM users" -p prod --attr env=prod --attr team=ai
+xsql query "SELECT * FROM users" -p prod --attr source=codex-cli --attr agent=codex --attr env=prod --attr team=data --attr task=targeted-query
 
 # 通过 ENV 传递
-export XSQL_ATTR='env=prod,team=ai'
+export XSQL_ATTR='source=codex-cli,agent=codex,env=prod,team=data'
 xsql query "SELECT * FROM users" -p prod
 ```
 
@@ -668,3 +669,4 @@ xsql query "SELECT * FROM users" -p prod
 - CLI `--attr` 可重复使用
 - ENV `XSQL_ATTR` 用逗号分隔
 - CLI 优先级高于 ENV
+- Codex 发起的 CLI 调用统一携带 `--attr source=codex-cli`；建议追加 `agent`、`env`、`team`、`task` 等属性，`source` 保持为 `codex-cli`。其他 AI 客户端应使用自己的稳定 source 值。

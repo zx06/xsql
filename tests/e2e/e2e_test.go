@@ -488,33 +488,58 @@ func TestQuery_MySQL_ReadOnlyBlocked(t *testing.T) {
 	}
 }
 
-func TestQuery_MySQL_UnsafeAllowWrite(t *testing.T) {
+func TestQuery_MySQL_UnsafeAllowWriteRequiresProfileAndCLI(t *testing.T) {
 	dsn := mysqlDSN(t)
-	config := createTempConfig(t, `profiles:
+	readOnlyConfig := createTempConfig(t, `profiles:
   test:
     db: mysql
     dsn: "`+dsn+`"
 `)
+	writeEnabledConfig := createTempConfig(t, `profiles:
+  test:
+    db: mysql
+    dsn: "`+dsn+`"
+    unsafe_allow_write: true
+`)
 
-	// With --unsafe-allow-write, write statements should bypass read-only check
-	// They may still fail at DB level, but not with XSQL_RO_BLOCKED
-	stdout, _, exitCode := runXSQL(t, "query", "INSERT INTO nonexistent VALUES (1)",
-		"--config", config, "--profile", "test", "--format", "json",
-		"--unsafe-allow-write")
-
-	// Should fail with DB error (table doesn't exist), not RO_BLOCKED
-	var resp Response
-	if err := json.Unmarshal([]byte(stdout), &resp); err != nil {
-		t.Fatalf("invalid JSON: %v", err)
+	writeSQL := "INSERT INTO definitely_nonexistent_table_xyz VALUES (1)"
+	tests := []struct {
+		name          string
+		configPath    string
+		includeCLI    bool
+		wantROBlocked bool
+	}{
+		{name: "neither enabled", configPath: readOnlyConfig, wantROBlocked: true},
+		{name: "CLI only", configPath: readOnlyConfig, includeCLI: true, wantROBlocked: true},
+		{name: "profile only", configPath: writeEnabledConfig, wantROBlocked: true},
+		{name: "both enabled", configPath: writeEnabledConfig, includeCLI: true},
 	}
 
-	if resp.Error != nil && resp.Error.Code == "XSQL_RO_BLOCKED" {
-		t.Error("--unsafe-allow-write should bypass read-only check")
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args := []string{"query", writeSQL,
+				"--config", tt.configPath, "--profile", "test", "--format", "json"}
+			if tt.includeCLI {
+				args = append(args, "--unsafe-allow-write")
+			}
 
-	// Exit code should be 5 (DB_EXEC_FAILED), not 4 (RO_BLOCKED)
-	if exitCode == 4 {
-		t.Error("expected exit code != 4 (should not be RO_BLOCKED)")
+			stdout, _, exitCode := runXSQL(t, args...)
+			var resp Response
+			if err := json.Unmarshal([]byte(stdout), &resp); err != nil {
+				t.Fatalf("invalid JSON: %v", err)
+			}
+
+			gotROBlocked := resp.Error != nil && resp.Error.Code == "XSQL_RO_BLOCKED"
+			if gotROBlocked != tt.wantROBlocked {
+				t.Fatalf("RO blocked = %v, want %v; response: %+v", gotROBlocked, tt.wantROBlocked, resp.Error)
+			}
+			if tt.wantROBlocked && exitCode != 4 {
+				t.Fatalf("exit code = %d, want 4", exitCode)
+			}
+			if !tt.wantROBlocked && exitCode == 4 {
+				t.Fatal("both write gates enabled but query was blocked by read-only policy")
+			}
+		})
 	}
 }
 

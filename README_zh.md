@@ -4,7 +4,7 @@
 [![codecov](https://codecov.io/github/zx06/xsql/graph/badge.svg?token=LrcR0pifCj)](https://codecov.io/github/zx06/xsql)
 [![Go Reference](https://pkg.go.dev/badge/github.com/zx06/xsql.svg)](https://pkg.go.dev/github.com/zx06/xsql)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/zx06/xsql)](https://github.com/zx06/xsql/blob/main/go.mod)
-[![Go Report Card](https://goreportcard.com/badge/github.com/zx06/xsql)](https://goreportcard.com/report/github.com/zx06/xsql)
+[![GitHub Stars](https://img.shields.io/github/stars/zx06/xsql)](https://github.com/zx06/xsql/stargazers)
 [![License](https://img.shields.io/github/license/zx06/xsql)](https://github.com/zx06/xsql/blob/main/LICENSE)
 [![Release](https://img.shields.io/github/v/release/zx06/xsql)](https://github.com/zx06/xsql/releases/latest)
 [![GitHub Downloads](https://img.shields.io/github/downloads/zx06/xsql/total)](https://github.com/zx06/xsql/releases)
@@ -19,7 +19,7 @@ xsql 是专为 AI Agent 设计的跨数据库 CLI 工具。默认只读、结构
 
 ```bash
 # AI 可以这样查询你的数据库
-xsql query "SELECT * FROM users WHERE created_at > '2024-01-01'" -p prod -f json
+xsql query "SELECT * FROM users WHERE created_at > '2024-01-01'" -p prod -f json --attr source=codex-cli --attr agent=codex --attr env=prod --attr task=targeted-query
 ```
 
 ## ✨ 为什么选择 xsql？
@@ -108,23 +108,24 @@ npx skills add zx06/xsql
 你现在可以使用 xsql 工具查询数据库。
 
 ## 基本用法
-xsql query "<SQL>" -p <profile> -f json
+xsql query "<SQL>" -p <profile> -f json --attr source=codex-cli --attr agent=codex --attr env=<env> --attr task=<task>
 
 ## 可用命令
-- xsql query "SQL" -p <profile> -f json  # 执行查询
-- xsql schema dump -p <profile> -f json  # 导出数据库结构
-- xsql profile list -f json               # 列出所有 profile
-- xsql profile show <name> -f json        # 查看 profile 详情
+- xsql query "SQL" -p <profile> -f json --attr source=codex-cli --attr agent=codex --attr env=<env> --attr task=<task> # 执行查询
+- xsql schema dump -p <profile> -f json --attr source=codex-cli --attr agent=codex --attr env=<env> --attr task=schema-discovery # 导出数据库结构
+- xsql profile list -f json --attr source=codex-cli --attr agent=codex --attr task=profile-discovery # 列出所有 profile
+- xsql profile show <name> -f json --attr source=codex-cli --attr agent=codex --attr task=profile-discovery # 查看 profile 详情
 
 ## 输出格式
 成功: {"ok":true,"schema_version":1,"data":{"columns":[...],"rows":[...]}}
 失败: {"ok":false,"schema_version":1,"error":{"code":"XSQL_...","message":"..."}}
 
 ## 重要规则
-1. 默认只读模式，无法执行 INSERT/UPDATE/DELETE
+1. 默认只读；写入要求 profile 设置 `unsafe_allow_write: true`，且本次命令同时携带 `--unsafe-allow-write`
 2. 始终使用 -f json 获取结构化输出
-3. 先用 profile list 查看可用的数据库配置
-4. 检查 ok 字段判断执行是否成功
+3. Codex 发起的每次 xsql 调用都添加 `--attr source=codex-cli`，并在已知时补充 `agent`、`env`、`team`、`task`
+4. 先用 profile list 查看可用的数据库配置
+5. 检查 ok 字段判断执行是否成功
 
 ## 退出码
 0=成功, 2=配置错误, 3=连接错误, 4=只读拦截, 5=SQL执行错误
@@ -141,7 +142,7 @@ xsql query "<SQL>" -p <profile> -f json
   "mcpServers": {
     "xsql": {
       "command": "xsql",
-      "args": ["mcp", "server", "--config", "/path/to/xsql.yaml"]
+      "args": ["mcp", "server", "--config", "/path/to/xsql.yaml", "--attr", "source=codex-cli", "--attr", "agent=codex"]
     }
   }
 }
@@ -157,11 +158,11 @@ xsql query "<SQL>" -p <profile> -f json
 ## 数据库查询
 
 使用 xsql 工具查询数据库：
-- 查询: `xsql query "SELECT ..." -p <profile> -f json`
-- 导出结构: `xsql schema dump -p <profile> -f json`
-- 列出配置: `xsql profile list -f json`
+- 查询: `xsql query "SELECT ..." -p <profile> -f json --attr source=codex-cli --attr agent=codex --attr env=<env> --attr task=targeted-query`
+- 导出结构: `xsql schema dump -p <profile> -f json --attr source=codex-cli --attr agent=codex --attr env=<env> --attr task=schema-discovery`
+- 列出配置: `xsql profile list -f json --attr source=codex-cli --attr agent=codex --attr task=profile-discovery`
 
-注意: 默认只读模式，写操作需要 --unsafe-allow-write 标志。
+注意: 默认只读；写入要求 profile 设置 `unsafe_allow_write: true`，且本次命令同时携带 `--unsafe-allow-write`。
 ```
 
 ---
@@ -178,6 +179,10 @@ xsql query "<SQL>" -p <profile> -f json
 | `xsql profile list` | 列出所有 profile |
 | `xsql profile show <name>` | 查看 profile 详情（密码脱敏） |
 | `xsql mcp server` | 启动 MCP Server（AI 助手集成） |
+| `xsql config init/set` | 创建或更新配置文件 |
+| `xsql proxy` | 启动 SSH 本地端口转发代理 |
+| `xsql serve` / `xsql web` | 启动本地 Web UI |
+| `xsql stats` | 查看使用统计与审计属性 |
 | `xsql spec` | 导出 AI Tool Spec（支持 `--format yaml`） |
 | `xsql version` | 显示版本信息 |
 
@@ -261,6 +266,7 @@ xsql proxy -p prod --local-port 13306
 ### 安全特性
 
 - **双重只读保护**：SQL 静态分析 + 数据库事务级只读
+- **双重写入授权**：CLI 写入同时要求 profile 授权与本次命令 flag
 - **Keyring 集成**：`password: "keyring:prod/password"`
 - **密码脱敏**：`profile show` 不泄露密码
 - **SSH 安全**：默认验证 known_hosts

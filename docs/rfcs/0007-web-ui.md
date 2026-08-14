@@ -1,6 +1,6 @@
 # RFC 0007: Web 查询界面（serve / web）
 
-Status: Draft
+Status: Implemented
 
 ## 摘要
 为 xsql 增加一个本地优先的 Web 适配层，提供数据库查询与 schema 浏览能力。新增 `xsql serve` 和 `xsql web` 两个命令，其中 `web` 会在服务就绪后尝试打开默认浏览器。前端采用 Svelte，源码位于仓库子目录，CI/release 阶段先构建前端，再将产物嵌入 Go 二进制中发布。首版 Web 仅支持只读查询，不提供写操作入口。Query 编辑区使用 CodeMirror 6，提供 SQL 高亮、关键字补全、基于 schema API 的表/列补全，以及浏览器内本地 SQL 格式化。常用动作支持编辑器内快捷键：`Mod-Enter` 运行查询，`Shift-Alt-F` / `Mod-Shift-F` 格式化 SQL。Results 区采用紧凑结果网格：单元格默认单行截断，桌面端 hover 快速预览，点击后在底部详情区查看完整值并支持复制。

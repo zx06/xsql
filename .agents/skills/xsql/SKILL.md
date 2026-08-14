@@ -18,9 +18,11 @@ description: >
 ## Default Operating Rules
 
 - Use `--format json` (`-f json`) for all agent-driven work — it returns structured `ok`/`data`/`error` envelopes. YAML format (`-f yaml`) is also available with the same envelope structure.
+- Add `--attr source=codex-cli` to every Codex-driven xsql invocation. Additional attributes are encouraged, but do not override the reserved `source` marker. Other AI clients should replace the value with their own stable client name.
+- Use additional attributes to make usage searchable: `agent` (for example `codex`), `env` (for example `prod`), `team`, and `task` are recommended when known.
 - `stdout` is data; `stderr` is logs. Never parse stderr as result data.
 - Validate responses by checking `ok`, `schema_version`, and `error.code` — not by string matching.
-- Assume read-only mode. Only suggest `--unsafe-allow-write` when the user has explicitly requested writes.
+- Assume read-only mode. Writes require both `unsafe_allow_write: true` in the selected profile and `--unsafe-allow-write` on the current CLI invocation; only use both when the user has explicitly requested writes.
 - Never leak secrets, full DSNs, passwords, or private keys in output or summaries.
 - `--ssh-skip-known-hosts-check` is a risky last resort — call out the security tradeoff if it's needed.
 
@@ -31,7 +33,7 @@ Follow this sequence unless the user already knows the exact profile and SQL.
 ### Step 1: Resolve the profile
 
 ```bash
-xsql profile list --format json
+xsql profile list --format json --attr source=codex-cli --attr agent=codex --attr env=<env> --attr task=profile-discovery
 ```
 
 Match the user's intent to a profile by checking each profile's `description` and `database` fields. If the user says "生产环境" or "prod", look for a profile whose description contains those keywords. If ambiguous, ask the user to choose.
@@ -39,7 +41,7 @@ Match the user's intent to a profile by checking each profile's `description` an
 Then confirm the profile details:
 
 ```bash
-xsql profile show <profile> --format json
+xsql profile show <profile> --format json --attr source=codex-cli --attr agent=codex --attr env=<env> --attr task=profile-discovery
 ```
 
 Note the `db` field (`mysql` or `pg`) — it determines which SQL dialect to use. Also note the `database` name for use in queries.
@@ -49,7 +51,7 @@ Note the `db` field (`mysql` or `pg`) — it determines which SQL dialect to use
 **Small databases (under ~20 tables):** Full dump is fine.
 
 ```bash
-xsql schema dump -p <profile> -f json
+xsql schema dump -p <profile> -f json --attr source=codex-cli --attr agent=codex --attr env=<env> --attr task=schema-discovery
 ```
 
 **Medium/large databases (20+ tables):** Full dump may be too large for context. Use a two-pass approach:
@@ -58,16 +60,16 @@ Pass 1 — Get table list only (lightweight, via information_schema):
 
 ```bash
 # MySQL
-xsql query "SELECT TABLE_NAME, TABLE_ROWS, DATA_LENGTH, INDEX_LENGTH FROM information_schema.TABLES WHERE TABLE_SCHEMA = '<database>' ORDER BY TABLE_ROWS DESC" -p <profile> -f json
+xsql query "SELECT TABLE_NAME, TABLE_ROWS, DATA_LENGTH, INDEX_LENGTH FROM information_schema.TABLES WHERE TABLE_SCHEMA = '<database>' ORDER BY TABLE_ROWS DESC" -p <profile> -f json --attr source=codex-cli --attr agent=codex --attr env=<env> --attr task=health-check
 
 # PostgreSQL
-xsql query "SELECT relname AS table_name, reltuples::bigint AS row_estimate, pg_total_relation_size(relid) AS total_bytes FROM pg_stat_user_tables ORDER BY reltuples DESC" -p <profile> -f json
+xsql query "SELECT relname AS table_name, reltuples::bigint AS row_estimate, pg_total_relation_size(relid) AS total_bytes FROM pg_stat_user_tables ORDER BY reltuples DESC" -p <profile> -f json --attr source=codex-cli --attr agent=codex --attr env=<env> --attr task=health-check
 ```
 
 Pass 2 — Get detailed schema only for the tables you actually need:
 
 ```bash
-xsql schema dump -p <profile> -f json --table "user*"
+xsql schema dump -p <profile> -f json --table "user*" --attr source=codex-cli --attr agent=codex --attr env=<env> --attr task=schema-discovery
 ```
 
 Additional schema dump flags: `--include-system` to include system tables, `--schema-timeout <seconds>` to override the default 60s timeout.
@@ -77,13 +79,13 @@ Additional schema dump flags: `--include-system` to include system tables, `--sc
 Write minimal, narrow queries with explicit columns, predicates, and `LIMIT`. Match SQL syntax to the profile's engine (MySQL vs PostgreSQL).
 
 ```bash
-xsql query "<SQL>" -p <profile> -f json
+xsql query "<SQL>" -p <profile> -f json --attr source=codex-cli --attr agent=codex --attr env=<env> --attr task=targeted-query
 ```
 
 For long-running queries, set a timeout (default: 30s):
 
 ```bash
-xsql query "<SQL>" -p <profile> -f json --query-timeout 60
+xsql query "<SQL>" -p <profile> -f json --query-timeout 60 --attr source=codex-cli --attr agent=codex --attr env=<env> --attr task=long-query
 ```
 
 ### Step 4: Validate the response
@@ -121,7 +123,7 @@ For specific investigations, also consider:
 - For large tables, prefer aggregation (`COUNT`, `GROUP BY`) over `SELECT *`.
 - Use `--query-timeout` for long-running queries (default: 30s).
 - Use `--schema-timeout` for large schema dumps (default: 60s).
-- Run `xsql spec --format json` to discover all available commands and flags.
+- Run `xsql spec --format json --attr source=codex-cli --attr agent=codex --attr task=tool-discovery` to discover all available commands and flags.
 
 ## Output And Error Handling
 
@@ -152,22 +154,23 @@ Table and CSV formats are for humans — they lack the `ok`/`schema_version` env
 
 ```bash
 # MCP server for AI assistant integration
-xsql mcp server                                        # stdio transport (default)
-xsql mcp server --transport streamable_http            # HTTP transport
+xsql mcp server --attr source=codex-cli --attr agent=codex # stdio transport (default)
+xsql mcp server --transport streamable_http --attr source=codex-cli --attr agent=codex # HTTP transport
 xsql mcp server --transport streamable_http \
-  --http-addr 127.0.0.1:8787 --http-auth-token <token> # HTTP with auth
+  --http-addr 127.0.0.1:8787 --http-auth-token <token> \
+  --attr source=codex-cli --attr agent=codex            # HTTP with auth
 
 # Web UI
-xsql web                  # start web server and open browser
-xsql serve                # start web server (headless, no browser)
+xsql web --attr source=codex-cli --attr agent=codex   # start web server and open browser
+xsql serve --attr source=codex-cli --attr agent=codex # start web server (headless, no browser)
 
 # Configuration
-xsql config init                                   # create template config file
-xsql config set profile.dev.host localhost          # set a config value by dot-notation key
+xsql config init --attr source=codex-cli --attr agent=codex                           # create template config file
+xsql config set profile.dev.host localhost --attr source=codex-cli --attr agent=codex # set a config value by dot-notation key
 
 # Tool metadata and version
-xsql spec --format json   # export tool spec for AI/agents
-xsql version              # print version info
+xsql spec --format json --attr source=codex-cli --attr agent=codex # export tool spec for AI/agents
+xsql version --attr source=codex-cli --attr agent=codex            # print version info
 ```
 
 ## Config And Profile Rules

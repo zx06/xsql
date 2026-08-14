@@ -91,7 +91,7 @@ SELECT 'DELETE FROM users' AS warning;
 
 ### 第二层：数据库事务级只读（服务端）
 
-当 `unsafe_allow_write = false` 时，xsql 使用 Go 的 `database/sql` 包创建只读事务：
+当当前入口未授权写入时，xsql 使用 Go 的 `database/sql` 包创建只读事务：
 
 ```go
 tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
@@ -109,17 +109,17 @@ xsql query "SELECT * FROM users" -p prod
 
 #### 允许写操作（危险）
 ```bash
-# 使用 --unsafe-allow-write 绕过所有保护
-xsql query "INSERT INTO logs VALUES ('test')" -p prod --unsafe-allow-write
-
-# 或在 profile 中配置
+# 先在 profile 中授予写入资格
 # xsql.yaml:
 # profiles:
 #   prod:
 #     unsafe_allow_write: true
+
+# 本次 CLI 调用还必须显式申请写入
+xsql query "INSERT INTO logs VALUES ('test')" -p prod --unsafe-allow-write
 ```
 
-**警告**：`--unsafe-allow-write` 会同时绕过客户端静态分析和服务端事务级只读，请谨慎使用。
+profile 配置或 CLI flag 单独开启时仍保持只读。两者同时开启后，当前 CLI 调用会绕过客户端静态分析和服务端事务级只读，请谨慎使用。MCP 仍由 profile 配置控制，Web 始终强制只读。
 
 ### 绕过检测的风险提示
 

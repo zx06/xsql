@@ -11,11 +11,16 @@
 /internal/config       # 配置加载/合并/校验 + profiles
 /internal/ai           # AI LLM 客户端与 Context Prompt 组装
 /internal/tui          # Bubbletea TUI 交互式终端UI实现
+/internal/export       # AI 会话数据导出
+/internal/js           # goja 数据分析沙箱
+/internal/session      # AI 会话数据集存储
 /internal/secret       # keyring/加密/明文兼容
 /internal/db           # driver registry + 执行引擎
 /internal/db/mysql     # MySQL 驱动实现
 /internal/db/pg        # PostgreSQL 驱动实现
 /internal/mcp          # MCP Server 实现
+/internal/web          # Web API、鉴权与嵌入式前端适配
+/internal/stats        # 使用统计、attr 解析与聚合
 /internal/ssh          # SSH proxy（driver dial，必要时回退端口转发）+ ssh_config（可选）
 /internal/proxy        # 端口转发代理（ssh -L 语义）
 /internal/output       # json/yaml/table/csv + 流式输出

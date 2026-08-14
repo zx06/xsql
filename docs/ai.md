@@ -28,10 +28,10 @@ AI 可以通过 `xsql schema dump` 自动发现数据库结构：
 
 ```bash
 # 导出所有表结构（JSON 格式）
-xsql schema dump -p dev -f json
+xsql schema dump -p dev -f json --attr source=codex-cli --attr agent=codex --attr env=dev --attr task=schema-discovery
 
 # 过滤特定表
-xsql schema dump -p dev --table "user*" -f json
+xsql schema dump -p dev --table "user*" -f json --attr source=codex-cli --attr agent=codex --attr env=dev --attr task=schema-discovery
 
 # 输出示例
 {
@@ -54,23 +54,24 @@ xsql schema dump -p dev --table "user*" -f json
 ```
 
 **AI 工作流建议：**
-1. 先调用 `xsql schema dump` 获取表结构
-2. 理解表名、列名、类型、关系
-3. 基于结构生成正确的 SQL 查询
-4. 调用 `xsql query` 执行查询
+1. Codex 发起的 xsql CLI 调用都携带 `--attr source=codex-cli`，并在已知时追加 `agent`、`env`、`team`、`task`
+2. 先调用 `xsql schema dump` 获取表结构
+3. 理解表名、列名、类型、关系
+4. 基于结构生成正确的 SQL 查询
+5. 调用 `xsql query` 执行查询
 
 ## MCP Server
 xsql 提供了 MCP (Model Context Protocol) Server 模式，允许 AI 助手通过标准 MCP 协议访问数据库查询能力。
 
 ### 启动方式
 ```bash
-xsql mcp server
+xsql mcp server --attr source=codex-cli --attr agent=codex
 ```
 
 ### Streamable HTTP 传输
 需要通过 `streamable_http` 启动，并强制要求鉴权：
 ```bash
-xsql mcp server --transport streamable_http --http-addr 127.0.0.1:8787 --http-auth-token "your-token"
+xsql mcp server --transport streamable_http --http-addr 127.0.0.1:8787 --http-auth-token "your-token" --attr source=codex-cli --attr agent=codex
 ```
 
 ### MCP Tools
@@ -78,7 +79,6 @@ MCP Server 提供以下 tools：
 - **query**: 执行 SQL 查询（支持只读模式）
 - **profile_list**: 列出所有配置的 profiles
 - **profile_show**: 查看 profile 详情
-- **schema_dump**: 导出数据库结构（表、列、索引、外键）
 
 ### 集成示例
 在 Claude Desktop 配置中添加：
@@ -87,7 +87,7 @@ MCP Server 提供以下 tools：
   "mcpServers": {
     "xsql": {
       "command": "xsql",
-      "args": ["mcp", "server", "--command", "mcp", "server", "--config", "/path/to/config.yaml"]
+      "args": ["mcp", "server", "--config", "/path/to/config.yaml", "--attr", "source=codex-cli", "--attr", "agent=codex"]
     }
   }
 }
@@ -111,8 +111,10 @@ Web UI 复用 xsql 的 profile、SSH、只读策略和结构化错误契约，�
 
 ```bash
 # 启动交互式 TUI
-xsql ai --profile dev
+xsql ai --profile dev --attr source=codex-cli --attr agent=codex --attr env=dev --attr task=interactive-analysis
 ```
+
+`xsql ai` 默认保持只读。只有所选 profile 配置了 `unsafe_allow_write: true`，且本次启动同时携带 `--unsafe-allow-write` 时，TUI 才进入 READ-WRITE 模式；切换 profile 后会重新校验这两个条件。
 
 ### LLM 集成与 Tool Call 机制
 `xsql` 使用 OpenAI 官方 SDK (`github.com/openai/openai-go`) 与大模型交互，基于标准的 **ReAct Agent Loop 循环推理**，支持 3 大核心 Tools 调度：
