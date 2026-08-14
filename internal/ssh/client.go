@@ -232,10 +232,16 @@ func expandPath(p string) string {
 }
 
 func cleanIdentityPath(p string) (string, error) {
-	expanded := expandPath(p)
-	cleaned := filepath.Clean(expanded)
-	if strings.Contains(cleaned, "\x00") {
+	if p == "" {
+		return "", fmt.Errorf("empty identity file path")
+	}
+	if strings.Contains(p, "..") {
+		return "", fmt.Errorf("path traversal not allowed in identity file path")
+	}
+	if strings.Contains(p, "\x00") {
 		return "", fmt.Errorf("invalid path: contains null byte")
 	}
+	expanded := expandPath(p)
+	cleaned := filepath.Clean(expanded)
 	return cleaned, nil
 }

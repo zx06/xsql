@@ -690,6 +690,10 @@ func (h *handler) handleConfigTestProfile(w http.ResponseWriter, r *http.Request
 	}
 
 	if profile.SSHConfig != nil && profile.SSHConfig.IdentityFile != "" {
+		if strings.Contains(profile.SSHConfig.IdentityFile, "..") {
+			writeError(w, http.StatusBadRequest, errors.New(errors.CodeCfgInvalid, "invalid identity file path: path traversal not allowed", nil))
+			return
+		}
 		profile.SSHConfig.IdentityFile = filepath.Clean(profile.SSHConfig.IdentityFile)
 	}
 
@@ -727,6 +731,10 @@ func (h *handler) handleConfigTestSSHProxy(w http.ResponseWriter, r *http.Reques
 	}
 
 	if proxy.IdentityFile != "" {
+		if strings.Contains(proxy.IdentityFile, "..") {
+			writeError(w, http.StatusBadRequest, errors.New(errors.CodeCfgInvalid, "invalid identity file path: path traversal not allowed", nil))
+			return
+		}
 		proxy.IdentityFile = filepath.Clean(proxy.IdentityFile)
 	}
 

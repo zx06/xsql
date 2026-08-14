@@ -742,6 +742,23 @@ func TestHandler_ConfigAIAndTesting(t *testing.T) {
 			t.Errorf("expected 400 for missing host, got %d", recNoHost.Code)
 		}
 
+		// Traversal path error
+		reqBadPath := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/ssh-proxy", strings.NewReader(`{"ssh_proxy":{"host":"127.0.0.1","identity_file":"../id_rsa"}}`))
+		recBadPath := httptest.NewRecorder()
+		h.ServeHTTP(recBadPath, reqBadPath)
+		if recBadPath.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for traversal path, got %d", recBadPath.Code)
+		}
+
+		// Profile referencing SSH proxy with traversal path
+		hWithBadProxy := NewHandler(HandlerOptions{ConfigPath: createConfigFile(t, "profiles: {}\nssh_proxies:\n  bad_bastion:\n    host: 127.0.0.1\n    identity_file: \"../id_rsa\"\n")})
+		reqBadProfPath := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/profile", strings.NewReader(`{"profile":{"db":"mysql","host":"127.0.0.1","ssh_proxy":"bad_bastion"}}`))
+		recBadProfPath := httptest.NewRecorder()
+		hWithBadProxy.ServeHTTP(recBadProfPath, reqBadProfPath)
+		if recBadProfPath.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for traversal path in profile ssh config, got %d", recBadProfPath.Code)
+		}
+
 		// Inherited passphrase and connection attempt to closed port
 		reqProxyTest := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/ssh-proxy", strings.NewReader(`{"name":"bastion","ssh_proxy":{"host":"127.0.0.1","port":1}}`))
 		recProxyTest := httptest.NewRecorder()
