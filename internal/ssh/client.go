@@ -153,10 +153,17 @@ func buildAuthMethods(opts Options) ([]ssh.AuthMethod, *errors.XError) {
 
 	// Private key authentication
 	if opts.IdentityFile != "" {
-		keyPath := filepath.Clean(expandPath(opts.IdentityFile))
-		keyData, err := os.ReadFile(keyPath) // nolint:gosec // user configured identity file
+		keyPath, err := cleanIdentityPath(opts.IdentityFile)
 		if err != nil {
-			return nil, errors.Wrap(errors.CodeCfgInvalid, "failed to read ssh identity file", map[string]any{"path": keyPath}, err)
+			return nil, errors.Wrap(errors.CodeCfgInvalid, "invalid ssh identity file path", map[string]any{"path": opts.IdentityFile}, err)
+		}
+		absPath, err := filepath.Abs(keyPath)
+		if err != nil {
+			return nil, errors.Wrap(errors.CodeCfgInvalid, "failed to resolve ssh identity path", map[string]any{"path": keyPath}, err)
+		}
+		keyData, err := os.ReadFile(absPath) // nolint:gosec // user configured identity file
+		if err != nil {
+			return nil, errors.Wrap(errors.CodeCfgInvalid, "failed to read ssh identity file", map[string]any{"path": absPath}, err)
 		}
 		var signer ssh.Signer
 		if opts.Passphrase != "" {
@@ -222,4 +229,13 @@ func expandPath(p string) string {
 		}
 	}
 	return p
+}
+
+func cleanIdentityPath(p string) (string, error) {
+	expanded := expandPath(p)
+	cleaned := filepath.Clean(expanded)
+	if strings.Contains(cleaned, "\x00") {
+		return "", fmt.Errorf("invalid path: contains null byte")
+	}
+	return cleaned, nil
 }
