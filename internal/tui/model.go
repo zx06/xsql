@@ -95,8 +95,8 @@ type Model struct {
 	initialPrompt    string
 	autoExecute      bool
 
-	sessionStore  *session.SessionDataStore
-	jsEngine      *js.JSEngine
+	sessionStore   *session.SessionDataStore
+	jsEngine       *js.JSEngine
 	chatHistory    []ai.ChatMessage
 	pendingActions []ai.ToolAction
 	pendingExport  *PendingExport
