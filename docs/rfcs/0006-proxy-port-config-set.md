@@ -1,6 +1,6 @@
 # RFC 0006: Proxy Port Config & Config Set Command
 
-Status: Accepted
+Status: Implemented
 
 ## 摘要
 增加两项能力：（1）支持在 profile 配置中指定 proxy 本地端口，端口冲突时交互式询问用户；（2）新增 `xsql config set` 和 `xsql config init` 命令，降低配置复杂度。两项变更涉及 config schema 新增字段、新增 CLI 命令、新增错误码。

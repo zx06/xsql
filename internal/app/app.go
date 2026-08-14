@@ -40,7 +40,7 @@ func (a App) BuildSpec() spec.Spec {
 				Name:        "query",
 				Description: "Execute a read-only SQL query",
 				Flags: append(globalFlags,
-					spec.FlagSpec{Name: "unsafe-allow-write", Default: "false", Description: "Bypass read-only check (dangerous)"},
+					spec.FlagSpec{Name: "unsafe-allow-write", Default: "false", Description: "Allow writes when profile unsafe_allow_write is true"},
 					spec.FlagSpec{Name: "allow-plaintext", Default: "false", Description: "Allow plaintext secrets in config"},
 					spec.FlagSpec{Name: "ssh-skip-known-hosts-check", Default: "false", Description: "Skip SSH known_hosts check (dangerous)"},
 				),

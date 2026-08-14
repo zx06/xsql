@@ -1,4 +1,4 @@
-# RFC 0010: TUI Visual and Interactive Experience Redesign
+# RFC 0011: TUI Visual and Interactive Experience Redesign
 
 Status: Implemented
 

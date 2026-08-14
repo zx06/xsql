@@ -1,9 +1,9 @@
 # RFC 0004: Proxy Port Forwarding
 
-Status: Draft
+Status: Implemented
 
 ## 摘要
-新增 `xsql proxy start` 命令，提供本地 TCP 端口转发功能。用户可以通过 xsql 启动一个本地监听端口，所有连接到该端口的流量通过 SSH tunnel 转发到远程数据库。这为开发环境提供了类似 `ssh -L` 的便捷端口转发能力，无需手动配置端口转发即可让本地程序（如数据库客户端、IDE）访问远程数据库。
+新增 `xsql proxy -p <profile>` 命令，提供本地 TCP 端口转发功能。用户可以通过 xsql 启动一个本地监听端口，所有连接到该端口的流量通过 SSH tunnel 转发到远程数据库。这为开发环境提供了类似 `ssh -L` 的便捷端口转发能力，无需手动配置端口转发即可让本地程序（如数据库客户端、IDE）访问远程数据库。
 
 ## 背景 / 动机
 - 当前痛点：开发者在本地开发时需要通过 SSH tunnel 访问远程数据库，通常需要手动执行 `ssh -L local_port:remote_host:remote_port user@ssh_host` 命令，且每次重启后需要重新执行
@@ -15,18 +15,18 @@ Status: Draft
 
 #### 新增命令
 
-**`xsql proxy start <profile>`**
+**`xsql proxy -p <profile>`**
 启动端口转发代理，将本地端口通过 SSH tunnel 转发到指定 profile 的数据库。
 
 ```bash
 # 使用 profile 启动代理（端口自动分配）
-xsql proxy start prod-mysql
+xsql proxy -p prod-mysql
 
 # 指定本地端口
-xsql proxy start prod-mysql --local-port 13306
+xsql proxy -p prod-mysql --local-port 13306
 
 # 输出 JSON 格式
-xsql proxy start prod-mysql --format json
+xsql proxy -p prod-mysql --format json
 ```
 
 **输出示例（Table）：**
@@ -65,9 +65,7 @@ Press Ctrl+C to stop
 - 无默认行为变化，这是新增功能
 
 #### 错误码
-新增错误码：
-- `CodeProxyStartFailed`（退出码 10）：代理启动失败
-- `CodeProxyPortInUse`（退出码 10）：端口已被占用
+端口已被占用时返回 `XSQL_PORT_IN_USE`（退出码 10）；其他 SSH/配置错误复用现有稳定错误码。
 
 ### 技术设计（Architecture）
 
@@ -111,7 +109,7 @@ type Options struct {
 
 #### 兼容性策略
 - 新增功能，不破坏现有兼容性
-- 仅在显式调用 `proxy start` 时启动代理
+- 仅在显式调用 `xsql proxy` 时启动代理
 
 ## 备选方案（Alternatives）
 

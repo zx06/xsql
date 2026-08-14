@@ -99,19 +99,26 @@ PostgreSQL 测试：
 ```
 cmd/xsql/          # CLI 入口
 internal/
+  ai/              # AI LLM 客户端与 Prompt 组装
   app/             # 应用编排
   config/          # 配置加载/合并/校验 + profile
   db/              # driver registry + query
     mysql/         # MySQL driver
     pg/            # PostgreSQL driver
   errors/          # 错误码/退出码
+  export/          # AI 会话数据导出
+  js/              # goja 数据分析沙箱
   log/             # slog 日志
   mcp/             # MCP Server 实现
   output/          # json/yaml/table/csv 输出
   proxy/           # 端口转发代理
   secret/          # keyring + 明文策略
+  session/         # AI 会话数据集存储
   spec/            # tool spec 导出
   ssh/             # SSH client + dial
+  stats/           # 使用统计与 attr 聚合
+  tui/             # AI 交互式终端 UI
+  web/             # Web API 与静态资源适配
 webui/             # Svelte 前端源码 + 嵌入资源
 tests/
   e2e/             # E2E 测试

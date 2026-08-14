@@ -146,6 +146,28 @@ func TestRunQuery_MissingDB(t *testing.T) {
 	}
 }
 
+func TestCLIWriteAllowed(t *testing.T) {
+	tests := []struct {
+		name               string
+		cliAllowsWrite     bool
+		profileAllowsWrite bool
+		want               bool
+	}{
+		{name: "neither enabled"},
+		{name: "CLI only", cliAllowsWrite: true},
+		{name: "profile only", profileAllowsWrite: true},
+		{name: "both enabled", cliAllowsWrite: true, profileAllowsWrite: true, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := cliWriteAllowed(tt.cliAllowsWrite, tt.profileAllowsWrite); got != tt.want {
+				t.Fatalf("cliWriteAllowed() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestRunQuery_UnsupportedDriver(t *testing.T) {
 	GlobalConfig.Resolved.Profile = configProfile("sqlite")
 	GlobalConfig.FormatStr = "json"

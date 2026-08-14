@@ -2,6 +2,23 @@
 
 本目录用于维护 **xsql** 的设计变更记录（Request For Comments）。
 
+## RFC 索引
+
+| 编号 | 标题 | 状态 |
+|------|------|------|
+| [0001](0001-ssh-driver-dial.md) | SSH Proxy 采用 Driver Dial 优先 | Implemented |
+| [0002](0002-config-loading.md) | Config 文件加载与 Profile 选择 | Implemented |
+| [0003](0003-mcp-server.md) | MCP Server 实现 | Implemented |
+| [0004](0004-proxy-port-forwarding.md) | Proxy Port Forwarding | Implemented |
+| [0005](0005-schema-dump.md) | Schema Dump | Implemented |
+| [0006](0006-proxy-port-config-set.md) | Proxy Port Config & Config Set | Implemented |
+| [0007](0007-web-ui.md) | Web 查询界面 | Implemented |
+| [0008](0008-usage-stats.md) | Usage Stats & Global Attributes | Implemented |
+| [0009](0009-ai-tui.md) | AI TUI Interactive Mode | Implemented |
+| [0010](0010-openai-sdk-tool-call.md) | OpenAI SDK & Tool Call | Implemented |
+| [0011](0011-tui-visual-redesign.md) | TUI Visual Redesign | Implemented |
+| [0012](0012-goja-js-data-analysis.md) | goja Data Analysis & ReAct Loop | Implemented |
+
 ## 何时需要 RFC
 当变更会影响以下任一项时，必须先提交/更新 RFC（并同步更新对应 `docs/*`）：
 - CLI 命令/flag/默认值/行为
@@ -13,7 +30,7 @@
 
 ## 编号与命名
 - 文件命名：`NNNN-title.md`，例如 `0001-ssh-driver-dial.md`
-- `NNNN` 从 `0001` 开始递增。
+- `NNNN` 从 `0001` 开始递增，编号必须唯一；新 RFC 使用当前最大编号的下一个值。
 
 ## 流程（最小流程）
 1) 新建 RFC（使用 `0000-template.md`）

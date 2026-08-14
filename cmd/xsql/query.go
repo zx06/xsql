@@ -13,6 +13,10 @@ import (
 
 const DefaultQueryTimeout = 30 * time.Second
 
+func cliWriteAllowed(cliAllowsWrite, profileAllowsWrite bool) bool {
+	return cliAllowsWrite && profileAllowsWrite
+}
+
 // QueryFlags holds the flags for the query command
 type QueryFlags struct {
 	UnsafeAllowWrite bool
@@ -36,7 +40,7 @@ func NewQueryCommand(w *output.Writer) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&flags.UnsafeAllowWrite, "unsafe-allow-write", false, "Allow write operations (bypasses read-only protection)")
+	cmd.Flags().BoolVar(&flags.UnsafeAllowWrite, "unsafe-allow-write", false, "Allow writes when the profile also sets unsafe_allow_write: true")
 	cmd.Flags().BoolVar(&flags.AllowPlaintext, "allow-plaintext", false, "Allow plaintext secrets in config")
 	cmd.Flags().BoolVar(&flags.SSHSkipHostKey, "ssh-skip-known-hosts-check", false, "Skip SSH known_hosts check (dangerous)")
 	cmd.Flags().IntVar(&flags.QueryTimeout, "query-timeout", 0, "Query timeout in seconds (default: 30)")
@@ -63,7 +67,7 @@ func runQuery(args []string, flags *QueryFlags, w *output.Writer) error {
 		SQL:              sql,
 		AllowPlaintext:   flags.AllowPlaintext,
 		SkipHostKeyCheck: flags.SSHSkipHostKey,
-		UnsafeAllowWrite: flags.UnsafeAllowWrite || p.UnsafeAllowWrite,
+		UnsafeAllowWrite: cliWriteAllowed(flags.UnsafeAllowWrite, p.UnsafeAllowWrite),
 	})
 
 	// Record stats

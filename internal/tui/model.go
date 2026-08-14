@@ -158,7 +158,7 @@ func NewModel(_ config.Options, resolved config.Resolved, aiService *ai.Service,
 		profileName:      resolved.ProfileName,
 		allProfiles:      resolved.AllProfiles,
 		profileList:      pList,
-		unsafeAllowWrite: unsafeAllowWrite || resolved.Profile.UnsafeAllowWrite,
+		unsafeAllowWrite: unsafeAllowWrite && resolved.Profile.UnsafeAllowWrite,
 		cliAllowWrite:    unsafeAllowWrite,
 		aiModel:          resolved.AI.Model,
 		initialPrompt:    strings.TrimSpace(initialPrompt),
@@ -804,7 +804,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					m.profileName = nextProfileName
 					m.profile = newP
-					m.unsafeAllowWrite = m.cliAllowWrite || newP.UnsafeAllowWrite
+					m.unsafeAllowWrite = m.cliAllowWrite && newP.UnsafeAllowWrite
 					m.schemaInfo = nil
 					m.state = StateLoadingSchema
 

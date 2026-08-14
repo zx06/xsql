@@ -1,4 +1,4 @@
-# RFC 0009: Migrate OpenAI Integration to Official SDK and Tool Call
+# RFC 0010: Migrate OpenAI Integration to Official SDK and Tool Call
 
 Status: Implemented
 

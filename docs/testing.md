@@ -217,9 +217,6 @@ go test -v ./internal/ssh/...
 #### CLI Flags 测试
 测试 SSH CLI flags 与配置文件的合并行为：
 - `--ssh-skip-known-hosts-check`
-- `--ssh-identity-file`
-- `--ssh-user`
-- `--ssh-host`
 
 ```bash
 # 运行 SSH CLI flag 测试
@@ -260,14 +257,19 @@ export XSQL_TEST_PG_DSN="..."
 ### 目录结构
 ```
 tests/e2e/
+  ├── ai_test.go                 # AI TUI 命令测试
+  ├── config_test.go             # config 命令测试
   ├── e2e_test.go                # 共享 helper 和基础设施
   ├── mcp_test.go                # MCP Server 测试
   ├── output_test.go             # 输出格式测试
   ├── profile_test.go            # profile 命令测试
   ├── proxy_test.go              # proxy 命令测试
   ├── readonly_test.go           # 只读策略测试
+  ├── schema_test.go             # schema dump 测试
   ├── ssh_cli_flags_test.go      # SSH CLI flags 测试
-  └── ssh_proxy_success_test.go  # SSH 代理成功测试（需要真实 SSH）
+  ├── ssh_proxy_success_test.go  # SSH 代理成功测试（需要真实 SSH）
+  ├── stats_test.go              # stats 与 attr 测试
+  └── web_test.go                # Web 命令与 API 测试
 ```
 
 ### 运行测试

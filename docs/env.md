@@ -12,7 +12,7 @@
 - `XSQL_WEB_HTTP_AUTH_TOKEN`：Web 鉴权 token
 - `XSQL_STATS_ENABLED`：是否启用使用统计（`true`/`false`）
 - `XSQL_STATS_LOG_SQL`：是否记录 SQL 内容（`true`/`false`）
-- `XSQL_ATTR`：统计属性（格式：`key1=val1,key2=val2`）
+- `XSQL_ATTR`：统计属性（格式：`key1=val1,key2=val2`）；例如 `source=codex-cli,agent=codex,env=prod,team=data,task=health-check`
 - `XSQL_AI_MODEL`：AI 模型名称
 - `XSQL_AI_BASE_URL`：OpenAI 兼容服务 Base URL
 - `XSQL_AI_API_KEY`：AI 服务 API Key（明文仅保存在当前进程环境中）

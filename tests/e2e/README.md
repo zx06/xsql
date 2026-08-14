@@ -70,6 +70,13 @@ go test -v -tags=e2e -coverprofile=coverage.txt ./tests/e2e/...
 - 配置文件详情
 - 配置文件验证
 
+### 其他入口
+- AI TUI 命令与初始状态（`ai_test.go`）
+- config 命令（`config_test.go`）
+- schema dump（`schema_test.go`）
+- 使用统计与全局 attr（`stats_test.go`）
+- Web 命令与 HTTP API（`web_test.go`）
+
 ## 环境变量
 
 | 变量 | 描述 | 示例 |
