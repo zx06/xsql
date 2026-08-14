@@ -200,8 +200,11 @@ export class WebUIController {
   #tableDetailCache = new Map();
   #tableDetailRequestCache = new Map();
 
+  #toastCounter = 0;
+
   showToast(message, type = 'info', duration = 3000) {
-    const id = `${Date.now()}-${Math.random()}`;
+    this.#toastCounter += 1;
+    const id = `toast-${this.#toastCounter}-${Date.now()}`;
     this.toasts = [...this.toasts, { id, message, type }];
     if (duration > 0) {
       setTimeout(() => {
@@ -563,23 +566,29 @@ export class WebUIController {
     }
 
     const isPG = this.sqlDialect === 'postgresql';
-    const tableName = tableDetail.schema ? (isPG ? `"${tableDetail.schema}"."${tableDetail.name}"` : `\`${tableDetail.schema}\`.\`${tableDetail.name}\``) : (isPG ? `"${tableDetail.name}"` : `\`${tableDetail.name}\``);
-    const comments = [];
+    const quoteIdent = (name) => (isPG ? `"${name}"` : `\`${name}\``);
+    
+    let tableName = quoteIdent(tableDetail.name);
+    if (tableDetail.schema) {
+      tableName = `${quoteIdent(tableDetail.schema)}.${quoteIdent(tableDetail.name)}`;
+    }
 
+    const comments = [];
     const cols = tableDetail.columns.map((col) => {
-      let def = `  ${isPG ? `"${col.name}"` : `\`${col.name}\``} ${col.type}`;
+      const colIdent = quoteIdent(col.name);
+      let def = `  ${colIdent} ${col.type}`;
       if (!col.nullable) def += ' NOT NULL';
       if (col.default != null && col.default !== '') def += ` DEFAULT ${col.default}`;
       if (!isPG && col.comment) {
-        def += ` COMMENT '${col.comment.replace(/'/g, "''")}'`;
+        def += ` COMMENT '${col.comment.replaceAll("'", "''")}'`;
       }
       if (isPG && col.comment) {
-        comments.push(`COMMENT ON COLUMN ${tableName}."${col.name}" IS '${col.comment.replace(/'/g, "''")}';`);
+        comments.push(`COMMENT ON COLUMN ${tableName}.${quoteIdent(col.name)} IS '${col.comment.replaceAll("'", "''")}';`);
       }
       return def;
     });
 
-    const pkCols = tableDetail.columns.filter((c) => c.primary_key).map((c) => isPG ? `"${c.name}"` : `\`${c.name}\``);
+    const pkCols = tableDetail.columns.filter((c) => c.primary_key).map((c) => quoteIdent(c.name));
     if (pkCols.length > 0) {
       cols.push(`  PRIMARY KEY (${pkCols.join(', ')})`);
     }
@@ -587,13 +596,13 @@ export class WebUIController {
     let ddl = `CREATE TABLE ${tableName} (\n${cols.join(',\n')}\n)`;
     if (!isPG) {
       if (tableDetail.comment) {
-        ddl += ` COMMENT='${tableDetail.comment.replace(/'/g, "''")}'`;
+        ddl += ` COMMENT='${tableDetail.comment.replaceAll("'", "''")}'`;
       }
       ddl += ';';
     } else {
       ddl += ';';
       if (tableDetail.comment) {
-        comments.unshift(`COMMENT ON TABLE ${tableName} IS '${tableDetail.comment.replace(/'/g, "''")}';`);
+        comments.unshift(`COMMENT ON TABLE ${tableName} IS '${tableDetail.comment.replaceAll("'", "''")}';`);
       }
       if (comments.length > 0) {
         ddl += `\n\n${comments.join('\n')}`;
