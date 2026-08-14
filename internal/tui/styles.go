@@ -2,6 +2,11 @@ package tui
 
 import "github.com/charmbracelet/lipgloss"
 
+func init() {
+	// Initialize theme based on safe environment detection (no OSC 11 probe)
+	SetThemeDark(DetectDarkBackground())
+}
+
 var (
 	// Palette Colors (Adaptive Catppuccin / Tokyo Night Theme)
 	PrimaryColor   = lipgloss.AdaptiveColor{Light: "#6D28D9", Dark: "#A78BFA"}

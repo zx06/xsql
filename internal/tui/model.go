@@ -116,6 +116,9 @@ type Model struct {
 	activeTable   int
 	activeToolIdx int
 
+	isDark        bool
+	rawAIMessages map[int]string
+
 	textarea textarea.Model
 	viewport viewport.Model
 	spinner  spinner.Model
@@ -153,7 +156,7 @@ func NewModel(_ config.Options, resolved config.Resolved, aiService *ai.Service,
 		pList = []string{resolved.ProfileName}
 	}
 
-	return Model{
+	m := Model{
 		aiService:        aiService,
 		profile:          resolved.Profile,
 		profileName:      resolved.ProfileName,
@@ -174,6 +177,8 @@ func NewModel(_ config.Options, resolved config.Resolved, aiService *ai.Service,
 		toolCalls:        []ToolCallItem{},
 		activeTable:      -1,
 		activeToolIdx:    -1,
+		isDark:           DetectDarkBackground(),
+		rawAIMessages:    make(map[int]string),
 		state:            StateLoadingSchema,
 		textarea:         ta,
 		viewport:         vp,
@@ -182,6 +187,8 @@ func NewModel(_ config.Options, resolved config.Resolved, aiService *ai.Service,
 		width:            80,
 		height:           24,
 	}
+	SetThemeDark(m.isDark)
+	return m
 }
 
 func (m Model) Init() tea.Cmd {
@@ -345,6 +352,22 @@ func (m *Model) renderToolCall(idx int) {
 	}
 
 	m.messages[tc.MsgIndex] = sb.String()
+	m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+}
+
+func (m *Model) rerenderAllMessages() {
+	for idx, rawMD := range m.rawAIMessages {
+		if idx >= 0 && idx < len(m.messages) {
+			renderedMD := RenderMarkdownWithTheme(rawMD, m.width, m.isDark)
+			m.messages[idx] = AITagStyle.Render("🤖 AI") + "\n" + renderedMD
+		}
+	}
+	for i := range m.toolCalls {
+		m.renderToolCall(i)
+	}
+	for i := range m.tableStates {
+		m.renderTableState(i, i == m.activeTable)
+	}
 	m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 }
 
@@ -572,8 +595,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		})
 
 		if exp != "" {
-			renderedMD := RenderMarkdown(exp, m.width)
+			renderedMD := RenderMarkdownWithTheme(exp, m.width, m.isDark)
 			aiMsg := AITagStyle.Render("🤖 AI") + "\n" + renderedMD
+			m.rawAIMessages[len(m.messages)] = exp
 			m.messages = append(m.messages, aiMsg)
 		}
 		m.state = StateIdle

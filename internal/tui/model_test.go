@@ -695,3 +695,37 @@ func TestModel_MultipleToolCalls_SequentialExecution(t *testing.T) {
 		t.Fatalf("expected StateIdle after final text response, got %v", m.state)
 	}
 }
+
+func TestTUI_Model_ThemeAutoDetection(t *testing.T) {
+	// Test Default Dark
+	resolved := config.Resolved{
+		ProfileName: "default",
+		Profile:     config.Profile{DB: "mysql"},
+	}
+	t.Setenv("XSQL_THEME", "dark")
+	mDark := NewModel(config.Options{}, resolved, nil, "", false)
+	if !mDark.isDark {
+		t.Fatal("expected isDark == true when XSQL_THEME=dark")
+	}
+
+	// Test Light Mode auto-detection via env var
+	t.Setenv("XSQL_THEME", "light")
+	mLight := NewModel(config.Options{}, resolved, nil, "", false)
+	if mLight.isDark {
+		t.Fatal("expected isDark == false when XSQL_THEME=light")
+	}
+
+	// Test COLORFGBG detection
+	t.Setenv("XSQL_THEME", "")
+	t.Setenv("COLORFGBG", "0;15") // Light background (bg=15)
+	mLight2 := NewModel(config.Options{}, resolved, nil, "", false)
+	if mLight2.isDark {
+		t.Fatal("expected isDark == false when COLORFGBG='0;15'")
+	}
+
+	t.Setenv("COLORFGBG", "15;0") // Dark background (bg=0)
+	mDark2 := NewModel(config.Options{}, resolved, nil, "", false)
+	if !mDark2.isDark {
+		t.Fatal("expected isDark == true when COLORFGBG='15;0'")
+	}
+}
