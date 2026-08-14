@@ -78,6 +78,10 @@ func NewHandler(opts HandlerOptions) http.Handler {
 	mux.Handle(apiPrefix+"/config/profiles/", h.withAuth(http.HandlerFunc(h.handleConfigDeleteProfile)))
 	mux.Handle(apiPrefix+"/config/ssh-proxies", h.withAuth(http.HandlerFunc(h.handleConfigSaveSSHProxy)))
 	mux.Handle(apiPrefix+"/config/ssh-proxies/", h.withAuth(http.HandlerFunc(h.handleConfigDeleteSSHProxy)))
+	mux.Handle(apiPrefix+"/config/ai", h.withAuth(http.HandlerFunc(h.handleConfigSaveAI)))
+	mux.Handle(apiPrefix+"/config/test/profile", h.withAuth(http.HandlerFunc(h.handleConfigTestProfile)))
+	mux.Handle(apiPrefix+"/config/test/ssh-proxy", h.withAuth(http.HandlerFunc(h.handleConfigTestSSHProxy)))
+	mux.Handle(apiPrefix+"/config/test/ai", h.withAuth(http.HandlerFunc(h.handleConfigTestAI)))
 	mux.Handle(apiPrefix+"/schema/tables/", h.withAuth(http.HandlerFunc(h.handleSchemaTable)))
 	mux.Handle(apiPrefix+"/schema/tables", h.withAuth(http.HandlerFunc(h.handleSchemaTables)))
 	mux.Handle(apiPrefix+"/query", h.withAuth(http.HandlerFunc(h.handleQuery)))
@@ -511,6 +515,7 @@ func (h *handler) handleConfigGet(w http.ResponseWriter, r *http.Request) {
 		"ssh_proxies": cfg.SSHProxies,
 		"mcp":         cfg.MCP,
 		"web":         cfg.Web,
+		"ai":          cfg.AI,
 	})
 }
 
@@ -615,4 +620,144 @@ func (h *handler) handleConfigDeleteSSHProxy(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "name": name})
+}
+
+type configAIRequest struct {
+	AI config.AIConfig `json:"ai"`
+}
+
+func (h *handler) handleConfigSaveAI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		writeMethodNotAllowed(w)
+		return
+	}
+	var req configAIRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, errors.Wrap(errors.CodeCfgInvalid, "invalid JSON payload", nil, err))
+		return
+	}
+	configPath := h.getResolvedConfigPath()
+	if xe := config.SaveAI(configPath, req.AI); xe != nil {
+		writeError(w, statusCodeFor(xe.Code), xe)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "config_path": configPath})
+}
+
+func (h *handler) handleConfigTestProfile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+	var req struct {
+		Name    string         `json:"name"`
+		Profile config.Profile `json:"profile"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, errors.Wrap(errors.CodeCfgInvalid, "invalid JSON payload", nil, err))
+		return
+	}
+
+	profile := req.Profile
+	cfg, _, _ := config.LoadConfig(config.Options{ConfigPath: h.configPath})
+
+	// If password is blank but profile already exists in config, preserve saved password
+	if profile.Password == "" && req.Name != "" {
+		if existing, ok := cfg.Profiles[req.Name]; ok {
+			profile.Password = existing.Password
+		}
+	}
+
+	// Resolve SSH proxy if specified
+	if profile.SSHConfig == nil && profile.SSHProxy != "" {
+		if proxy, ok := cfg.SSHProxies[profile.SSHProxy]; ok {
+			profile.SSHConfig = &proxy
+		} else {
+			writeError(w, http.StatusBadRequest, errors.New(errors.CodeCfgInvalid, "ssh_proxy not found in configuration", map[string]any{"ssh_proxy": profile.SSHProxy}))
+			return
+		}
+	}
+
+	// Default ports
+	if profile.Port == 0 {
+		switch profile.DB {
+		case "mysql":
+			profile.Port = 3306
+		case "pg":
+			profile.Port = 5432
+		}
+	}
+
+	result, xe := app.TestProfileConnection(r.Context(), profile, h.allowPlaintext, h.skipHostKeyCheck)
+	if xe != nil {
+		writeError(w, statusCodeFor(xe.Code), xe)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *handler) handleConfigTestSSHProxy(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+	var req struct {
+		Name     string          `json:"name"`
+		SSHProxy config.SSHProxy `json:"ssh_proxy"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, errors.Wrap(errors.CodeCfgInvalid, "invalid JSON payload", nil, err))
+		return
+	}
+
+	proxy := req.SSHProxy
+	cfg, _, _ := config.LoadConfig(config.Options{ConfigPath: h.configPath})
+	if proxy.Passphrase == "" && req.Name != "" {
+		if existing, ok := cfg.SSHProxies[req.Name]; ok {
+			proxy.Passphrase = existing.Passphrase
+		}
+	}
+	if proxy.Port == 0 {
+		proxy.Port = 22
+	}
+
+	result, xe := app.TestSSHProxyConnection(r.Context(), proxy, h.allowPlaintext, h.skipHostKeyCheck)
+	if xe != nil {
+		writeError(w, statusCodeFor(xe.Code), xe)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *handler) handleConfigTestAI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+	var req struct {
+		AI config.AIConfig `json:"ai"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, errors.Wrap(errors.CodeCfgInvalid, "invalid JSON payload", nil, err))
+		return
+	}
+
+	aiCfg := req.AI
+	cfg, _, _ := config.LoadConfig(config.Options{ConfigPath: h.configPath})
+	if aiCfg.APIKey == "" {
+		aiCfg.APIKey = cfg.AI.APIKey
+	}
+	if aiCfg.BaseURL == "" {
+		aiCfg.BaseURL = cfg.AI.BaseURL
+	}
+	if aiCfg.Model == "" {
+		aiCfg.Model = cfg.AI.Model
+	}
+
+	result, xe := app.TestAIConnection(r.Context(), aiCfg)
+	if xe != nil {
+		writeError(w, statusCodeFor(xe.Code), xe)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }

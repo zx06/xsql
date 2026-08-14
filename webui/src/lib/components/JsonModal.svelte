@@ -1,4 +1,6 @@
 <script>
+  import { highlightJson, tryParseJson } from '../result-grid.js';
+
   let {
     data = null,
     onClose
@@ -8,39 +10,14 @@
 
   function formattedJson() {
     if (!data) return '';
-    try {
-      const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+    const parsed = tryParseJson(data);
+    if (parsed !== null) {
       return JSON.stringify(parsed, null, 2);
-    } catch {
-      return String(data);
     }
-  }
-
-  function highlightJson(jsonStr) {
-    if (!jsonStr) return '';
-    const escaped = String(jsonStr)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-
-    const jsonRegex = /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g;
-
-    return escaped.replace(jsonRegex, (match) => {
-      if (/^"/.test(match)) {
-        if (/:$/.test(match)) {
-          const key = match.slice(0, -1);
-          return `<span class="json-key">${key}</span>:`;
-        }
-        return `<span class="json-string">${match}</span>`;
-      }
-      if (/true|false/.test(match)) {
-        return `<span class="json-boolean">${match}</span>`;
-      }
-      if (/null/.test(match)) {
-        return `<span class="json-null">${match}</span>`;
-      }
-      return `<span class="json-number">${match}</span>`;
-    });
+    if (typeof data === 'object') {
+      return JSON.stringify(data, null, 2);
+    }
+    return String(data);
   }
 
   async function handleCopy() {
@@ -57,7 +34,7 @@
 </script>
 
 {#if data !== null}
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
     <div
       role="button"
       tabindex="-1"
@@ -66,15 +43,21 @@
       onclick={onClose}
       onkeydown={(e) => e.key === 'Escape' && onClose()}
     ></div>
-    <div class="relative z-10 flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-[var(--panel-border)] bg-[var(--panel-bg)] shadow-2xl overflow-hidden">
-      <div class="flex items-center justify-between border-b border-[var(--panel-border)] px-4 py-3">
-        <strong class="text-sm text-[var(--text)]">Formatted JSON Preview</strong>
+    <div class="relative z-10 flex max-h-[85vh] w-full max-w-3xl flex-col rounded-xl border border-[var(--panel-border)] bg-[var(--panel-bg)] shadow-2xl overflow-hidden">
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between border-b border-[var(--panel-border)] px-4 py-2.5 bg-[var(--panel-inner)]">
+        <div class="flex items-center gap-2">
+          <svg class="h-4 w-4 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+          </svg>
+          <strong class="text-xs font-semibold text-[var(--text)]">JSON / Detail Inspector</strong>
+        </div>
         <div class="flex items-center gap-2">
           <button
-            class="xsql-button border-[var(--input-border)] bg-[var(--panel-inner)] px-2.5 py-1 text-xs text-[var(--text)] hover:bg-[var(--accent-soft)]"
+            class="xsql-button px-2.5 py-1 text-xs text-[var(--text)]"
             onclick={handleCopy}
           >
-            {copied ? 'Copied' : 'Copy'}
+            {copied ? '✓ Copied' : 'Copy'}
           </button>
           <button
             class="rounded-lg p-1 text-[var(--muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--text)]"
@@ -84,8 +67,10 @@
           </button>
         </div>
       </div>
+
+      <!-- Content -->
       <div class="xsql-scroll flex-1 overflow-auto p-4 bg-[var(--editor-bg)]">
-        <pre class="m-0 font-mono text-xs text-[var(--text)] whitespace-pre-wrap break-all">{@html highlightJson(formattedJson())}</pre>
+        <pre class="m-0 font-mono text-xs text-[var(--text)] whitespace-pre-wrap break-all leading-5">{@html highlightJson(formattedJson())}</pre>
       </div>
     </div>
   </div>

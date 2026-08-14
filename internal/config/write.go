@@ -277,6 +277,13 @@ func DeleteSSHProxy(configPath, name string) *errors.XError {
 	})
 }
 
+// SaveAI creates or updates the AI configuration in the specified config file.
+func SaveAI(configPath string, ai AIConfig) *errors.XError {
+	return modifyConfig(configPath, "ai", "ai", true, func(cfg *File) {
+		cfg.AI = ai
+	})
+}
+
 // FindConfigPath returns the path to the config file being used (or default path).
 func FindConfigPath(opts Options) string {
 	if opts.ConfigPath != "" {

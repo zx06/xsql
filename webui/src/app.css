@@ -16,7 +16,7 @@ body,
     margin: 0;
     background: var(--app-bg);
     color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", "Helvetica Neue", Arial, sans-serif;
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -26,7 +26,7 @@ body,
   pre,
   kbd,
   samp {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   }
 
   button,
@@ -45,140 +45,182 @@ body,
   }
 }
 
+/* Light Theme: Crisp, high-readability developer aesthetic (GitHub Light / Linear clean) */
 .theme-white {
-  --app-bg: #f3f4f6;
-  --text: #1f2937;
-  --muted: #6b7280;
-  --panel-bg: rgba(255, 255, 255, 0.92);
-  --panel-border: rgba(0, 0, 0, 0.08);
-  --panel-shadow: rgba(0, 0, 0, 0.04);
-  --panel-inner: rgba(249, 250, 251, 0.8);
+  --app-bg: #f6f8fa;
+  --text: #1f2328;
+  --text-secondary: #59636e;
+  --muted: #656d76;
+  --panel-bg: #ffffff;
+  --panel-border: #d0d7de;
+  --panel-border-hover: #afb8c1;
+  --panel-shadow: rgba(31, 35, 40, 0.06);
+  --panel-inner: #f6f8fa;
   --input-bg: #ffffff;
-  --input-border: rgba(0, 0, 0, 0.12);
+  --input-border: #d0d7de;
   --table-bg: #ffffff;
-  --table-head-bg: #f9fafb;
-  --table-border: rgba(0, 0, 0, 0.06);
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
-  --accent-soft: rgba(37, 99, 235, 0.08);
-  --accent-border: #3b82f6;
-  --tag-bg: #e0e7ff;
-  --tag-text: #3730a3;
-  --pill-bg: #e0f2fe;
-  --pill-text: #0369a1;
-  --error-bg: #fef2f2;
-  --error-text: #991b1b;
-  --editor-bg: #f9fafb;
-  --editor-border: rgba(0, 0, 0, 0.08);
+  --table-head-bg: #f6f8fa;
+  --table-border: #e1e4e8;
+  --table-row-hover: #f3f4f6;
+  --table-row-selected: #ddf4ff;
+  
+  --accent: #0969da;
+  --accent-hover: #0550ae;
+  --accent-soft: rgba(9, 105, 218, 0.08);
+  --accent-border: #0969da;
+  
+  --success-bg: #dafbe1;
+  --success-text: #1a7f37;
+  --success-border: #aceebb;
+  
+  --tag-bg: #ddf4ff;
+  --tag-text: #0969da;
+  --pill-bg: #eaeef2;
+  --pill-text: #424a53;
+  --error-bg: #ffebe9;
+  --error-text: #cf222e;
+  --error-border: #ffc1ba;
+  --editor-bg: #ffffff;
+  --editor-border: #d0d7de;
 }
 
+/* Dark Theme: Sleek, high-contrast studio dark palette (GitHub Dark / Linear Night) */
 .theme-black {
-  --app-bg: #0b0f17;
-  --text: #f3f4f6;
-  --muted: #9ca3af;
-  --panel-bg: rgba(17, 24, 39, 0.88);
-  --panel-border: rgba(255, 255, 255, 0.08);
-  --panel-shadow: rgba(0, 0, 0, 0.4);
-  --panel-inner: rgba(31, 41, 55, 0.6);
-  --input-bg: #111827;
-  --input-border: rgba(255, 255, 255, 0.12);
-  --table-bg: #0f172a;
-  --table-head-bg: #1e293b;
-  --table-border: rgba(255, 255, 255, 0.07);
-  --accent: #3b82f6;
-  --accent-hover: #60a5fa;
-  --accent-soft: rgba(59, 130, 246, 0.15);
-  --accent-border: #60a5fa;
-  --tag-bg: #1e1b4b;
-  --tag-text: #a5b4fc;
-  --pill-bg: #082f49;
-  --pill-text: #7dd3fc;
-  --error-bg: rgba(127, 29, 29, 0.5);
-  --error-text: #fca5a5;
-  --editor-bg: #0f172a;
-  --editor-border: rgba(255, 255, 255, 0.08);
+  --app-bg: #0d1117;
+  --text: #f0f6fc;
+  --text-secondary: #8b949e;
+  --muted: #7d8590;
+  --panel-bg: #161b22;
+  --panel-border: rgba(240, 246, 252, 0.1);
+  --panel-border-hover: rgba(240, 246, 252, 0.2);
+  --panel-shadow: rgba(0, 0, 0, 0.55);
+  --panel-inner: #0d1117;
+  --input-bg: #0d1117;
+  --input-border: rgba(240, 246, 252, 0.15);
+  --table-bg: #161b22;
+  --table-head-bg: #0d1117;
+  --table-border: rgba(240, 246, 252, 0.08);
+  --table-row-hover: rgba(56, 139, 253, 0.08);
+  --table-row-selected: rgba(56, 139, 253, 0.2);
+  
+  --accent: #2f81f7;
+  --accent-hover: #58a6ff;
+  --accent-soft: rgba(56, 139, 253, 0.15);
+  --accent-border: #58a6ff;
+  
+  --success-bg: rgba(46, 160, 67, 0.15);
+  --success-text: #3fb950;
+  --success-border: rgba(63, 185, 80, 0.3);
+  
+  --tag-bg: rgba(56, 139, 253, 0.15);
+  --tag-text: #79c0ff;
+  --pill-bg: #21262d;
+  --pill-text: #8b949e;
+  --error-bg: rgba(248, 81, 73, 0.15);
+  --error-text: #ff7b72;
+  --error-border: rgba(248, 81, 73, 0.3);
+  --editor-bg: #0d1117;
+  --editor-border: rgba(240, 246, 252, 0.1);
 }
 
-.json-key {
-  color: var(--accent);
+/* JSON Viewer Highlighting */
+.theme-white .json-key {
+  color: #0550ae;
   font-weight: 600;
 }
-.json-string {
-  color: #059669;
+.theme-white .json-string {
+  color: #116329;
+}
+.theme-white .json-number {
+  color: #953800;
+  font-weight: 500;
+}
+.theme-white .json-boolean {
+  color: #cf222e;
+  font-weight: 600;
+}
+.theme-white .json-null {
+  color: #6e7781;
+  font-style: italic;
+  font-weight: 600;
+}
+
+.theme-black .json-key {
+  color: #79c0ff;
+  font-weight: 600;
 }
 .theme-black .json-string {
-  color: #34d399;
-}
-.json-number {
-  color: #d97706;
+  color: #7ee787;
 }
 .theme-black .json-number {
-  color: #fbbf24;
-}
-.json-boolean {
-  color: #db2777;
-  font-weight: 600;
+  color: #ffa657;
+  font-weight: 500;
 }
 .theme-black .json-boolean {
-  color: #f472b6;
+  color: #ff7b72;
+  font-weight: 600;
 }
-.json-null {
-  color: var(--muted);
+.theme-black .json-null {
+  color: #8b949e;
   font-style: italic;
   font-weight: 600;
 }
 
 @layer components {
   .xsql-panel {
-    @apply rounded-xl border border-[var(--panel-border)] bg-[var(--panel-bg)] shadow-[0_10px_24px_var(--panel-shadow)] backdrop-blur-md transition-all;
+    @apply rounded-xl border border-[var(--panel-border)] bg-[var(--panel-bg)] shadow-[0_4px_16px_var(--panel-shadow)] transition-all;
   }
 
   .xsql-input {
-    @apply w-full rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--text)] outline-none transition placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[color:var(--accent-soft)];
+    @apply w-full rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-1.5 text-xs text-[var(--text)] outline-none transition placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[color:var(--accent-soft)];
   }
 
   .xsql-button {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--panel-border)] bg-[var(--panel-inner)] px-2.5 py-1.5 text-xs font-medium text-[var(--text)] transition hover:bg-[var(--accent-soft)] hover:border-[var(--accent-border)] active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none;
   }
 
   .xsql-button-primary {
-    @apply border-[var(--accent-border)] bg-[var(--accent)] text-white shadow-sm hover:brightness-110;
+    @apply border-[var(--accent-border)] bg-[var(--accent)] text-white shadow-xs hover:brightness-110 hover:border-[var(--accent-hover)];
   }
 
   .xsql-tab {
-    @apply rounded-md px-3 py-1.5 text-xs font-medium text-[var(--muted)] transition hover:bg-[var(--accent-soft)] hover:text-[var(--text)];
+    @apply inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-[var(--muted)] transition hover:bg-[var(--accent-soft)] hover:text-[var(--text)];
   }
 
   .xsql-tab-active {
-    @apply bg-[var(--accent-soft)] text-[var(--text)] ring-1 ring-[var(--panel-border)];
+    @apply bg-[var(--accent-soft)] text-[var(--accent)] font-semibold border border-[var(--accent-border)]/30;
   }
 
   .xsql-resizer-h {
-    @apply relative flex w-2 cursor-col-resize items-center justify-center transition hover:bg-[var(--accent-soft)];
+    @apply relative flex w-1.5 cursor-col-resize items-center justify-center transition hover:bg-[var(--accent)];
   }
 
   .xsql-resizer-h::after {
     content: '';
-    @apply h-8 w-1 rounded-full bg-[var(--muted)] opacity-30 transition hover:opacity-100;
+    @apply h-6 w-0.5 rounded-full bg-[var(--muted)] opacity-40 transition hover:opacity-100;
   }
 
   .xsql-resizer-v {
-    @apply relative flex h-2 cursor-row-resize items-center justify-center transition hover:bg-[var(--accent-soft)];
+    @apply relative flex h-1.5 cursor-row-resize items-center justify-center transition hover:bg-[var(--accent)];
   }
 
   .xsql-resizer-v::after {
     content: '';
-    @apply h-1 w-8 rounded-full bg-[var(--muted)] opacity-30 transition hover:opacity-100;
+    @apply h-0.5 w-6 rounded-full bg-[var(--muted)] opacity-40 transition hover:opacity-100;
+  }
+
+  .xsql-badge {
+    @apply inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase font-mono tracking-wider;
   }
 
   .xsql-scroll {
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent;
+    scrollbar-color: color-mix(in srgb, var(--muted) 35%, transparent) transparent;
   }
 
   .xsql-scroll::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
   }
 
   .xsql-scroll::-webkit-scrollbar-track {
@@ -186,33 +228,32 @@ body,
   }
 
   .xsql-scroll::-webkit-scrollbar-thumb {
-    border: 2px solid transparent;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--muted) 40%, transparent);
-    background-clip: padding-box;
+    background: color-mix(in srgb, var(--muted) 30%, transparent);
   }
 
   .xsql-scroll::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in srgb, var(--muted) 65%, transparent);
-    background-clip: padding-box;
+    background: color-mix(in srgb, var(--muted) 60%, transparent);
   }
 }
 
+/* Data Results Table */
 .xsql-table {
   width: 100%;
   min-width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: auto;
   background: var(--table-bg);
 }
 
 .xsql-table th,
 .xsql-table td {
   border-bottom: 1px solid var(--table-border);
-  padding: 0.55rem 0.75rem;
+  padding: 0.45rem 0.65rem;
   text-align: left;
-  vertical-align: top;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  vertical-align: middle;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 .xsql-table th {
@@ -223,75 +264,103 @@ body,
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: 0.03em;
   user-select: none;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  border-bottom: 1.5px solid var(--table-border);
 }
 
 .xsql-table td {
-  font-size: 0.83rem;
+  font-size: 0.8rem;
   color: var(--text);
-  word-break: break-word;
+  white-space: nowrap;
 }
 
 .xsql-table-compact th {
-  padding: 0.45rem 0.65rem;
+  padding: 0.4rem 0.55rem;
 }
 
 .xsql-table-compact td {
-  padding: 0.15rem 0.25rem;
-  vertical-align: middle;
+  padding: 0.2rem 0.35rem;
 }
 
+/* CodeMirror customizations */
 .xsql-cm {
   min-height: 0;
 }
 
 .xsql-cm .cm-editor {
   height: 100%;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.xsql-cm .cm-gutters {
+  background-color: transparent !important;
+  border-right: 1px solid var(--table-border) !important;
+  color: var(--muted) !important;
+}
+
+.xsql-cm .cm-activeLineGutter {
+  background-color: var(--accent-soft) !important;
+  color: var(--text) !important;
 }
 
 .xsql-cm .cm-scroller,
 .xsql-cm .cm-tooltip-autocomplete > ul {
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent;
+  scrollbar-color: color-mix(in srgb, var(--muted) 35%, transparent) transparent;
 }
 
 .xsql-cm .cm-scroller::-webkit-scrollbar,
 .xsql-cm .cm-tooltip-autocomplete > ul::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.xsql-cm .cm-scroller::-webkit-scrollbar-track,
-.xsql-cm .cm-tooltip-autocomplete > ul::-webkit-scrollbar-track {
-  background: transparent;
+  width: 6px;
+  height: 6px;
 }
 
 .xsql-cm .cm-scroller::-webkit-scrollbar-thumb,
 .xsql-cm .cm-tooltip-autocomplete > ul::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--muted) 40%, transparent);
-  background-clip: padding-box;
+  background: color-mix(in srgb, var(--muted) 30%, transparent);
 }
 
-.xsql-cm .cm-scroller::-webkit-scrollbar-thumb:hover,
-.xsql-cm .cm-tooltip-autocomplete > ul::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--muted) 65%, transparent);
-  background-clip: padding-box;
+.xsql-cm .cm-tooltip-autocomplete {
+  border: 1px solid var(--panel-border) !important;
+  border-radius: 0.5rem !important;
+  background-color: var(--panel-bg) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3) !important;
 }
 
 .xsql-cm .cm-tooltip-autocomplete ul {
-  padding: 0.25rem;
+  padding: 0.3rem !important;
 }
 
-.xsql-cm .cm-tooltip-autocomplete ul li .cm-completionLabel {
+.xsql-cm .cm-tooltip-autocomplete ul li {
+  border-radius: 0.375rem !important;
+  padding: 0.25rem 0.5rem !important;
+}
+
+.xsql-cm .cm-tooltip-autocomplete ul li[aria-selected] {
+  background-color: var(--accent-soft) !important;
+  color: var(--accent) !important;
+}
+
+.xsql-cm .cm-completionLabel {
   font-size: 0.82rem;
+  font-weight: 500;
 }
 
-.xsql-cm .cm-tooltip-autocomplete ul li .cm-completionDetail {
+.xsql-cm .cm-completionDetail {
   color: var(--muted);
+  font-size: 0.75rem;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
