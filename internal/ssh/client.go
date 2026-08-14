@@ -153,8 +153,8 @@ func buildAuthMethods(opts Options) ([]ssh.AuthMethod, *errors.XError) {
 
 	// Private key authentication
 	if opts.IdentityFile != "" {
-		keyPath := expandPath(opts.IdentityFile)
-		keyData, err := os.ReadFile(keyPath)
+		keyPath := filepath.Clean(expandPath(opts.IdentityFile))
+		keyData, err := os.ReadFile(keyPath) // nolint:gosec // user configured identity file
 		if err != nil {
 			return nil, errors.Wrap(errors.CodeCfgInvalid, "failed to read ssh identity file", map[string]any{"path": keyPath}, err)
 		}
@@ -173,9 +173,15 @@ func buildAuthMethods(opts Options) ([]ssh.AuthMethod, *errors.XError) {
 	// Try default private key paths
 	if len(methods) == 0 {
 		for _, name := range []string{"id_ed25519", "id_rsa", "id_ecdsa"} {
-			keyPath := expandPath("~/.ssh/" + name)
+			keyPath := filepath.Clean(expandPath("~/.ssh/" + name))
 			if keyData, err := os.ReadFile(keyPath); err == nil {
-				if signer, err := ssh.ParsePrivateKey(keyData); err == nil {
+				var signer ssh.Signer
+				if opts.Passphrase != "" {
+					signer, err = ssh.ParsePrivateKeyWithPassphrase(keyData, []byte(opts.Passphrase))
+				} else {
+					signer, err = ssh.ParsePrivateKey(keyData)
+				}
+				if err == nil {
 					methods = append(methods, ssh.PublicKeys(signer))
 					break
 				}
@@ -197,7 +203,7 @@ func buildHostKeyCallback(opts Options) (ssh.HostKeyCallback, *errors.XError) {
 	if khPath == "" {
 		khPath = "~/.ssh/known_hosts"
 	}
-	khPath = expandPath(khPath)
+	khPath = filepath.Clean(expandPath(khPath))
 	cb, err := knownhosts.New(khPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -210,8 +216,10 @@ func buildHostKeyCallback(opts Options) (ssh.HostKeyCallback, *errors.XError) {
 
 func expandPath(p string) string {
 	if strings.HasPrefix(p, "~/") {
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, p[2:])
+		home, err := os.UserHomeDir()
+		if err == nil {
+			return filepath.Join(home, p[2:])
+		}
 	}
 	return p
 }

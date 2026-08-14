@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -688,6 +689,10 @@ func (h *handler) handleConfigTestProfile(w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	if profile.SSHConfig != nil && profile.SSHConfig.IdentityFile != "" {
+		profile.SSHConfig.IdentityFile = filepath.Clean(profile.SSHConfig.IdentityFile)
+	}
+
 	result, xe := app.TestProfileConnection(r.Context(), profile, h.allowPlaintext, h.skipHostKeyCheck)
 	if xe != nil {
 		writeError(w, statusCodeFor(xe.Code), xe)
@@ -719,6 +724,10 @@ func (h *handler) handleConfigTestSSHProxy(w http.ResponseWriter, r *http.Reques
 	}
 	if proxy.Port == 0 {
 		proxy.Port = 22
+	}
+
+	if proxy.IdentityFile != "" {
+		proxy.IdentityFile = filepath.Clean(proxy.IdentityFile)
 	}
 
 	result, xe := app.TestSSHProxyConnection(r.Context(), proxy, h.allowPlaintext, h.skipHostKeyCheck)
