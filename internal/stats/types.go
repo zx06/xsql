@@ -1,6 +1,10 @@
 package stats
 
-import "time"
+import (
+	"sort"
+	"strings"
+	"time"
+)
 
 // Record is a single usage statistics entry.
 type Record struct {
@@ -104,12 +108,20 @@ func formatAttrs(attrs map[string]string) string {
 	if len(attrs) == 0 {
 		return "-"
 	}
-	result := ""
-	for k, v := range attrs {
-		if result != "" {
-			result += ","
-		}
-		result += k + "=" + v
+	keys := make([]string, 0, len(attrs))
+	for k := range attrs {
+		keys = append(keys, k)
 	}
-	return result
+	sort.Strings(keys)
+
+	var sb strings.Builder
+	for i, k := range keys {
+		if i > 0 {
+			sb.WriteString(",")
+		}
+		sb.WriteString(k)
+		sb.WriteString("=")
+		sb.WriteString(attrs[k])
+	}
+	return sb.String()
 }

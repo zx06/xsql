@@ -753,6 +753,20 @@ func TestHandler_ConfigAIAndTesting(t *testing.T) {
 		if recNoKey.Code != http.StatusBadRequest {
 			t.Errorf("expected 400 for missing api key, got %d", recNoKey.Code)
 		}
+
+		// Success path with mock OpenAI server
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"1","object":"chat.completion","created":1,"model":"gpt-4o","choices":[{"index":0,"message":{"role":"assistant","content":"OK"},"finish_reason":"stop"}]}`))
+		}))
+		defer srv.Close()
+
+		reqSuccess := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/ai", strings.NewReader(`{"ai":{"api_key":"test-key","base_url":"`+srv.URL+`","model":"gpt-4o"}}`))
+		recSuccess := httptest.NewRecorder()
+		h.ServeHTTP(recSuccess, reqSuccess)
+		if recSuccess.Code != http.StatusOK {
+			t.Errorf("expected 200 for successful AI test, got %d: %s", recSuccess.Code, recSuccess.Body.String())
+		}
 	}
 }
 

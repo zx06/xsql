@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -1092,5 +1094,39 @@ func TestTestAIConnection_Validation(t *testing.T) {
 	}
 	if xe.Code != errors.CodeCfgInvalid {
 		t.Errorf("expected CodeCfgInvalid, got %s", xe.Code)
+	}
+}
+
+func TestTestAIConnection_SuccessMock(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"id": "chatcmpl-123",
+			"object": "chat.completion",
+			"created": 1677652288,
+			"model": "gpt-4o",
+			"choices": [{
+				"index": 0,
+				"message": {
+					"role": "assistant",
+					"content": "OK"
+				},
+				"finish_reason": "stop"
+			}]
+		}`))
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	res, xe := TestAIConnection(ctx, config.AIConfig{
+		APIKey:  "test-key",
+		BaseURL: srv.URL,
+		Model:   "gpt-4o",
+	})
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+	if res == nil || res["ok"] != true {
+		t.Fatalf("expected ok=true, got: %v", res)
 	}
 }
