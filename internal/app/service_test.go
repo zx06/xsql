@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -1059,5 +1061,124 @@ func TestDescribeTable_NoDB(t *testing.T) {
 
 	if xe.Code != errors.CodeCfgInvalid {
 		t.Errorf("expected CodeCfgInvalid, got %q", xe.Code)
+	}
+}
+
+func TestTestProfileConnection_NoDB(t *testing.T) {
+	ctx := context.Background()
+	_, xe := TestProfileConnection(ctx, config.Profile{DB: ""}, false, false)
+	if xe == nil {
+		t.Fatal("expected error for missing DB type")
+	}
+	if xe.Code != errors.CodeCfgInvalid {
+		t.Errorf("expected CodeCfgInvalid, got %s", xe.Code)
+	}
+}
+
+func TestTestSSHProxyConnection_Validation(t *testing.T) {
+	ctx := context.Background()
+	_, xe := TestSSHProxyConnection(ctx, config.SSHProxy{Host: ""}, false, false)
+	if xe == nil {
+		t.Fatal("expected error for missing host")
+	}
+	if xe.Code != errors.CodeCfgInvalid {
+		t.Errorf("expected CodeCfgInvalid, got %s", xe.Code)
+	}
+}
+
+func TestTestAIConnection_Validation(t *testing.T) {
+	ctx := context.Background()
+	_, xe := TestAIConnection(ctx, config.AIConfig{APIKey: ""})
+	if xe == nil {
+		t.Fatal("expected error for missing api key")
+	}
+	if xe.Code != errors.CodeCfgInvalid {
+		t.Errorf("expected CodeCfgInvalid, got %s", xe.Code)
+	}
+}
+
+func TestTestAIConnection_SuccessMock(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"id": "chatcmpl-123",
+			"object": "chat.completion",
+			"created": 1677652288,
+			"model": "gpt-4o",
+			"choices": [{
+				"index": 0,
+				"message": {
+					"role": "assistant",
+					"content": "OK"
+				},
+				"finish_reason": "stop"
+			}]
+		}`))
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	res, xe := TestAIConnection(ctx, config.AIConfig{
+		APIKey:  "test-key",
+		BaseURL: srv.URL,
+		Model:   "gpt-4o",
+	})
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+	if res == nil || res["ok"] != true {
+		t.Fatalf("expected ok=true, got: %v", res)
+	}
+}
+
+func TestTestProfileConnection_InvalidHost(t *testing.T) {
+	ctx := context.Background()
+	_, xe := TestProfileConnection(ctx, config.Profile{
+		DB:   "mysql",
+		Host: "127.0.0.1",
+		Port: 1, // Closed port
+	}, false, false)
+	if xe == nil {
+		t.Fatal("expected error connecting to closed port")
+	}
+}
+
+func TestTestSSHProxyConnection_Branches(t *testing.T) {
+	ctx := context.Background()
+
+	// Passphrase resolution error
+	_, xe := TestSSHProxyConnection(ctx, config.SSHProxy{
+		Host:       "127.0.0.1",
+		Passphrase: "secret://vault/nonexistent",
+	}, false, false)
+	if xe == nil {
+		t.Fatal("expected error for unresolvable secret passphrase")
+	}
+
+	// Connection failure to closed port with plaintext passphrase
+	_, xe = TestSSHProxyConnection(ctx, config.SSHProxy{
+		Host:       "127.0.0.1",
+		Port:       1,
+		Passphrase: "plaintext-pass",
+	}, true, true)
+	if xe == nil {
+		t.Fatal("expected error connecting to closed port")
+	}
+}
+
+func TestTestAIConnection_HttpError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"error":"invalid_api_key"}`, http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	_, xe := TestAIConnection(ctx, config.AIConfig{
+		APIKey:  "bad-key",
+		BaseURL: srv.URL,
+		Model:   "gpt-4o",
+	})
+	if xe == nil {
+		t.Fatal("expected error for 401 response")
 	}
 }

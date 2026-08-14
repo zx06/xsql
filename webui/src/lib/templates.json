@@ -1,0 +1,79 @@
+[
+  {
+    "id": "count",
+    "title": "🔢 Count rows",
+    "description": "Total row count of the selected table",
+    "category": "Query",
+    "dialects": {
+      "default": "SELECT COUNT(*) AS total_count FROM {table};"
+    }
+  },
+  {
+    "id": "select_50",
+    "title": "📋 Select 50 records",
+    "description": "Quickly inspect first 50 rows",
+    "category": "Query",
+    "dialects": {
+      "default": "SELECT * FROM {table} LIMIT 50;"
+    }
+  },
+  {
+    "id": "group_by",
+    "title": "📊 Group by & Count",
+    "description": "Aggregate distribution of a column",
+    "category": "Query",
+    "dialects": {
+      "default": "SELECT \n  column_name,\n  COUNT(*) AS count\nFROM {table}\nGROUP BY column_name\nORDER BY count DESC\nLIMIT 20;"
+    }
+  },
+  {
+    "id": "table_size",
+    "title": "💾 Tables by disk size",
+    "description": "Rank database tables by total disk space",
+    "category": "Diagnostics",
+    "dialects": {
+      "mysql": "-- MySQL: Tables ranked by disk size\nSELECT \n  table_name AS `Table`,\n  ROUND(((data_length + index_length) / 1024 / 1024), 2) AS `Size (MB)`,\n  table_rows AS `Est. Rows`\nFROM information_schema.TABLES \nWHERE table_schema = DATABASE()\nORDER BY (data_length + index_length) DESC \nLIMIT 15;",
+      "postgresql": "-- PostgreSQL: Tables ranked by disk size\nSELECT \n  schemaname || '.' || relname AS \"Table\",\n  pg_size_pretty(pg_total_relation_size(relid)) AS \"Total Size\",\n  pg_size_pretty(pg_relation_size(relid)) AS \"Data Size\",\n  pg_size_pretty(pg_total_relation_size(relid) - pg_relation_size(relid)) AS \"Index Size\",\n  n_live_tup AS \"Est. Rows\"\nFROM pg_catalog.pg_statio_user_tables\nJOIN pg_stat_user_tables USING (relid)\nORDER BY pg_total_relation_size(relid) DESC\nLIMIT 15;"
+    }
+  },
+  {
+    "id": "indexes",
+    "title": "🔑 Table index usage",
+    "description": "Inspect indexes and scan statistics",
+    "category": "Performance",
+    "dialects": {
+      "mysql": "-- MySQL: Index details\nSHOW INDEX FROM {table};",
+      "postgresql": "-- PostgreSQL: Indexes and usage scans for table\nSELECT \n  indexrelname AS \"Index Name\",\n  pg_size_pretty(pg_relation_size(indexrelid)) AS \"Index Size\",\n  idx_scan AS \"Index Scans\",\n  idx_tup_read AS \"Tuples Read\"\nFROM pg_stat_user_indexes\nWHERE relname = '{rawTableName}'\nORDER BY idx_scan DESC;"
+    }
+  },
+  {
+    "id": "processlist",
+    "title": "⚡ Active running queries",
+    "description": "Inspect active threads, sessions and slow queries",
+    "category": "Diagnostics",
+    "dialects": {
+      "mysql": "-- MySQL: Active running queries\nSHOW FULL PROCESSLIST;",
+      "postgresql": "-- PostgreSQL: Active queries & running sessions\nSELECT \n  pid,\n  usename AS \"User\",\n  client_addr AS \"Client IP\",\n  state,\n  age(clock_timestamp(), query_start) AS \"Duration\",\n  query AS \"Query\"\nFROM pg_stat_activity\nWHERE state != 'idle' AND pid <> pg_backend_pid()\nORDER BY query_start ASC;"
+    }
+  },
+  {
+    "id": "explain",
+    "title": "🔍 Explain query plan",
+    "description": "Show detailed execution plan for query",
+    "category": "Performance",
+    "dialects": {
+      "mysql": "-- MySQL: Query execution plan (JSON)\nEXPLAIN FORMAT=JSON\nSELECT * FROM {table} LIMIT 10;",
+      "postgresql": "-- PostgreSQL: Detailed execution plan\nEXPLAIN (ANALYZE, BUFFERS, VERBOSE)\nSELECT * FROM {table} LIMIT 10;"
+    }
+  },
+  {
+    "id": "sys_vars",
+    "title": "⚙️ DB Version & Environment",
+    "description": "View database version, current user and active database/schema",
+    "category": "Metadata",
+    "dialects": {
+      "mysql": "-- MySQL: Version, user and active database\nSELECT VERSION() AS mysql_version, CURRENT_USER() AS user, DATABASE() AS current_db;",
+      "postgresql": "-- PostgreSQL: Version, user and active schema\nSELECT version() AS pg_version, current_user, current_database(), current_schema();"
+    }
+  }
+]

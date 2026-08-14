@@ -1,4 +1,6 @@
 import { formatSQLQuery, resolveSQLDialectName } from './sql-editor.js';
+import { copyText, exportToInsertSQL, exportToMarkdownTable } from './result-grid.js';
+import { renderTemplateById } from './templates.js';
 
 function readSessionValue(key) {
   if (typeof sessionStorage === 'undefined') {
@@ -61,7 +63,7 @@ function formatTableName(table) {
 }
 
 function buildPreviewSQL(table) {
-  return `SELECT * FROM ${formatTableName(table)} LIMIT 10`;
+  return `SELECT * FROM ${formatTableName(table)} LIMIT 20;`;
 }
 
 function createEmptyCompletionCatalog(profile = '') {
@@ -118,42 +120,53 @@ export class WebUIController {
   queryLoading = $state(false);
   pageLoading = $state(true);
   errorMessage = $state('');
-  sql = $state('SELECT 1');
+  sql = $state('SELECT 1;');
   columns = $state.raw([]);
   rows = $state.raw([]);
   configPath = $state('');
-  activeTab = $state('structure');
+  activeTab = $state('results'); // 'results' | 'structure' | 'ddl'
   themeMode = $state(readThemeMode());
   systemPrefersDark = $state(false);
   completionCatalog = $state.raw(createEmptyCompletionCatalog());
 
   // Layout & Resizing
-  sidebarWidth = $state(readNumberStorage('xsql-web-sidebar-width', 270));
-  editorHeight = $state(readNumberStorage('xsql-web-editor-height', 220));
+  sidebarWidth = $state(readNumberStorage('xsql-web-sidebar-width', 260));
+  editorHeight = $state(readNumberStorage('xsql-web-editor-height', 200));
   sidebarCollapsed = $state(readBoolStorage('xsql-web-sidebar-collapsed', false));
+  editorMaximized = $state(false);
 
   // Query History & Timing
   queryHistory = $state(readHistoryStorage());
   queryHistoryOpen = $state(false);
   lastExecutionMs = $state(null);
 
-  // Config Modal & Graphical Management
+  // Modals & Drawers
   configModalOpen = $state(false);
   configLoading = $state(false);
   fullConfig = $state(null);
+  shortcutsModalOpen = $state(false);
+  selectedJsonModalData = $state(null);
 
-  // Results Grid enhancements: Filter & Sort & Modal
+  // Toasts Notification System
+  toasts = $state([]);
+
+  // Results Grid enhancements: Filter & Sort
   resultFilter = $state('');
   sortColumn = $state('');
   sortDirection = $state('asc'); // 'asc' | 'desc'
-  selectedJsonModalData = $state(null);
 
   rowCount = $derived(this.rows.length);
   tableCount = $derived(this.schemaTables.length);
   selectedProfileMeta = $derived(this.profiles.find((profile) => profile.name === this.selectedProfile) ?? null);
   selectedTableName = $derived(this.selectedTable ? formatTableName(this.selectedTable) : '');
   resolvedTheme = $derived(this.themeMode === 'auto' ? (this.systemPrefersDark ? 'black' : 'white') : this.themeMode);
-  sqlDialect = $derived(resolveSQLDialectName(this.selectedProfileMeta?.db));
+  sqlDialect = $derived(
+    resolveSQLDialectName(
+      this.selectedProfileMeta?.db,
+      this.selectedProfile,
+      this.schemaTables[0]?.schema
+    )
+  );
 
   // Processed Rows (Filtered & Sorted)
   processedRows = $derived.by(() => {
@@ -186,6 +199,23 @@ export class WebUIController {
   #structureRequestSeq = 0;
   #tableDetailCache = new Map();
   #tableDetailRequestCache = new Map();
+
+  #toastCounter = 0;
+
+  showToast(message, type = 'info', duration = 3000) {
+    this.#toastCounter += 1;
+    const id = `toast-${this.#toastCounter}-${Date.now()}`;
+    this.toasts = [...this.toasts, { id, message, type }];
+    if (duration > 0) {
+      setTimeout(() => {
+        this.dismissToast(id);
+      }, duration);
+    }
+  }
+
+  dismissToast(id) {
+    this.toasts = this.toasts.filter((t) => t.id !== id);
+  }
 
   authHeaders() {
     const headers = { 'Content-Type': 'application/json' };
@@ -244,12 +274,28 @@ export class WebUIController {
     localStorage.setItem('xsql-web-sidebar-collapsed', String(this.sidebarCollapsed));
   }
 
+  toggleEditorMaximized() {
+    this.editorMaximized = !this.editorMaximized;
+  }
+
   toggleQueryHistory() {
     this.queryHistoryOpen = !this.queryHistoryOpen;
   }
 
+  openShortcutsModal() {
+    this.shortcutsModalOpen = true;
+  }
+
+  closeShortcutsModal() {
+    this.shortcutsModalOpen = false;
+  }
+
   setSQL(sql) {
     this.sql = sql;
+  }
+
+  clearSQL() {
+    this.sql = '';
   }
 
   setActiveTab(tab) {
@@ -291,9 +337,27 @@ export class WebUIController {
     try {
       this.sql = formatSQLQuery(input, this.sqlDialect);
       this.errorMessage = '';
+      this.showToast('SQL Formatted', 'success', 1500);
     } catch (error) {
       this.errorMessage = error instanceof Error ? `Format failed: ${error.message}` : 'Format failed';
+      this.showToast(`Format failed: ${error.message}`, 'error', 3000);
     }
+  }
+
+  // --- SQL Snippets Library ---
+  insertSnippet(type) {
+    const rawTableName = this.selectedTable?.name || 'table_name';
+    const schema = this.selectedTable?.schema || '';
+    const table = this.selectedTable ? formatTableName(this.selectedTable) : '';
+
+    const snippet = renderTemplateById(type, this.sqlDialect, {
+      table,
+      rawTableName,
+      schema
+    });
+
+    this.sql = snippet;
+    this.showToast('Template inserted into editor', 'info', 1500);
   }
 
   // --- Graphical Config Management ---
@@ -314,6 +378,7 @@ export class WebUIController {
       this.configPath = data.config_path || this.configPath;
     } catch (error) {
       this.errorMessage = `Failed to load config: ${error.message}`;
+      this.showToast(`Failed to load config: ${error.message}`, 'error');
     } finally {
       this.configLoading = false;
     }
@@ -329,8 +394,10 @@ export class WebUIController {
       await this.loadConfig();
       const profileList = await this.api('/api/v1/profiles');
       this.profiles = profileList.profiles || [];
+      this.showToast(`Profile "${name}" saved`, 'success');
     } catch (error) {
       this.errorMessage = `Failed to save profile: ${error.message}`;
+      this.showToast(this.errorMessage, 'error');
       throw error;
     }
   }
@@ -348,8 +415,10 @@ export class WebUIController {
         this.selectedProfile = this.profiles[0]?.name || '';
         await this.loadTables();
       }
+      this.showToast(`Profile "${name}" deleted`, 'info');
     } catch (error) {
       this.errorMessage = `Failed to delete profile: ${error.message}`;
+      this.showToast(this.errorMessage, 'error');
       throw error;
     }
   }
@@ -362,8 +431,10 @@ export class WebUIController {
         body: JSON.stringify({ name, ssh_proxy: proxyData })
       });
       await this.loadConfig();
+      this.showToast(`SSH Proxy "${name}" saved`, 'success');
     } catch (error) {
       this.errorMessage = `Failed to save SSH proxy: ${error.message}`;
+      this.showToast(this.errorMessage, 'error');
       throw error;
     }
   }
@@ -375,13 +446,72 @@ export class WebUIController {
         method: 'DELETE'
       });
       await this.loadConfig();
+      this.showToast(`SSH Proxy "${name}" deleted`, 'info');
     } catch (error) {
       this.errorMessage = `Failed to delete SSH proxy: ${error.message}`;
+      this.showToast(this.errorMessage, 'error');
       throw error;
     }
   }
 
-  // --- Export Results ---
+  async saveAIConfig(aiData) {
+    this.errorMessage = '';
+    try {
+      await this.api('/api/v1/config/ai', {
+        method: 'POST',
+        body: JSON.stringify({ ai: aiData })
+      });
+      await this.loadConfig();
+      this.showToast('AI Settings saved successfully', 'success');
+    } catch (error) {
+      this.errorMessage = `Failed to save AI config: ${error.message}`;
+      this.showToast(this.errorMessage, 'error');
+      throw error;
+    }
+  }
+
+  async testProfileConnection(name, profileData) {
+    return this.api('/api/v1/config/test/profile', {
+      method: 'POST',
+      body: JSON.stringify({ name, profile: profileData })
+    });
+  }
+
+  async testSSHProxyConnection(name, proxyData) {
+    return this.api('/api/v1/config/test/ssh-proxy', {
+      method: 'POST',
+      body: JSON.stringify({ name, ssh_proxy: proxyData })
+    });
+  }
+
+  async testAIConnection(aiData) {
+    return this.api('/api/v1/config/test/ai', {
+      method: 'POST',
+      body: JSON.stringify({ ai: aiData })
+    });
+  }
+
+  // --- Copy & Export ---
+  async copyAsMarkdown() {
+    if (!this.columns.length || !this.rows.length) {
+      this.showToast('No data to copy', 'error');
+      return;
+    }
+    const md = exportToMarkdownTable(this.columns, this.processedRows);
+    await copyText(md);
+    this.showToast(`Copied ${this.processedRows.length} rows as Markdown table!`, 'success');
+  }
+
+  async copyAsInsertSQL() {
+    if (!this.columns.length || !this.rows.length) {
+      this.showToast('No data to copy', 'error');
+      return;
+    }
+    const sql = exportToInsertSQL(this.selectedTableName || 'query_result', this.columns, this.processedRows);
+    await copyText(sql);
+    this.showToast(`Copied ${this.processedRows.length} rows as SQL INSERT!`, 'success');
+  }
+
   exportResults(type = 'csv') {
     if (!this.columns.length || !this.rows.length) {
       return;
@@ -421,11 +551,64 @@ export class WebUIController {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `query_result_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '_')}.${ext}`;
+    a.download = `xsql_result_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '_')}.${ext}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    this.showToast(`Exported ${rowsToExport.length} rows to ${ext.toUpperCase()}`, 'success');
+  }
+
+  // Generate DDL for current table detail
+  generateDDL(tableDetail) {
+    if (!tableDetail || !tableDetail.columns || !tableDetail.columns.length) {
+      return '-- No table columns available to generate DDL';
+    }
+
+    const isPG = this.sqlDialect === 'postgresql';
+    const quoteIdent = (name) => (isPG ? `"${name}"` : `\`${name}\``);
+    
+    let tableName = quoteIdent(tableDetail.name);
+    if (tableDetail.schema) {
+      tableName = `${quoteIdent(tableDetail.schema)}.${quoteIdent(tableDetail.name)}`;
+    }
+
+    const comments = [];
+    const cols = tableDetail.columns.map((col) => {
+      const colIdent = quoteIdent(col.name);
+      let def = `  ${colIdent} ${col.type}`;
+      if (!col.nullable) def += ' NOT NULL';
+      if (col.default != null && col.default !== '') def += ` DEFAULT ${col.default}`;
+      if (!isPG && col.comment) {
+        def += ` COMMENT '${col.comment.replaceAll("'", "''")}'`;
+      }
+      if (isPG && col.comment) {
+        comments.push(`COMMENT ON COLUMN ${tableName}.${quoteIdent(col.name)} IS '${col.comment.replaceAll("'", "''")}';`);
+      }
+      return def;
+    });
+
+    const pkCols = tableDetail.columns.filter((c) => c.primary_key).map((c) => quoteIdent(c.name));
+    if (pkCols.length > 0) {
+      cols.push(`  PRIMARY KEY (${pkCols.join(', ')})`);
+    }
+
+    let ddl = `CREATE TABLE ${tableName} (\n${cols.join(',\n')}\n)`;
+    if (!isPG) {
+      if (tableDetail.comment) {
+        ddl += ` COMMENT='${tableDetail.comment.replaceAll("'", "''")}'`;
+      }
+      ddl += ';';
+    } else {
+      ddl += ';';
+      if (tableDetail.comment) {
+        comments.unshift(`COMMENT ON TABLE ${tableName} IS '${tableDetail.comment.replaceAll("'", "''")}';`);
+      }
+      if (comments.length > 0) {
+        ddl += `\n\n${comments.join('\n')}`;
+      }
+    }
+    return ddl;
   }
 
   #tableDetailCacheKey(profileName, schemaName, tableName) {
@@ -523,6 +706,7 @@ export class WebUIController {
       }
     } catch (error) {
       this.errorMessage = error.message;
+      this.showToast(error.message, 'error', 5000);
     } finally {
       this.pageLoading = false;
     }
@@ -551,7 +735,7 @@ export class WebUIController {
       this.schemaTables = data.tables || [];
       this.selectedTable = this.schemaTables[0] || null;
       this.selectedTableDetail = null;
-      this.activeTab = 'structure';
+      this.activeTab = 'results';
       this.#setCompletionCatalog(this.schemaTables, this.selectedTable?.schema || '');
 
       if (this.selectedTable) {
@@ -629,6 +813,7 @@ export class WebUIController {
       this.columns = [];
       this.rows = [];
       this.errorMessage = error.message;
+      this.showToast(`Query error: ${error.message}`, 'error', 4000);
     } finally {
       const durationMs = Math.round(performance.now() - startTime);
       this.lastExecutionMs = durationMs;
@@ -653,9 +838,11 @@ export class WebUIController {
     if (!filterProfile || filterProfile === '__all__') {
       this.queryHistory = [];
       saveHistoryStorage([]);
+      this.showToast('All query history cleared', 'info');
     } else {
       this.queryHistory = this.queryHistory.filter((item) => item.profile !== filterProfile);
       saveHistoryStorage(this.queryHistory);
+      this.showToast(`History cleared for profile ${filterProfile}`, 'info');
     }
   }
 
@@ -680,7 +867,7 @@ export class WebUIController {
     this.rows = [];
     this.selectedTable = null;
     this.selectedTableDetail = null;
-    this.activeTab = 'structure';
+    this.activeTab = 'results';
     this.#resetCompletionState(profileName);
     await this.loadTables();
   }

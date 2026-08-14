@@ -633,3 +633,192 @@ func TestHandler_ConfigManagementErrors(t *testing.T) {
 	}
 }
 
+func TestHandler_ConfigAIAndTesting(t *testing.T) {
+	tempConfig := createConfigFile(t, "profiles:\n  dev:\n    db: mysql\n    host: 127.0.0.1\n    port: 3306\nssh_proxies:\n  bastion:\n    host: 127.0.0.1\n    port: 22\nai:\n  provider: openai\n  base_url: https://api.openai.com/v1\n  api_key: sk-test\n  model: gpt-4o\n")
+	h := NewHandler(HandlerOptions{ConfigPath: tempConfig})
+
+	// 1. GET /api/v1/config returns ai
+	{
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/config", nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 for GET config, got %d", rec.Code)
+		}
+		var env envelope
+		_ = json.NewDecoder(rec.Body).Decode(&env)
+		dataMap, ok := env.Data.(map[string]any)
+		if !ok || dataMap["ai"] == nil {
+			t.Fatalf("expected ai section in config response, got: %v", env.Data)
+		}
+	}
+
+	// 2. POST /api/v1/config/ai saves AI
+	{
+		body := `{"ai":{"provider":"deepseek","model":"deepseek-chat","base_url":"https://api.deepseek.com","api_key":"sk-deepseek"}}`
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/config/ai", strings.NewReader(body))
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 for POST /api/v1/config/ai, got %d: %s", rec.Code, rec.Body.String())
+		}
+
+		// Invalid method
+		reqGet := httptest.NewRequest(http.MethodGet, "/api/v1/config/ai", nil)
+		recGet := httptest.NewRecorder()
+		h.ServeHTTP(recGet, reqGet)
+		if recGet.Code != http.StatusMethodNotAllowed {
+			t.Errorf("expected 405 for GET /api/v1/config/ai, got %d", recGet.Code)
+		}
+
+		// Invalid json
+		reqBad := httptest.NewRequest(http.MethodPost, "/api/v1/config/ai", strings.NewReader("{invalid"))
+		recBad := httptest.NewRecorder()
+		h.ServeHTTP(recBad, reqBad)
+		if recBad.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for invalid json, got %d", recBad.Code)
+		}
+	}
+
+	// 3. POST /api/v1/config/test/profile
+	{
+		// Invalid method
+		reqGet := httptest.NewRequest(http.MethodGet, "/api/v1/config/test/profile", nil)
+		recGet := httptest.NewRecorder()
+		h.ServeHTTP(recGet, reqGet)
+		if recGet.Code != http.StatusMethodNotAllowed {
+			t.Errorf("expected 405 for GET test profile, got %d", recGet.Code)
+		}
+
+		// Invalid json
+		reqBad := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/profile", strings.NewReader("{bad"))
+		recBad := httptest.NewRecorder()
+		h.ServeHTTP(recBad, reqBad)
+		if recBad.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for bad json, got %d", recBad.Code)
+		}
+
+		// Missing db
+		reqNoDB := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/profile", strings.NewReader(`{"profile":{"host":"127.0.0.1"}}`))
+		recNoDB := httptest.NewRecorder()
+		h.ServeHTTP(recNoDB, reqNoDB)
+		if recNoDB.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for missing db, got %d", recNoDB.Code)
+		}
+
+		// Unknown ssh proxy
+		reqBadSSH := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/profile", strings.NewReader(`{"profile":{"db":"mysql","host":"127.0.0.1","ssh_proxy":"nonexistent"}}`))
+		recBadSSH := httptest.NewRecorder()
+		h.ServeHTTP(recBadSSH, reqBadSSH)
+		if recBadSSH.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for nonexistent ssh proxy, got %d", recBadSSH.Code)
+		}
+
+		// Valid ssh proxy reference and inherited password with connection failure (port 1)
+		reqSSHTest := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/profile", strings.NewReader(`{"profile":{"name":"dev","db":"mysql","host":"127.0.0.1","port":1,"ssh_proxy":"bastion"}}`))
+		recSSHTest := httptest.NewRecorder()
+		h.ServeHTTP(recSSHTest, reqSSHTest)
+		// Should fail to connect to port 1, returning an error response
+		if recSSHTest.Code == http.StatusOK {
+			t.Errorf("expected non-200 connection error for closed port, got 200")
+		}
+	}
+
+	// 4. POST /api/v1/config/test/ssh-proxy
+	{
+		// Invalid method
+		reqGet := httptest.NewRequest(http.MethodGet, "/api/v1/config/test/ssh-proxy", nil)
+		recGet := httptest.NewRecorder()
+		h.ServeHTTP(recGet, reqGet)
+		if recGet.Code != http.StatusMethodNotAllowed {
+			t.Errorf("expected 405 for GET test ssh proxy, got %d", recGet.Code)
+		}
+
+		// Missing host
+		reqNoHost := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/ssh-proxy", strings.NewReader(`{"ssh_proxy":{"port":22}}`))
+		recNoHost := httptest.NewRecorder()
+		h.ServeHTTP(recNoHost, reqNoHost)
+		if recNoHost.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for missing host, got %d", recNoHost.Code)
+		}
+
+		// Traversal path error
+		reqBadPath := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/ssh-proxy", strings.NewReader(`{"ssh_proxy":{"host":"127.0.0.1","identity_file":"../id_rsa"}}`))
+		recBadPath := httptest.NewRecorder()
+		h.ServeHTTP(recBadPath, reqBadPath)
+		if recBadPath.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for traversal path, got %d", recBadPath.Code)
+		}
+
+		// Profile referencing SSH proxy with traversal path
+		hWithBadProxy := NewHandler(HandlerOptions{ConfigPath: createConfigFile(t, "profiles: {}\nssh_proxies:\n  bad_bastion:\n    host: 127.0.0.1\n    identity_file: \"../id_rsa\"\n")})
+		reqBadProfPath := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/profile", strings.NewReader(`{"profile":{"db":"mysql","host":"127.0.0.1","ssh_proxy":"bad_bastion"}}`))
+		recBadProfPath := httptest.NewRecorder()
+		hWithBadProxy.ServeHTTP(recBadProfPath, reqBadProfPath)
+		if recBadProfPath.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for traversal path in profile ssh config, got %d", recBadProfPath.Code)
+		}
+
+		// Inherited passphrase and connection attempt to closed port
+		reqProxyTest := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/ssh-proxy", strings.NewReader(`{"name":"bastion","ssh_proxy":{"host":"127.0.0.1","port":1}}`))
+		recProxyTest := httptest.NewRecorder()
+		h.ServeHTTP(recProxyTest, reqProxyTest)
+		if recProxyTest.Code == http.StatusOK {
+			t.Errorf("expected non-200 connection error for closed port, got 200")
+		}
+	}
+
+	// 5. POST /api/v1/config/test/ai
+	{
+		// Invalid method
+		reqGet := httptest.NewRequest(http.MethodGet, "/api/v1/config/test/ai", nil)
+		recGet := httptest.NewRecorder()
+		h.ServeHTTP(recGet, reqGet)
+		if recGet.Code != http.StatusMethodNotAllowed {
+			t.Errorf("expected 405 for GET test ai, got %d", recGet.Code)
+		}
+
+		// Missing API key
+		reqNoKey := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/ai", strings.NewReader(`{"ai":{"base_url":"https://api.openai.com/v1"}}`))
+		recNoKey := httptest.NewRecorder()
+		// Overwrite temp config with empty key
+		hEmptyKey := NewHandler(HandlerOptions{ConfigPath: createConfigFile(t, "profiles: {}\nssh_proxies: {}\nai:\n  api_key: \"\"\n")})
+		hEmptyKey.ServeHTTP(recNoKey, reqNoKey)
+		if recNoKey.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for missing api key, got %d", recNoKey.Code)
+		}
+
+		// Success path with mock OpenAI server
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"1","object":"chat.completion","created":1,"model":"gpt-4o","choices":[{"index":0,"message":{"role":"assistant","content":"OK"},"finish_reason":"stop"}]}`))
+		}))
+		defer srv.Close()
+
+		reqSuccess := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/ai", strings.NewReader(`{"ai":{"api_key":"test-key","base_url":"`+srv.URL+`","model":"gpt-4o"}}`))
+		recSuccess := httptest.NewRecorder()
+		h.ServeHTTP(recSuccess, reqSuccess)
+		if recSuccess.Code != http.StatusOK {
+			t.Errorf("expected 200 for successful AI test, got %d: %s", recSuccess.Code, recSuccess.Body.String())
+		}
+	}
+
+	// 6. Test Default Port Resolution for MySQL and PG in handleConfigTestProfile
+	{
+		// MySQL default port 0 -> 3306
+		reqMySQL := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/profile", strings.NewReader(`{"profile":{"db":"mysql","host":"127.0.0.1","port":0}}`))
+		recMySQL := httptest.NewRecorder()
+		h.ServeHTTP(recMySQL, reqMySQL)
+
+		// PG default port 0 -> 5432
+		reqPG := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/profile", strings.NewReader(`{"profile":{"db":"pg","host":"127.0.0.1","port":0}}`))
+		recPG := httptest.NewRecorder()
+		h.ServeHTTP(recPG, reqPG)
+
+		// SSH proxy default port 0 -> 22
+		reqSSH := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/ssh-proxy", strings.NewReader(`{"ssh_proxy":{"host":"127.0.0.1","port":0}}`))
+		recSSH := httptest.NewRecorder()
+		h.ServeHTTP(recSSH, reqSSH)
+	}
+}
+

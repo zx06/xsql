@@ -323,14 +323,43 @@ function createSchemaCompletionSource({ getCatalog, getTableDetail, ensureTableD
   };
 }
 
-export function resolveSQLDialectName(dbName) {
-  const normalized = String(dbName || '').trim().toLowerCase();
-  if (normalized === 'mysql') {
-    return 'mysql';
-  }
-  if (normalized === 'postgres' || normalized === 'postgresql') {
+export function resolveSQLDialectName(dbName, profileName = '', sampleSchema = '') {
+  const normDb = String(dbName || '').trim().toLowerCase();
+  const normProf = String(profileName || '').trim().toLowerCase();
+  const normSchema = String(sampleSchema || '').trim().toLowerCase();
+
+  // Explicit or partial PostgreSQL markers
+  if (
+    normDb === 'pg' ||
+    normDb === 'pgsql' ||
+    normDb === 'postgres' ||
+    normDb === 'postgresql' ||
+    normDb.includes('postgres') ||
+    normDb.includes('pgsql') ||
+    normDb.startsWith('pg') ||
+    normProf.includes('postgres') ||
+    normProf.includes('pgsql') ||
+    normProf.startsWith('pg_') ||
+    normProf.endsWith('_pg') ||
+    normProf === 'pg' ||
+    normSchema === 'public' ||
+    normSchema === 'pg_catalog'
+  ) {
     return 'postgresql';
   }
+
+  // Explicit or partial MySQL markers
+  if (
+    normDb === 'mysql' ||
+    normDb === 'mariadb' ||
+    normDb.includes('mysql') ||
+    normDb.includes('maria') ||
+    normProf.includes('mysql') ||
+    normProf.includes('maria')
+  ) {
+    return 'mysql';
+  }
+
   return 'sql';
 }
 

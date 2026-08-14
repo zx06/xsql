@@ -351,21 +351,25 @@ func TestReconnectDialer_KeepaliveDetectsDeath(t *testing.T) {
 	}
 	defer rd.Close()
 
-	// Wait enough time for keepalive to detect death and trigger reconnect
-	// 2 missed keepalives at 50ms interval = 100ms, plus some margin
-	time.Sleep(400 * time.Millisecond)
-
-	eventsMu.Lock()
-	defer eventsMu.Unlock()
-
-	// Should have seen disconnected event
+	// Wait for keepalive to detect death and trigger reconnect
+	// 2 missed keepalives at 50ms interval = 100ms; poll up to 3s for CI reliability
+	deadline := time.Now().Add(3 * time.Second)
 	hasDisconnected := false
-	for _, e := range events {
-		if e.Type == StatusDisconnected {
-			hasDisconnected = true
+	for time.Now().Before(deadline) {
+		eventsMu.Lock()
+		for _, e := range events {
+			if e.Type == StatusDisconnected {
+				hasDisconnected = true
+				break
+			}
+		}
+		eventsMu.Unlock()
+		if hasDisconnected {
 			break
 		}
+		time.Sleep(20 * time.Millisecond)
 	}
+
 	if !hasDisconnected {
 		t.Error("expected StatusDisconnected event from keepalive detection")
 	}
@@ -620,20 +624,25 @@ func TestReconnectDialer_RealSSH_Reconnect(t *testing.T) {
 	defer srv2.Close()
 
 	// Wait for keepalive to detect death + reconnect to succeed
-	time.Sleep(1500 * time.Millisecond)
-
-	eventsMu.Lock()
+	deadline := time.Now().Add(4 * time.Second)
 	hasDisconnected := false
 	hasReconnected := false
-	for _, e := range events {
-		if e.Type == StatusDisconnected {
-			hasDisconnected = true
+	for time.Now().Before(deadline) {
+		eventsMu.Lock()
+		for _, e := range events {
+			if e.Type == StatusDisconnected {
+				hasDisconnected = true
+			}
+			if e.Type == StatusReconnected {
+				hasReconnected = true
+			}
 		}
-		if e.Type == StatusReconnected {
-			hasReconnected = true
+		eventsMu.Unlock()
+		if hasDisconnected && hasReconnected {
+			break
 		}
+		time.Sleep(30 * time.Millisecond)
 	}
-	eventsMu.Unlock()
 
 	if !hasDisconnected {
 		t.Error("expected StatusDisconnected after server shutdown")

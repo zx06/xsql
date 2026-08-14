@@ -5,10 +5,13 @@ import (
 	"sort"
 	"time"
 
+	"github.com/zx06/xsql/internal/ai"
 	"github.com/zx06/xsql/internal/config"
 	"github.com/zx06/xsql/internal/db"
 	"github.com/zx06/xsql/internal/errors"
 	"github.com/zx06/xsql/internal/output"
+	"github.com/zx06/xsql/internal/secret"
+	"github.com/zx06/xsql/internal/ssh"
 )
 
 // ProfileListResult is the structured result for profile listing.
@@ -270,4 +273,103 @@ func SchemaTimeout(profile config.Profile, overrideSeconds int, overrideSet bool
 		return time.Duration(profile.SchemaTimeout) * time.Second
 	}
 	return fallback
+}
+
+// TestProfileConnection tests a database profile connection and measures latency.
+func TestProfileConnection(ctx context.Context, profile config.Profile, allowPlaintext, skipHostKey bool) (map[string]any, *errors.XError) {
+	if profile.DB == "" {
+		return nil, errors.New(errors.CodeCfgInvalid, "db type is required (mysql|pg)", nil)
+	}
+
+	start := time.Now()
+	conn, xe := ResolveConnection(ctx, ConnectionOptions{
+		Profile:          profile,
+		AllowPlaintext:   allowPlaintext,
+		SkipHostKeyCheck: skipHostKey,
+	})
+	if xe != nil {
+		return nil, xe
+	}
+	defer func() { _ = conn.Close() }()
+
+	if err := conn.DB.PingContext(ctx); err != nil {
+		return nil, errors.Wrap(errors.CodeDBConnectFailed, "database ping failed", nil, err)
+	}
+	latency := time.Since(start).Milliseconds()
+
+	return map[string]any{
+		"ok":         true,
+		"latency_ms": latency,
+		"db":         profile.DB,
+	}, nil
+}
+
+// TestSSHProxyConnection tests an SSH proxy configuration and measures latency.
+func TestSSHProxyConnection(ctx context.Context, proxy config.SSHProxy, allowPlaintext, skipHostKey bool) (map[string]any, *errors.XError) {
+	if proxy.Host == "" {
+		return nil, errors.New(errors.CodeCfgInvalid, "ssh host is required", nil)
+	}
+
+	start := time.Now()
+	passphrase := proxy.Passphrase
+	if passphrase != "" {
+		pp, xe := secret.Resolve(passphrase, secret.Options{AllowPlaintext: allowPlaintext})
+		if xe != nil {
+			return nil, xe
+		}
+		passphrase = pp
+	}
+
+	client, xe := ssh.Connect(ctx, ssh.Options{
+		Host:                proxy.Host,
+		Port:                proxy.Port,
+		User:                proxy.User,
+		IdentityFile:        proxy.IdentityFile,
+		Passphrase:          passphrase,
+		KnownHostsFile:      proxy.KnownHostsFile,
+		SkipKnownHostsCheck: skipHostKey || proxy.SkipHostKey,
+	})
+	if xe != nil {
+		return nil, xe
+	}
+	defer func() { _ = client.Close() }()
+	latency := time.Since(start).Milliseconds()
+
+	return map[string]any{
+		"ok":         true,
+		"latency_ms": latency,
+		"host":       proxy.Host,
+		"port":       proxy.Port,
+		"user":       proxy.User,
+	}, nil
+}
+
+// TestAIConnection tests AI configuration and measures latency.
+func TestAIConnection(ctx context.Context, aiCfg config.AIConfig) (map[string]any, *errors.XError) {
+	if aiCfg.APIKey == "" {
+		return nil, errors.New(errors.CodeCfgInvalid, "api_key is required", nil)
+	}
+	if aiCfg.Model == "" {
+		aiCfg.Model = "gpt-4o"
+	}
+	if aiCfg.BaseURL == "" {
+		aiCfg.BaseURL = "https://api.openai.com/v1"
+	}
+
+	start := time.Now()
+	client := ai.NewClient(aiCfg, nil)
+	resp, xe := client.ChatCompletion(ctx, []ai.ChatMessage{
+		{Role: "user", Content: "Respond with only 'OK'"},
+	})
+	if xe != nil {
+		return nil, xe
+	}
+	latency := time.Since(start).Milliseconds()
+
+	return map[string]any{
+		"ok":         true,
+		"latency_ms": latency,
+		"model":      aiCfg.Model,
+		"response":   resp.Explanation,
+	}, nil
 }
