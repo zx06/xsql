@@ -785,5 +785,23 @@ func TestHandler_ConfigAIAndTesting(t *testing.T) {
 			t.Errorf("expected 200 for successful AI test, got %d: %s", recSuccess.Code, recSuccess.Body.String())
 		}
 	}
+
+	// 6. Test Default Port Resolution for MySQL and PG in handleConfigTestProfile
+	{
+		// MySQL default port 0 -> 3306
+		reqMySQL := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/profile", strings.NewReader(`{"profile":{"db":"mysql","host":"127.0.0.1","port":0}}`))
+		recMySQL := httptest.NewRecorder()
+		h.ServeHTTP(recMySQL, reqMySQL)
+
+		// PG default port 0 -> 5432
+		reqPG := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/profile", strings.NewReader(`{"profile":{"db":"pg","host":"127.0.0.1","port":0}}`))
+		recPG := httptest.NewRecorder()
+		h.ServeHTTP(recPG, reqPG)
+
+		// SSH proxy default port 0 -> 22
+		reqSSH := httptest.NewRequest(http.MethodPost, "/api/v1/config/test/ssh-proxy", strings.NewReader(`{"ssh_proxy":{"host":"127.0.0.1","port":0}}`))
+		recSSH := httptest.NewRecorder()
+		h.ServeHTTP(recSSH, reqSSH)
+	}
 }
 
