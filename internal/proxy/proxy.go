@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/zx06/xsql/internal/errors"
 )
@@ -98,56 +99,65 @@ func (p *Proxy) acceptConnections(remoteHost string, remotePort int) {
 	defer p.wg.Done()
 
 	remoteAddr := fmt.Sprintf("%s:%d", remoteHost, remotePort)
+	var tempDelay time.Duration
 
 	for {
-		select {
-		case <-p.ctx.Done():
-			return
-		default:
-			localConn, err := p.listener.Accept()
-			if err != nil {
-				// Check if context was canceled
-				select {
-				case <-p.ctx.Done():
-					return
-				default:
-					// Log error but continue accepting
-					continue
-				}
+		localConn, err := p.listener.Accept()
+		if err != nil {
+			select {
+			case <-p.ctx.Done():
+				return
+			default:
 			}
 
-			p.wg.Add(1)
-			go p.handleConnection(localConn, remoteAddr)
+			if tempDelay == 0 {
+				tempDelay = 5 * time.Millisecond
+			} else {
+				tempDelay *= 2
+			}
+			if maxDelay := 1 * time.Second; tempDelay > maxDelay {
+				tempDelay = maxDelay
+			}
+
+			select {
+			case <-time.After(tempDelay):
+			case <-p.ctx.Done():
+				return
+			}
+			continue
 		}
+		tempDelay = 0
+
+		p.wg.Add(1)
+		go p.handleConnection(localConn, remoteAddr)
 	}
 }
 
 // handleConnection handles a single connection by forwarding it through SSH.
 func (p *Proxy) handleConnection(localConn net.Conn, remoteAddr string) {
 	defer p.wg.Done()
-	defer func() {
-		if localConn != nil {
-			_ = localConn.Close()
-		}
-	}()
 
 	// Dial remote through SSH
 	remoteConn, err := p.dialer.DialContext(p.ctx, "tcp", remoteAddr)
 	if err != nil {
+		_ = localConn.Close()
 		log.Printf("[proxy] failed to dial remote %s: %v", remoteAddr, err)
 		return
 	}
 	if remoteConn == nil {
+		_ = localConn.Close()
 		log.Printf("[proxy] dial returned nil conn")
 		return
 	}
-	if remoteConn != nil {
-		defer func() {
-			if closeErr := remoteConn.Close(); closeErr != nil {
-				log.Printf("[proxy] failed to close remote connection: %v", closeErr)
-			}
-		}()
+
+	var closeOnce sync.Once
+	closeBoth := func() {
+		closeOnce.Do(func() {
+			_ = localConn.Close()
+			_ = remoteConn.Close()
+		})
 	}
+	defer closeBoth()
 
 	// Bidirectional copy
 	var wg sync.WaitGroup
@@ -156,6 +166,7 @@ func (p *Proxy) handleConnection(localConn net.Conn, remoteAddr string) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		defer closeBoth()
 		if _, err := io.Copy(localConn, remoteConn); err != nil {
 			errChan <- fmt.Errorf("copy remote->local failed: %w", err)
 		}
@@ -164,6 +175,7 @@ func (p *Proxy) handleConnection(localConn net.Conn, remoteAddr string) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		defer closeBoth()
 		if _, err := io.Copy(remoteConn, localConn); err != nil {
 			errChan <- fmt.Errorf("copy local->remote failed: %w", err)
 		}
@@ -185,9 +197,7 @@ func (p *Proxy) handleConnection(localConn net.Conn, remoteAddr string) {
 		default:
 		}
 	case <-p.ctx.Done():
-		// Context cancelled: close connections to unblock io.Copy goroutines
-		_ = localConn.Close()
-		_ = remoteConn.Close()
+		closeBoth()
 		// Wait for goroutines to finish
 		<-done
 		// Check for any final errors
