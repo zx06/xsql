@@ -631,3 +631,111 @@ func (d *directDialer) DialContext(ctx context.Context, network, addr string) (n
 }
 
 func (d *directDialer) Close() error { return nil }
+
+func TestProxy_HandleConnection_RemoteDisconnect(t *testing.T) {
+	// Remote server that immediately closes accepted connection
+	server, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = server.Close() }()
+
+	go func() {
+		for {
+			conn, err := server.Accept()
+			if err != nil {
+				return
+			}
+			// Close remote side immediately
+			_ = conn.Close()
+		}
+	}()
+
+	dialer := &directDialer{addr: server.Addr().String()}
+	defer func() { _ = dialer.Close() }()
+
+	ctx := context.Background()
+	opts := Options{
+		LocalHost:  "127.0.0.1",
+		LocalPort:  0,
+		RemoteHost: "127.0.0.1",
+		RemotePort: server.Addr().(*net.TCPAddr).Port,
+		Dialer:     dialer,
+	}
+
+	proxy, result, xe := Start(ctx, opts)
+	if xe != nil {
+		t.Fatalf("failed to start proxy: %v", xe)
+	}
+	defer func() { _ = proxy.Stop() }()
+
+	conn, err := net.DialTimeout("tcp", result.LocalAddress, 2*time.Second)
+	if err != nil {
+		t.Fatalf("failed to connect to proxy: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	// Because remote closed immediately, reading from local conn should return EOF quickly
+	buf := make([]byte, 10)
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, err = conn.Read(buf)
+	if err == nil {
+		t.Fatal("expected read error/EOF since remote closed")
+	}
+}
+
+func TestProxy_HandleConnection_LocalDisconnect(t *testing.T) {
+	// Remote server that holds connection open
+	server, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = server.Close() }()
+
+	remoteClosed := make(chan struct{})
+	go func() {
+		conn, err := server.Accept()
+		if err != nil {
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		// Wait for proxy to close remote connection when local client closes
+		buf := make([]byte, 10)
+		_, _ = conn.Read(buf)
+		close(remoteClosed)
+	}()
+
+	dialer := &directDialer{addr: server.Addr().String()}
+	defer func() { _ = dialer.Close() }()
+
+	ctx := context.Background()
+	opts := Options{
+		LocalHost:  "127.0.0.1",
+		LocalPort:  0,
+		RemoteHost: "127.0.0.1",
+		RemotePort: server.Addr().(*net.TCPAddr).Port,
+		Dialer:     dialer,
+	}
+
+	proxy, result, xe := Start(ctx, opts)
+	if xe != nil {
+		t.Fatalf("failed to start proxy: %v", xe)
+	}
+	defer func() { _ = proxy.Stop() }()
+
+	conn, err := net.DialTimeout("tcp", result.LocalAddress, 2*time.Second)
+	if err != nil {
+		t.Fatalf("failed to connect to proxy: %v", err)
+	}
+
+	// Close local connection immediately
+	_ = conn.Close()
+
+	select {
+	case <-remoteClosed:
+		// Success: remote connection unblocked and closed
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for remote connection to be closed after local client disconnect")
+	}
+}
+
