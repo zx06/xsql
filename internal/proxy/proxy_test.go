@@ -739,3 +739,143 @@ func TestProxy_HandleConnection_LocalDisconnect(t *testing.T) {
 	}
 }
 
+type errDialer struct{}
+
+func (d *errDialer) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	return nil, &net.OpError{Op: "dial", Err: &net.AddrError{Err: "simulated dial error", Addr: addr}}
+}
+
+func (d *errDialer) Close() error { return nil }
+
+func TestProxy_HandleConnection_DialError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	p := &Proxy{
+		dialer: &errDialer{},
+		ctx:    ctx,
+		cancel: cancel,
+	}
+
+	localConn, peer := net.Pipe()
+	defer func() { _ = peer.Close() }()
+
+	done := make(chan struct{})
+	p.wg.Add(1)
+	go func() {
+		defer close(done)
+		p.handleConnection(localConn, "127.0.0.1:12345")
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handleConnection should return quickly when dialer returns error")
+	}
+}
+
+type mockBackoffListener struct {
+	attempts int
+	maxErrs  int
+	ch       chan net.Conn
+	closed   chan struct{}
+}
+
+func (m *mockBackoffListener) Accept() (net.Conn, error) {
+	m.attempts++
+	if m.attempts <= m.maxErrs {
+		return nil, &net.OpError{Op: "accept", Err: &net.AddrError{Err: "simulated accept error", Addr: "127.0.0.1"}}
+	}
+	select {
+	case conn := <-m.ch:
+		return conn, nil
+	case <-m.closed:
+		return nil, net.ErrClosed
+	}
+}
+
+func (m *mockBackoffListener) Close() error {
+	select {
+	case <-m.closed:
+	default:
+		close(m.closed)
+	}
+	return nil
+}
+
+func (m *mockBackoffListener) Addr() net.Addr {
+	return &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 12345}
+}
+
+func TestProxy_AcceptConnections_BackoffAndRecover(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	listener := &mockBackoffListener{
+		maxErrs: 2,
+		ch:      make(chan net.Conn, 1),
+		closed:  make(chan struct{}),
+	}
+	defer func() { _ = listener.Close() }()
+
+	p := &Proxy{
+		dialer:   &directDialer{addr: "127.0.0.1:0"},
+		listener: listener,
+		ctx:      ctx,
+		cancel:   cancel,
+	}
+
+	localConn, peer := net.Pipe()
+	defer func() { _ = peer.Close() }()
+	listener.ch <- localConn
+
+	p.wg.Add(1)
+	go p.acceptConnections("127.0.0.1", 12345)
+
+	// Wait for backoff to retry, accept the conn, and reset
+	time.Sleep(50 * time.Millisecond)
+
+	// Cancel context to stop accept loop
+	cancel()
+	_ = listener.Close()
+	p.wg.Wait()
+}
+
+func TestProxy_AcceptConnections_ContextDoneDuringBackoff(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	listener := &mockBackoffListener{
+		maxErrs: 100, // Always error
+		ch:      make(chan net.Conn, 1),
+		closed:  make(chan struct{}),
+	}
+	defer func() { _ = listener.Close() }()
+
+	p := &Proxy{
+		dialer:   &nilConnDialer{},
+		listener: listener,
+		ctx:      ctx,
+		cancel:   cancel,
+	}
+
+	p.wg.Add(1)
+	go p.acceptConnections("127.0.0.1", 12345)
+
+	// Cancel shortly after it hits the first error and enters time.After
+	time.Sleep(2 * time.Millisecond)
+	cancel()
+
+	done := make(chan struct{})
+	go func() {
+		p.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("acceptConnections should terminate upon context cancellation during backoff")
+	}
+}
+
+
