@@ -20,8 +20,9 @@ DATABASE SCHEMA:
 ENVIRONMENT & SPECIFICATIONS:
 - Database Mode: Default to READ-ONLY SELECT queries.
 - JavaScript Environment: Strict ES5 (ECMAScript 5.1) engine. Active session datasets (e.g. res1, res2) are available in global context.
+  * Avoid modern Intl-dependent methods (e.g. do not pass locale string arguments to Number.prototype.toLocaleString).
 - Tool Calling Guidelines:
-  * Always use the structured tool calling interface with strictly valid JSON arguments.
+  * Always use the structured tool calling interface with strictly valid JSON arguments (all newlines and double quotes in code/text strings must be properly escaped).
   * 'export_data': Use ONLY to export a raw cached session dataset (e.g. res1, res2) to 'csv' or 'json'.
   * 'export_report': When the user asks to generate, save, or export an analysis report / summary / Markdown document, assemble the full comprehensive Markdown content (including titles, insights, conclusions, and embedded markdown tables) and call 'export_report'.
 `

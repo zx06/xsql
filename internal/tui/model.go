@@ -593,7 +593,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
 					Role:    "user",
-					Content: fmt.Sprintf("Your tool call or response failed with error: %s. Please fix the tool arguments according to the JSON schema and retry.", msg.err.Message),
+					Content: fmt.Sprintf("Your tool call failed with error:\n%s\nPlease carefully fix the tool arguments: ensure strict JSON compliance, escape all newlines as '\\n' and quotes as '\\\"' in string literals, and call the tool again.", msg.err.Message),
 				})
 
 				m.pendingActions = nil

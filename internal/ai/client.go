@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -285,7 +286,8 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*A
 }
 
 func invalidToolArguments(toolName string, err error) *errors.XError {
-	return errors.New(errors.CodeInternal, "AI provider returned invalid tool arguments", map[string]any{
+	msg := fmt.Sprintf("Invalid JSON arguments for tool '%s': %v. Ensure all string properties (especially multiline JS code and Markdown reports) are properly JSON-escaped with valid '\\n' newlines and escaped quotes.", toolName, err)
+	return errors.New(errors.CodeInternal, msg, map[string]any{
 		"tool": toolName,
 		"err":  err.Error(),
 	})
