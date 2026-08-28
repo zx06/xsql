@@ -77,6 +77,8 @@ type ToolCallItem struct {
 }
 
 type PendingExport struct {
+	IsReport  bool
+	Content   string
 	DatasetID string
 	Format    string
 	FilePath  string
@@ -102,6 +104,8 @@ type Model struct {
 	pendingExport  *PendingExport
 	jsRetryCount   int
 	maxJSRetries   int
+	aiRetryCount   int
+	maxAIRetries   int
 	lastCtrlCTime  time.Time
 
 	confirmOption int // 0: Confirm/Execute, 1: Adjust Prompt, 2: Cancel/Deny
@@ -171,6 +175,8 @@ func NewModel(_ config.Options, resolved config.Resolved, aiService *ai.Service,
 		chatHistory:      []ai.ChatMessage{},
 		jsRetryCount:     0,
 		maxJSRetries:     3,
+		aiRetryCount:     0,
+		maxAIRetries:     2,
 		confirmOption:    0,
 		tableStates:      []TableState{},
 		toolCalls:        []ToolCallItem{},
@@ -325,6 +331,8 @@ func (m *Model) renderToolCall(idx int) {
 			detailCode = HighlightSQL(tc.Detail)
 		case "execute_javascript":
 			detailCode = HighlightJS(tc.Detail)
+		case "export_report":
+			detailCode = RenderMarkdownWithTheme(tc.Detail, m.width-8, m.isDark)
 		}
 
 		detail := ToolDetailStyle.Render(detailCode)
@@ -487,10 +495,45 @@ func (m *Model) executeNextPendingAction() (tea.Model, tea.Cmd) {
 		m.focusToolCall(toolIdx)
 
 		m.pendingExport = &PendingExport{
+			IsReport:  false,
 			DatasetID: act.DatasetID,
 			Format:    act.Format,
 			FilePath:  act.FilePath,
 			ToolIdx:   toolIdx,
+		}
+		m.confirmOption = 0
+		m.state = StateExportReady
+		m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+		m.viewport.GotoBottom()
+		return *m, nil
+
+	case ai.TypeReport:
+		m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+			Role:    "assistant",
+			Content: fmt.Sprintf("Call tool 'export_report': filepath=%s, explanation=%s", act.FilePath, act.Explanation),
+		})
+
+		lineCount := len(strings.Split(act.Content, "\n"))
+		tc := ToolCallItem{
+			ID:              fmt.Sprintf("tc_%d", len(m.toolCalls)+1),
+			Name:            "export_report",
+			Summary:         fmt.Sprintf("Export Markdown report (%d lines) to %s [Pending User Confirmation]", lineCount, act.FilePath),
+			Detail:          act.Content,
+			Result:          "⏳ Pending Human Confirmation",
+			TableStateIndex: -1,
+			MsgIndex:        len(m.messages),
+			IsExpanded:      false,
+		}
+		m.messages = append(m.messages, "")
+		m.toolCalls = append(m.toolCalls, tc)
+		toolIdx := len(m.toolCalls) - 1
+		m.focusToolCall(toolIdx)
+
+		m.pendingExport = &PendingExport{
+			IsReport: true,
+			Content:  act.Content,
+			FilePath: act.FilePath,
+			ToolIdx:  toolIdx,
 		}
 		m.confirmOption = 0
 		m.state = StateExportReady
@@ -543,13 +586,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case aiResponseMsg:
 		if msg.err != nil {
-			m.messages = append(m.messages, ErrorMsgStyle.Render(fmt.Sprintf("AI Error: %v", msg.err)))
+			m.aiRetryCount++
+			if m.aiRetryCount <= m.maxAIRetries {
+				retryWarn := ErrorMsgStyle.Render(fmt.Sprintf("⚠️ AI Response/Tool Call Failed (Attempt %d/%d): %v", m.aiRetryCount, m.maxAIRetries, msg.err.Message))
+				m.messages = append(m.messages, retryWarn)
+
+				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+					Role:    "user",
+					Content: fmt.Sprintf("Your tool call or response failed with error: %s. Please fix the tool arguments according to the JSON schema and retry.", msg.err.Message),
+				})
+
+				m.pendingActions = nil
+				m.state = StateThinking
+				m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+				m.viewport.GotoBottom()
+				return m, m.runAgentStepCmd()
+			}
+
+			m.messages = append(m.messages, ErrorMsgStyle.Render(fmt.Sprintf("AI Error (after %d retries): %v", m.maxAIRetries, msg.err)))
+			m.aiRetryCount = 0
+			m.pendingActions = nil
 			m.state = StateIdle
 			m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 			m.viewport.GotoBottom()
 			return m, nil
 		}
 
+		m.aiRetryCount = 0
 		m.explanation = msg.response.Explanation
 
 		actions := msg.response.Actions
@@ -561,6 +624,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				actions = []ai.ToolAction{{Type: ai.TypeSQL, SQL: msg.response.SQL, Explanation: msg.response.Explanation}}
 			} else if msg.response.Type == ai.TypeExport && msg.response.DatasetID != "" {
 				actions = []ai.ToolAction{{Type: ai.TypeExport, DatasetID: msg.response.DatasetID, Format: msg.response.Format, FilePath: msg.response.FilePath, Explanation: msg.response.Explanation}}
+			} else if msg.response.Type == ai.TypeReport && msg.response.Content != "" {
+				actions = []ai.ToolAction{{Type: ai.TypeReport, Content: msg.response.Content, FilePath: msg.response.FilePath, Explanation: msg.response.Explanation}}
 			}
 		}
 
@@ -691,34 +756,57 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch triggerOpt {
 			case 0:
 				// Option 1: Confirm & Export
-				datasetRes, exists := m.sessionStore.Get(m.pendingExport.DatasetID)
-				if !exists || datasetRes == nil {
-					m.toolCalls[m.pendingExport.ToolIdx].Result = fmt.Sprintf("❌ Export Failed: Dataset '%s' not found", m.pendingExport.DatasetID)
-					m.renderToolCall(m.pendingExport.ToolIdx)
-					m.chatHistory = append(m.chatHistory, ai.ChatMessage{
-						Role:    "user",
-						Content: fmt.Sprintf("Tool 'export_data' failed: dataset '%s' not found in session catalog.", m.pendingExport.DatasetID),
-					})
-				} else {
-					outPath, xe := export.ExportQueryResult(datasetRes, export.ExportFormat(m.pendingExport.Format), m.pendingExport.FilePath)
+				if m.pendingExport.IsReport {
+					outPath, xe := export.ExportReport(m.pendingExport.Content, m.pendingExport.FilePath)
 					if xe != nil {
-						m.toolCalls[m.pendingExport.ToolIdx].Result = fmt.Sprintf("❌ Export Failed: %v", xe.Message)
+						m.toolCalls[m.pendingExport.ToolIdx].Result = fmt.Sprintf("❌ Save Report Failed: %v", xe.Message)
 						m.renderToolCall(m.pendingExport.ToolIdx)
 						m.chatHistory = append(m.chatHistory, ai.ChatMessage{
 							Role:    "user",
-							Content: fmt.Sprintf("Tool 'export_data' failed to write file: %v", xe.Message),
+							Content: fmt.Sprintf("Tool 'export_report' failed to write file: %v", xe.Message),
 						})
 					} else {
-						m.toolCalls[m.pendingExport.ToolIdx].Result = fmt.Sprintf("✓ Exported dataset '%s' to '%s' (%s)", m.pendingExport.DatasetID, outPath, strings.ToUpper(m.pendingExport.Format))
+						m.toolCalls[m.pendingExport.ToolIdx].Result = fmt.Sprintf("✓ Saved Markdown report to '%s'", outPath)
 						m.renderToolCall(m.pendingExport.ToolIdx)
 
-						statusLine := SuccessBadgeStyle.Render("✓ File Exported Success") + " " + MetricsStyle.Render(fmt.Sprintf("Exported dataset '%s' to '%s'", m.pendingExport.DatasetID, outPath))
+						statusLine := SuccessBadgeStyle.Render("✓ Report Saved Success") + " " + MetricsStyle.Render(fmt.Sprintf("Saved Markdown report to '%s'", outPath))
 						m.messages = append(m.messages, statusLine)
 
 						m.chatHistory = append(m.chatHistory, ai.ChatMessage{
 							Role:    "user",
-							Content: fmt.Sprintf("Tool 'export_data' executed successfully. Exported dataset '%s' to local file '%s'.", m.pendingExport.DatasetID, outPath),
+							Content: fmt.Sprintf("Tool 'export_report' executed successfully. Saved Markdown report to local file '%s'.", outPath),
 						})
+					}
+				} else {
+					datasetRes, exists := m.sessionStore.Get(m.pendingExport.DatasetID)
+					if !exists || datasetRes == nil {
+						m.toolCalls[m.pendingExport.ToolIdx].Result = fmt.Sprintf("❌ Export Failed: Dataset '%s' not found", m.pendingExport.DatasetID)
+						m.renderToolCall(m.pendingExport.ToolIdx)
+						m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+							Role:    "user",
+							Content: fmt.Sprintf("Tool 'export_data' failed: dataset '%s' not found in session catalog.", m.pendingExport.DatasetID),
+						})
+					} else {
+						outPath, xe := export.ExportQueryResult(datasetRes, export.ExportFormat(m.pendingExport.Format), m.pendingExport.FilePath)
+						if xe != nil {
+							m.toolCalls[m.pendingExport.ToolIdx].Result = fmt.Sprintf("❌ Export Failed: %v", xe.Message)
+							m.renderToolCall(m.pendingExport.ToolIdx)
+							m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+								Role:    "user",
+								Content: fmt.Sprintf("Tool 'export_data' failed to write file: %v", xe.Message),
+							})
+						} else {
+							m.toolCalls[m.pendingExport.ToolIdx].Result = fmt.Sprintf("✓ Exported dataset '%s' to '%s' (%s)", m.pendingExport.DatasetID, outPath, strings.ToUpper(m.pendingExport.Format))
+							m.renderToolCall(m.pendingExport.ToolIdx)
+
+							statusLine := SuccessBadgeStyle.Render("✓ File Exported Success") + " " + MetricsStyle.Render(fmt.Sprintf("Exported dataset '%s' to '%s'", m.pendingExport.DatasetID, outPath))
+							m.messages = append(m.messages, statusLine)
+
+							m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+								Role:    "user",
+								Content: fmt.Sprintf("Tool 'export_data' executed successfully. Exported dataset '%s' to local file '%s'.", m.pendingExport.DatasetID, outPath),
+							})
+						}
 					}
 				}
 				m.pendingExport = nil
@@ -734,12 +822,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			case 2:
 				// Option 3: Deny / Cancel Export
+				toolName := "export_data"
+				if m.pendingExport.IsReport {
+					toolName = "export_report"
+				}
 				m.toolCalls[m.pendingExport.ToolIdx].Result = "🚫 Export Denied by User"
 				m.renderToolCall(m.pendingExport.ToolIdx)
 
 				m.chatHistory = append(m.chatHistory, ai.ChatMessage{
 					Role:    "user",
-					Content: "Tool 'export_data' was denied by user.",
+					Content: fmt.Sprintf("Tool '%s' was denied by user.", toolName),
 				})
 				m.pendingExport = nil
 				m.pendingActions = nil
@@ -1035,11 +1127,18 @@ func (m Model) View() string {
 		sb.WriteString(m.spinner.View() + " Executing SQL query...\n")
 	case StateExportReady:
 		if m.pendingExport != nil {
+			title := "✨ File Export Approval Required"
+			options := []string{"Confirm & Export File", "Adjust Prompt / Change Options", "Deny & Cancel Export"}
 			exportInfo := fmt.Sprintf("Dataset: %s | FilePath: %s | Format: %s", m.pendingExport.DatasetID, m.pendingExport.FilePath, strings.ToUpper(m.pendingExport.Format))
+			if m.pendingExport.IsReport {
+				title = "✨ Markdown Report Save Approval Required"
+				options = []string{"Confirm & Save Report", "Adjust Prompt / Change Options", "Deny & Cancel Save"}
+				exportInfo = fmt.Sprintf("Report File: %s | Content: %d lines", m.pendingExport.FilePath, len(strings.Split(m.pendingExport.Content, "\n")))
+			}
 			card := renderActionOptionsCard(
-				"✨ File Export Approval Required",
+				title,
 				SQLCodeStyle.Render(exportInfo),
-				[]string{"Confirm & Export File", "Adjust Prompt / Change Options", "Deny & Cancel Export"},
+				options,
 				m.confirmOption,
 				m.width,
 			)

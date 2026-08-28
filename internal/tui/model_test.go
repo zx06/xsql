@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -434,6 +435,33 @@ func TestTUI_Model_ExportFlow(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("expected runAgentStepCmd after export feedback")
 	}
+
+	// Test TypeReport flow
+	tempDir := t.TempDir()
+	reportPath := filepath.Join(tempDir, "report.md")
+	updated, _ = m.Update(aiResponseMsg{
+		response: &ai.AIResponse{
+			Type:        ai.TypeReport,
+			Content:     "# Sales Report\n\n- Q1: 100",
+			FilePath:    reportPath,
+			Explanation: "Export markdown report",
+		},
+	})
+	m = updated.(Model)
+	if m.state != StateExportReady {
+		t.Fatalf("expected StateExportReady for TypeReport, got %v", m.state)
+	}
+	if m.pendingExport == nil || !m.pendingExport.IsReport {
+		t.Fatal("expected pendingExport to be report")
+	}
+
+	// Confirm report save
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	content, err := os.ReadFile(reportPath)
+	if err != nil || !strings.Contains(string(content), "Sales Report") {
+		t.Fatalf("expected report file to be written, err: %v", err)
+	}
 }
 
 func TestTUI_Model_FullCoverage(t *testing.T) {
@@ -567,13 +595,35 @@ func TestTUI_Model_ViewAndAllStatesCoverage(t *testing.T) {
 	})
 	m = updated.(Model)
 
-	// 4. Test aiResponseMsg with error & TypeText
-	updated, _ = m.Update(aiResponseMsg{
+	// 4. Test aiResponseMsg with error & retry behavior
+	// Attempt 1: Should trigger retry and set state to StateThinking
+	updated, cmd := m.Update(aiResponseMsg{
 		err: errors.New("XSQL_AI_API_ERROR", "api failed", nil),
 	})
 	m = updated.(Model)
+	if m.state != StateThinking {
+		t.Fatalf("expected StateThinking on first AI error retry, got %v", m.state)
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd to retry step")
+	}
+
+	// Attempt 2: Should still retry (StateThinking)
+	updated, _ = m.Update(aiResponseMsg{
+		err: errors.New("XSQL_AI_API_ERROR", "api failed again", nil),
+	})
+	m = updated.(Model)
+	if m.state != StateThinking {
+		t.Fatalf("expected StateThinking on second AI error retry, got %v", m.state)
+	}
+
+	// Attempt 3: Exceeds maxAIRetries (2), should transition to StateIdle
+	updated, _ = m.Update(aiResponseMsg{
+		err: errors.New("XSQL_AI_API_ERROR", "api failed third time", nil),
+	})
+	m = updated.(Model)
 	if m.state != StateIdle {
-		t.Fatalf("expected StateIdle after AI error, got %v", m.state)
+		t.Fatalf("expected StateIdle after exhausting AI retries, got %v", m.state)
 	}
 
 	updated, _ = m.Update(aiResponseMsg{

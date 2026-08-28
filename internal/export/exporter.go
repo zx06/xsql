@@ -15,10 +15,35 @@ import (
 type ExportFormat string
 
 const (
-	FormatCSV      ExportFormat = "csv"
-	FormatJSON     ExportFormat = "json"
-	FormatMarkdown ExportFormat = "markdown"
+	FormatCSV  ExportFormat = "csv"
+	FormatJSON ExportFormat = "json"
 )
+
+// ExpandPath expands leading ~ to user's home directory.
+func ExpandPath(filePath string) (string, error) {
+	filePath = strings.TrimSpace(filePath)
+	if filePath == "" {
+		return "", nil
+	}
+
+	if filePath == "~" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		return home, nil
+	}
+
+	if strings.HasPrefix(filePath, "~/") || strings.HasPrefix(filePath, "~\\") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(home, filePath[2:]), nil
+	}
+
+	return filePath, nil
+}
 
 func ExportQueryResult(result *db.QueryResult, format ExportFormat, filePath string) (string, *errors.XError) {
 	if result == nil {
@@ -27,19 +52,26 @@ func ExportQueryResult(result *db.QueryResult, format ExportFormat, filePath str
 
 	format = ExportFormat(strings.ToLower(strings.TrimSpace(string(format))))
 	switch format {
-	case FormatCSV, FormatJSON, FormatMarkdown:
+	case FormatCSV, FormatJSON:
 	default:
 		return "", errors.New(errors.CodeCfgInvalid, "unsupported export format", map[string]any{
 			"format": format,
 		})
 	}
 
-	if filePath == "" {
-		filePath = fmt.Sprintf("export_%s.%s", format, format)
+	expandedPath, err := ExpandPath(filePath)
+	if err != nil {
+		return "", errors.New(errors.CodeInternal, "failed to expand export file path", map[string]any{
+			"path": filePath,
+			"err":  err.Error(),
+		})
+	}
+	if expandedPath == "" {
+		expandedPath = fmt.Sprintf("export_%s.%s", format, format)
 	}
 
 	// Ensure directory exists
-	dir := filepath.Dir(filePath)
+	dir := filepath.Dir(expandedPath)
 	if dir != "" && dir != "." {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return "", errors.New(errors.CodeInternal, "failed to create export directory", map[string]any{
@@ -49,10 +81,10 @@ func ExportQueryResult(result *db.QueryResult, format ExportFormat, filePath str
 		}
 	}
 
-	f, err := os.Create(filePath)
+	f, err := os.Create(expandedPath)
 	if err != nil {
 		return "", errors.New(errors.CodeInternal, "failed to create export file", map[string]any{
-			"path": filePath,
+			"path": expandedPath,
 			"err":  err.Error(),
 		})
 	}
@@ -64,34 +96,6 @@ func ExportQueryResult(result *db.QueryResult, format ExportFormat, filePath str
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(result.Rows); err != nil {
 			return "", errors.New(errors.CodeInternal, "failed to write JSON export", map[string]any{"err": err.Error()})
-		}
-
-	case FormatMarkdown:
-		var sb strings.Builder
-		sb.WriteString("| " + strings.Join(result.Columns, " | ") + " |\n")
-		var sep []string
-		for range result.Columns {
-			sep = append(sep, "---")
-		}
-		sb.WriteString("| " + strings.Join(sep, " | ") + " |\n")
-
-		for _, row := range result.Rows {
-			var vals []string
-			for _, col := range result.Columns {
-				val := row[col]
-				if val == nil {
-					vals = append(vals, "NULL")
-				} else {
-					cellStr := fmt.Sprintf("%v", val)
-					cellStr = strings.ReplaceAll(cellStr, "\n", " ")
-					cellStr = strings.ReplaceAll(cellStr, "|", "\\|")
-					vals = append(vals, cellStr)
-				}
-			}
-			sb.WriteString("| " + strings.Join(vals, " | ") + " |\n")
-		}
-		if _, err := f.WriteString(sb.String()); err != nil {
-			return "", errors.New(errors.CodeInternal, "failed to write Markdown export", map[string]any{"err": err.Error()})
 		}
 
 	case FormatCSV:
@@ -119,6 +123,40 @@ func ExportQueryResult(result *db.QueryResult, format ExportFormat, filePath str
 		}
 	}
 
-	absPath, _ := filepath.Abs(filePath)
+	absPath, _ := filepath.Abs(expandedPath)
+	return absPath, nil
+}
+
+// ExportReport writes the Markdown/text report content to the target file path.
+func ExportReport(content string, filePath string) (string, *errors.XError) {
+	expandedPath, err := ExpandPath(filePath)
+	if err != nil {
+		return "", errors.New(errors.CodeInternal, "failed to expand report file path", map[string]any{
+			"path": filePath,
+			"err":  err.Error(),
+		})
+	}
+	if expandedPath == "" {
+		expandedPath = "report.md"
+	}
+
+	dir := filepath.Dir(expandedPath)
+	if dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return "", errors.New(errors.CodeInternal, "failed to create report directory", map[string]any{
+				"dir": dir,
+				"err": err.Error(),
+			})
+		}
+	}
+
+	if err := os.WriteFile(expandedPath, []byte(content), 0644); err != nil {
+		return "", errors.New(errors.CodeInternal, "failed to write report file", map[string]any{
+			"path": expandedPath,
+			"err":  err.Error(),
+		})
+	}
+
+	absPath, _ := filepath.Abs(expandedPath)
 	return absPath, nil
 }

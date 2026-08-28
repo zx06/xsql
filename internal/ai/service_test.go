@@ -225,6 +225,64 @@ func TestGenerateResponse_MockHTTP_JSToolCall(t *testing.T) {
 	}
 }
 
+func TestGenerateResponse_MockHTTP_ExportReportToolCall(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		respBody := `{
+			"id": "chatcmpl-126",
+			"object": "chat.completion",
+			"created": 1677652288,
+			"model": "gpt-4o",
+			"choices": [
+				{
+					"index": 0,
+					"message": {
+						"role": "assistant",
+						"content": null,
+						"tool_calls": [
+							{
+								"id": "call_report123",
+								"type": "function",
+								"function": {
+									"name": "export_report",
+									"arguments": "{\"content\":\"# Analysis Report\\n\\nAll good.\",\"filepath\":\"~/Downloads/report.md\",\"explanation\":\"Exports daily markdown report.\"}"
+								}
+							}
+						]
+					},
+					"finish_reason": "tool_calls"
+				}
+			]
+		}`
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(respBody))
+	}))
+	defer mockServer.Close()
+
+	cfg := config.AIConfig{
+		Provider: "openai",
+		BaseURL:  mockServer.URL,
+		APIKey:   "test-key",
+	}
+
+	client := NewClient(cfg, mockServer.Client())
+	service := NewService(cfg, client)
+
+	res, xe := service.GenerateResponse(context.Background(), "export report", nil, "mysql", "res1 catalog")
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+
+	if res.Type != TypeReport {
+		t.Errorf("expected type Report, got %q", res.Type)
+	}
+	if res.Content != "# Analysis Report\n\nAll good." {
+		t.Errorf("unexpected content: %q", res.Content)
+	}
+	if res.FilePath != "~/Downloads/report.md" {
+		t.Errorf("unexpected filepath: %q", res.FilePath)
+	}
+}
+
 func TestGenerateSQL_MockHTTP_TextMessageFallback(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respBody := `{

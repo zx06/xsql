@@ -104,7 +104,7 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*A
 	exportToolDef := openai.ChatCompletionToolParam{
 		Function: shared.FunctionDefinitionParam{
 			Name:        "export_data",
-			Description: openai.String("Export a cached session dataset (e.g. res1, res2) to a local file in CSV, JSON, or Markdown format after human confirmation."),
+			Description: openai.String("Export a cached session dataset (e.g. res1, res2) to a local file in CSV or JSON format after human confirmation."),
 			Parameters: shared.FunctionParameters{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -114,8 +114,8 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*A
 					},
 					"format": map[string]interface{}{
 						"type":        "string",
-						"description": "Export file format: 'csv', 'json', or 'markdown'.",
-						"enum":        []string{"csv", "json", "markdown"},
+						"description": "Export file format: 'csv' or 'json'.",
+						"enum":        []string{"csv", "json"},
 					},
 					"filepath": map[string]interface{}{
 						"type":        "string",
@@ -131,6 +131,31 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*A
 		},
 	}
 
+	reportToolDef := openai.ChatCompletionToolParam{
+		Function: shared.FunctionDefinitionParam{
+			Name:        "export_report",
+			Description: openai.String("Export a comprehensive Markdown analysis report to a local file after human confirmation."),
+			Parameters: shared.FunctionParameters{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"content": map[string]interface{}{
+						"type":        "string",
+						"description": "The complete Markdown text content of the analysis report.",
+					},
+					"filepath": map[string]interface{}{
+						"type":        "string",
+						"description": "Target file path (e.g. 'summary_report.md', '~/Downloads/report.md').",
+					},
+					"explanation": map[string]interface{}{
+						"type":        "string",
+						"description": "Brief explanation of the report being saved.",
+					},
+				},
+				"required": []string{"content", "filepath", "explanation"},
+			},
+		},
+	}
+
 	model := c.cfg.Model
 	if model == "" {
 		model = "gpt-4o"
@@ -139,7 +164,7 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*A
 	params := openai.ChatCompletionNewParams{
 		Model:             shared.ChatModel(model),
 		Messages:          sdkMessages,
-		Tools:             []openai.ChatCompletionToolParam{sqlToolDef, jsToolDef, exportToolDef},
+		Tools:             []openai.ChatCompletionToolParam{sqlToolDef, jsToolDef, exportToolDef, reportToolDef},
 		ParallelToolCalls: openai.Bool(false),
 	}
 	if c.cfg.MaxTokens > 0 {
@@ -213,6 +238,23 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*A
 					Explanation: strings.TrimSpace(raw.Explanation),
 				})
 
+			case "export_report":
+				var raw struct {
+					Content     string `json:"content"`
+					FilePath    string `json:"filepath"`
+					Explanation string `json:"explanation"`
+				}
+				if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &raw); err != nil {
+					return nil, invalidToolArguments(toolCall.Function.Name, err)
+				}
+				actions = append(actions, ToolAction{
+					ID:          toolCall.ID,
+					Type:        TypeReport,
+					Content:     strings.TrimSpace(raw.Content),
+					FilePath:    strings.TrimSpace(raw.FilePath),
+					Explanation: strings.TrimSpace(raw.Explanation),
+				})
+
 			default:
 				return nil, errors.New(errors.CodeInternal, "AI provider returned an unsupported tool call", map[string]any{
 					"tool": toolCall.Function.Name,
@@ -228,6 +270,7 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*A
 			DatasetID:   first.DatasetID,
 			Format:      first.Format,
 			FilePath:    first.FilePath,
+			Content:     first.Content,
 			Explanation: first.Explanation,
 			Actions:     actions,
 		}, nil
