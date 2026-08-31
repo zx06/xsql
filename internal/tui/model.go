@@ -755,59 +755,43 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			switch triggerOpt {
 			case 0:
-				// Option 1: Confirm & Export
+				// Option 1: Confirm & Export / Save
+				var outPath string
+				var xe *errors.XError
+				toolName := "export_data"
+				actionDesc := fmt.Sprintf("Exported dataset '%s'", m.pendingExport.DatasetID)
+
 				if m.pendingExport.IsReport {
-					outPath, xe := export.ExportReport(m.pendingExport.Content, m.pendingExport.FilePath)
-					if xe != nil {
-						m.toolCalls[m.pendingExport.ToolIdx].Result = fmt.Sprintf("❌ Save Report Failed: %v", xe.Message)
-						m.renderToolCall(m.pendingExport.ToolIdx)
-						m.chatHistory = append(m.chatHistory, ai.ChatMessage{
-							Role:    "user",
-							Content: fmt.Sprintf("Tool 'export_report' failed to write file: %v", xe.Message),
-						})
-					} else {
-						m.toolCalls[m.pendingExport.ToolIdx].Result = fmt.Sprintf("✓ Saved Markdown report to '%s'", outPath)
-						m.renderToolCall(m.pendingExport.ToolIdx)
-
-						statusLine := SuccessBadgeStyle.Render("✓ Report Saved Success") + " " + MetricsStyle.Render(fmt.Sprintf("Saved Markdown report to '%s'", outPath))
-						m.messages = append(m.messages, statusLine)
-
-						m.chatHistory = append(m.chatHistory, ai.ChatMessage{
-							Role:    "user",
-							Content: fmt.Sprintf("Tool 'export_report' executed successfully. Saved Markdown report to local file '%s'.", outPath),
-						})
-					}
+					toolName = "export_report"
+					actionDesc = "Saved Markdown report"
+					outPath, xe = export.ExportReport(m.pendingExport.Content, m.pendingExport.FilePath)
 				} else {
 					datasetRes, exists := m.sessionStore.Get(m.pendingExport.DatasetID)
 					if !exists || datasetRes == nil {
-						m.toolCalls[m.pendingExport.ToolIdx].Result = fmt.Sprintf("❌ Export Failed: Dataset '%s' not found", m.pendingExport.DatasetID)
-						m.renderToolCall(m.pendingExport.ToolIdx)
-						m.chatHistory = append(m.chatHistory, ai.ChatMessage{
-							Role:    "user",
-							Content: fmt.Sprintf("Tool 'export_data' failed: dataset '%s' not found in session catalog.", m.pendingExport.DatasetID),
-						})
+						xe = errors.New(errors.CodeCfgInvalid, fmt.Sprintf("dataset '%s' not found in session catalog", m.pendingExport.DatasetID), nil)
 					} else {
-						outPath, xe := export.ExportQueryResult(datasetRes, export.ExportFormat(m.pendingExport.Format), m.pendingExport.FilePath)
-						if xe != nil {
-							m.toolCalls[m.pendingExport.ToolIdx].Result = fmt.Sprintf("❌ Export Failed: %v", xe.Message)
-							m.renderToolCall(m.pendingExport.ToolIdx)
-							m.chatHistory = append(m.chatHistory, ai.ChatMessage{
-								Role:    "user",
-								Content: fmt.Sprintf("Tool 'export_data' failed to write file: %v", xe.Message),
-							})
-						} else {
-							m.toolCalls[m.pendingExport.ToolIdx].Result = fmt.Sprintf("✓ Exported dataset '%s' to '%s' (%s)", m.pendingExport.DatasetID, outPath, strings.ToUpper(m.pendingExport.Format))
-							m.renderToolCall(m.pendingExport.ToolIdx)
-
-							statusLine := SuccessBadgeStyle.Render("✓ File Exported Success") + " " + MetricsStyle.Render(fmt.Sprintf("Exported dataset '%s' to '%s'", m.pendingExport.DatasetID, outPath))
-							m.messages = append(m.messages, statusLine)
-
-							m.chatHistory = append(m.chatHistory, ai.ChatMessage{
-								Role:    "user",
-								Content: fmt.Sprintf("Tool 'export_data' executed successfully. Exported dataset '%s' to local file '%s'.", m.pendingExport.DatasetID, outPath),
-							})
-						}
+						outPath, xe = export.ExportQueryResult(datasetRes, export.ExportFormat(m.pendingExport.Format), m.pendingExport.FilePath)
 					}
+				}
+
+				if xe != nil {
+					m.toolCalls[m.pendingExport.ToolIdx].Result = fmt.Sprintf("❌ Export Failed: %v", xe.Message)
+					m.renderToolCall(m.pendingExport.ToolIdx)
+					m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+						Role:    "user",
+						Content: fmt.Sprintf("Tool '%s' failed: %v", toolName, xe.Message),
+					})
+				} else {
+					m.toolCalls[m.pendingExport.ToolIdx].Result = fmt.Sprintf("✓ %s to '%s'", actionDesc, outPath)
+					m.renderToolCall(m.pendingExport.ToolIdx)
+
+					statusLine := SuccessBadgeStyle.Render("✓ Export Success") + " " + MetricsStyle.Render(fmt.Sprintf("%s to '%s'", actionDesc, outPath))
+					m.messages = append(m.messages, statusLine)
+
+					m.chatHistory = append(m.chatHistory, ai.ChatMessage{
+						Role:    "user",
+						Content: fmt.Sprintf("Tool '%s' executed successfully. %s to local file '%s'.", toolName, actionDesc, outPath),
+					})
 				}
 				m.pendingExport = nil
 				return m.executeNextPendingAction()

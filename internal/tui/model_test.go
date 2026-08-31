@@ -436,7 +436,26 @@ func TestTUI_Model_ExportFlow(t *testing.T) {
 		t.Fatal("expected runAgentStepCmd after export feedback")
 	}
 
-	// Test TypeReport flow
+	// Test TypeReport flow - Deny report export
+	updated, _ = m.Update(aiResponseMsg{
+		response: &ai.AIResponse{
+			Type:        ai.TypeReport,
+			Content:     "# Sales Report",
+			FilePath:    "report.md",
+			Explanation: "Export markdown report",
+		},
+	})
+	m = updated.(Model)
+	if m.state != StateExportReady {
+		t.Fatalf("expected StateExportReady, got %v", m.state)
+	}
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	m = updated.(Model)
+	if m.state != StateThinking {
+		t.Fatalf("expected StateThinking after denying report save, got %v", m.state)
+	}
+
+	// Test TypeReport flow - Confirm save
 	tempDir := t.TempDir()
 	reportPath := filepath.Join(tempDir, "report.md")
 	updated, _ = m.Update(aiResponseMsg{
@@ -462,6 +481,39 @@ func TestTUI_Model_ExportFlow(t *testing.T) {
 	if err != nil || !strings.Contains(string(content), "Sales Report") {
 		t.Fatalf("expected report file to be written, err: %v", err)
 	}
+
+	// Test export_data confirm with valid dataset
+	res := &db.QueryResult{
+		Columns: []string{"id", "val"},
+		Rows:    []map[string]any{{"id": 1, "val": "abc"}},
+	}
+	datasetID := m.sessionStore.Save("SELECT 1", res)
+	csvPath := filepath.Join(tempDir, "data.csv")
+	updated, _ = m.Update(aiResponseMsg{
+		response: &ai.AIResponse{
+			Type:      ai.TypeExport,
+			DatasetID: datasetID,
+			Format:    "csv",
+			FilePath:  csvPath,
+		},
+	})
+	m = updated.(Model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if _, err := os.Stat(csvPath); err != nil {
+		t.Fatalf("expected data csv to be exported, err: %v", err)
+	}
+
+	// Test tool render for expanded export_report, execute_sql, execute_javascript
+	m.toolCalls = []ToolCallItem{
+		{Name: "export_report", Detail: "# Title", IsExpanded: true, MsgIndex: 0},
+		{Name: "execute_javascript", Detail: "var a = 1;", IsExpanded: true, MsgIndex: 0},
+		{Name: "execute_sql", Detail: "SELECT 1;", IsExpanded: true, MsgIndex: 0},
+	}
+	m.messages = []string{""}
+	m.renderToolCall(0)
+	m.renderToolCall(1)
+	m.renderToolCall(2)
 }
 
 func TestTUI_Model_FullCoverage(t *testing.T) {
@@ -777,5 +829,69 @@ func TestTUI_Model_ThemeAutoDetection(t *testing.T) {
 	mDark2 := NewModel(config.Options{}, resolved, nil, "", false)
 	if !mDark2.isDark {
 		t.Fatal("expected isDark == true when COLORFGBG='15;0'")
+	}
+}
+
+func TestTUI_Model_ActionFallback(t *testing.T) {
+	resolved := config.Resolved{ProfileName: "dev", Profile: config.Profile{DB: "mysql"}}
+	aiService := ai.NewService(config.AIConfig{}, nil)
+
+	// 1. Single TypeSQL fallback
+	m := NewModel(config.Options{}, resolved, aiService, "", false)
+	updated, _ := m.Update(aiResponseMsg{
+		response: &ai.AIResponse{
+			Type:        ai.TypeSQL,
+			SQL:         "SELECT 1;",
+			Explanation: "sql query",
+		},
+	})
+	m = updated.(Model)
+	if m.state != StateSQLReady {
+		t.Fatalf("expected StateSQLReady on fallback TypeSQL, got %v", m.state)
+	}
+
+	// 2. Single TypeJS fallback
+	m = NewModel(config.Options{}, resolved, aiService, "", false)
+	updated, _ = m.Update(aiResponseMsg{
+		response: &ai.AIResponse{
+			Type:        ai.TypeJS,
+			JSCode:      "var x = 1;",
+			Explanation: "js code",
+		},
+	})
+	m = updated.(Model)
+	if m.state != StateThinking {
+		t.Fatalf("expected StateThinking after JS fallback, got %v", m.state)
+	}
+
+	// 3. Single TypeExport fallback
+	m = NewModel(config.Options{}, resolved, aiService, "", false)
+	updated, _ = m.Update(aiResponseMsg{
+		response: &ai.AIResponse{
+			Type:        ai.TypeExport,
+			DatasetID:   "res1",
+			Format:      "csv",
+			FilePath:    "data.csv",
+			Explanation: "export",
+		},
+	})
+	m = updated.(Model)
+	if m.state != StateExportReady {
+		t.Fatalf("expected StateExportReady on fallback TypeExport, got %v", m.state)
+	}
+
+	// 4. Single TypeReport fallback
+	m = NewModel(config.Options{}, resolved, aiService, "", false)
+	updated, _ = m.Update(aiResponseMsg{
+		response: &ai.AIResponse{
+			Type:        ai.TypeReport,
+			Content:     "# Report",
+			FilePath:    "report.md",
+			Explanation: "report",
+		},
+	})
+	m = updated.(Model)
+	if m.state != StateExportReady {
+		t.Fatalf("expected StateExportReady on fallback TypeReport, got %v", m.state)
 	}
 }

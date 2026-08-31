@@ -395,3 +395,82 @@ func TestService_ChatCompletion(t *testing.T) {
 		t.Errorf("expected explanation 'Hello from ChatCompletion', got %q", res.Explanation)
 	}
 }
+
+func TestChatCompletion_InvalidToolArgumentsAndEdgeCases(t *testing.T) {
+	testCases := []struct {
+		name     string
+		respJSON string
+		wantErr  string
+	}{
+		{
+			name: "invalid execute_sql arguments",
+			respJSON: `{
+				"id": "cmpl-1", "object": "chat.completion", "created": 1, "model": "gpt-4o",
+				"choices": [{"index": 0, "message": {"role": "assistant", "tool_calls": [{"id": "c1", "type": "function", "function": {"name": "execute_sql", "arguments": "invalid json"}}]}}]
+			}`,
+			wantErr: "Invalid JSON arguments for tool 'execute_sql'",
+		},
+		{
+			name: "invalid execute_javascript arguments",
+			respJSON: `{
+				"id": "cmpl-2", "object": "chat.completion", "created": 1, "model": "gpt-4o",
+				"choices": [{"index": 0, "message": {"role": "assistant", "tool_calls": [{"id": "c2", "type": "function", "function": {"name": "execute_javascript", "arguments": "{"}}]}}]
+			}`,
+			wantErr: "Invalid JSON arguments for tool 'execute_javascript'",
+		},
+		{
+			name: "invalid export_data arguments",
+			respJSON: `{
+				"id": "cmpl-3", "object": "chat.completion", "created": 1, "model": "gpt-4o",
+				"choices": [{"index": 0, "message": {"role": "assistant", "tool_calls": [{"id": "c3", "type": "function", "function": {"name": "export_data", "arguments": "not-json"}}]}}]
+			}`,
+			wantErr: "Invalid JSON arguments for tool 'export_data'",
+		},
+		{
+			name: "invalid export_report arguments",
+			respJSON: `{
+				"id": "cmpl-4", "object": "chat.completion", "created": 1, "model": "gpt-4o",
+				"choices": [{"index": 0, "message": {"role": "assistant", "tool_calls": [{"id": "c4", "type": "function", "function": {"name": "export_report", "arguments": "bad json"}}]}}]
+			}`,
+			wantErr: "Invalid JSON arguments for tool 'export_report'",
+		},
+		{
+			name: "unsupported tool call",
+			respJSON: `{
+				"id": "cmpl-5", "object": "chat.completion", "created": 1, "model": "gpt-4o",
+				"choices": [{"index": 0, "message": {"role": "assistant", "tool_calls": [{"id": "c5", "type": "function", "function": {"name": "unknown_tool", "arguments": "{}"}}]}}]
+			}`,
+			wantErr: "unsupported tool call",
+		},
+		{
+			name: "empty choices",
+			respJSON: `{
+				"id": "cmpl-6", "object": "chat.completion", "created": 1, "model": "gpt-4o",
+				"choices": []
+			}`,
+			wantErr: "empty choices",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(tc.respJSON))
+			}))
+			defer server.Close()
+
+			cfg := config.AIConfig{Provider: "openai", BaseURL: server.URL, APIKey: "k"}
+			client := NewClient(cfg, server.Client())
+			svc := NewService(cfg, client)
+
+			_, xe := svc.ChatCompletion(context.Background(), []ChatMessage{{Role: "user", Content: "hi"}})
+			if xe == nil {
+				t.Fatalf("expected error containing %q, got nil", tc.wantErr)
+			}
+			if !strings.Contains(xe.Message, tc.wantErr) {
+				t.Fatalf("expected error containing %q, got %q", tc.wantErr, xe.Message)
+			}
+		})
+	}
+}

@@ -80,6 +80,16 @@ func TestExpandPath(t *testing.T) {
 		t.Fatalf("failed to get home dir: %v", err)
 	}
 
+	pEmpty, err := ExpandPath("")
+	if err != nil || pEmpty != "" {
+		t.Fatalf("expected empty, got %q, err %v", pEmpty, err)
+	}
+
+	pHomeOnly, err := ExpandPath("~")
+	if err != nil || pHomeOnly != home {
+		t.Fatalf("expected %s, got %s", home, pHomeOnly)
+	}
+
 	p, err := ExpandPath("~/Downloads/report.md")
 	if err != nil {
 		t.Fatalf("ExpandPath failed: %v", err)
@@ -87,6 +97,15 @@ func TestExpandPath(t *testing.T) {
 	expected := filepath.Join(home, "Downloads/report.md")
 	if p != expected {
 		t.Fatalf("expected %s, got %s", expected, p)
+	}
+
+	pWin, err := ExpandPath("~\\Downloads\\report.md")
+	if err != nil {
+		t.Fatalf("ExpandPath failed: %v", err)
+	}
+	expectedWin := filepath.Join(home, "Downloads\\report.md")
+	if pWin != expectedWin {
+		t.Fatalf("expected %s, got %s", expectedWin, pWin)
 	}
 
 	p2, _ := ExpandPath("/absolute/path.txt")
@@ -116,4 +135,11 @@ func TestExportReport(t *testing.T) {
 	if string(readBack) != content {
 		t.Fatalf("unexpected content: %s", string(readBack))
 	}
+
+	// Test default report name when path is empty
+	absDef, xe := ExportReport("# Test", "")
+	if xe != nil {
+		t.Fatalf("ExportReport with empty path failed: %v", xe)
+	}
+	_ = os.Remove(absDef)
 }

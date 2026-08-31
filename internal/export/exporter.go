@@ -45,6 +45,30 @@ func ExpandPath(filePath string) (string, error) {
 	return filePath, nil
 }
 
+func resolveAndPrepareTarget(filePath, defaultName string) (string, *errors.XError) {
+	expandedPath, err := ExpandPath(filePath)
+	if err != nil {
+		return "", errors.New(errors.CodeInternal, "failed to expand export file path", map[string]any{
+			"path": filePath,
+			"err":  err.Error(),
+		})
+	}
+	if expandedPath == "" {
+		expandedPath = defaultName
+	}
+
+	dir := filepath.Dir(expandedPath)
+	if dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return "", errors.New(errors.CodeInternal, "failed to create export directory", map[string]any{
+				"dir": dir,
+				"err": err.Error(),
+			})
+		}
+	}
+	return expandedPath, nil
+}
+
 func ExportQueryResult(result *db.QueryResult, format ExportFormat, filePath string) (string, *errors.XError) {
 	if result == nil {
 		return "", errors.New(errors.CodeCfgInvalid, "cannot export nil QueryResult", nil)
@@ -59,26 +83,10 @@ func ExportQueryResult(result *db.QueryResult, format ExportFormat, filePath str
 		})
 	}
 
-	expandedPath, err := ExpandPath(filePath)
-	if err != nil {
-		return "", errors.New(errors.CodeInternal, "failed to expand export file path", map[string]any{
-			"path": filePath,
-			"err":  err.Error(),
-		})
-	}
-	if expandedPath == "" {
-		expandedPath = fmt.Sprintf("export_%s.%s", format, format)
-	}
-
-	// Ensure directory exists
-	dir := filepath.Dir(expandedPath)
-	if dir != "" && dir != "." {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return "", errors.New(errors.CodeInternal, "failed to create export directory", map[string]any{
-				"dir": dir,
-				"err": err.Error(),
-			})
-		}
+	defaultName := fmt.Sprintf("export_%s.%s", format, format)
+	expandedPath, xe := resolveAndPrepareTarget(filePath, defaultName)
+	if xe != nil {
+		return "", xe
 	}
 
 	f, err := os.Create(expandedPath)
@@ -129,25 +137,9 @@ func ExportQueryResult(result *db.QueryResult, format ExportFormat, filePath str
 
 // ExportReport writes the Markdown/text report content to the target file path.
 func ExportReport(content string, filePath string) (string, *errors.XError) {
-	expandedPath, err := ExpandPath(filePath)
-	if err != nil {
-		return "", errors.New(errors.CodeInternal, "failed to expand report file path", map[string]any{
-			"path": filePath,
-			"err":  err.Error(),
-		})
-	}
-	if expandedPath == "" {
-		expandedPath = "report.md"
-	}
-
-	dir := filepath.Dir(expandedPath)
-	if dir != "" && dir != "." {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return "", errors.New(errors.CodeInternal, "failed to create report directory", map[string]any{
-				"dir": dir,
-				"err": err.Error(),
-			})
-		}
+	expandedPath, xe := resolveAndPrepareTarget(filePath, "report.md")
+	if xe != nil {
+		return "", xe
 	}
 
 	if err := os.WriteFile(expandedPath, []byte(content), 0644); err != nil {
