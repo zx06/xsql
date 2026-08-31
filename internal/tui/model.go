@@ -1009,6 +1009,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.LineDown(6)
 			return m, nil
 
+		case tea.KeyCtrlT:
+			m.isDark = !m.isDark
+			SetThemeDark(m.isDark)
+			for i := range m.toolCalls {
+				m.renderToolCall(i)
+			}
+			m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+			return m, nil
+
 		case tea.KeyUp:
 			m.viewport.LineUp(1)
 			return m, nil
@@ -1182,12 +1191,17 @@ func (m Model) View() string {
 		if len(m.profileList) > 1 {
 			profileBadge = fmt.Sprintf(" (%s)", m.profileName)
 		}
+		themeHint := "Dark"
+		if !m.isDark {
+			themeHint = "Light"
+		}
 		keybindings = renderKeybindingBadges([][2]string{
 			{"Enter", "Send"},
 			{"Alt+Enter", "Newline"},
 			{"Ctrl+P", "Profile" + profileBadge},
 			{"Tab", "Focus Tool" + toolNavHint},
 			{"Ctrl+O", "Tools (" + toolFoldState + ")"},
+			{"Ctrl+T", "Theme (" + themeHint + ")"},
 			{"←/→", "Cols"},
 			{"PgUp/PgDn", "Rows"},
 			{"Ctrl+E", "Expand Table"},

@@ -895,3 +895,23 @@ func TestTUI_Model_ActionFallback(t *testing.T) {
 		t.Fatalf("expected StateExportReady on fallback TypeReport, got %v", m.state)
 	}
 }
+
+func TestTUI_Model_CtrlTToggle(t *testing.T) {
+	resolved := config.Resolved{ProfileName: "dev", Profile: config.Profile{DB: "mysql"}}
+	m := NewModel(config.Options{}, resolved, nil, "", false)
+	initialDark := m.isDark
+
+	// Toggle theme via Ctrl+T
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	m = updated.(Model)
+	if m.isDark == initialDark {
+		t.Fatalf("expected isDark to toggle from %v to %v", initialDark, !initialDark)
+	}
+
+	// Toggle back
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	m = updated.(Model)
+	if m.isDark != initialDark {
+		t.Fatalf("expected isDark to toggle back to %v", initialDark)
+	}
+}

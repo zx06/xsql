@@ -1,9 +1,13 @@
 package tui
 
 import (
+	"context"
 	"os"
+	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
@@ -518,7 +522,23 @@ func DetectDarkBackground() bool {
 		}
 	}
 
-	// 3. Default to true (Dark mode) for developer terminals
+	// 3. macOS Native Appearance Detection (AppleInterfaceStyle)
+	if runtime.GOOS == "darwin" {
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "defaults", "read", "-g", "AppleInterfaceStyle")
+		out, err := cmd.Output()
+		if err != nil {
+			// On macOS, absence of AppleInterfaceStyle key indicates Light Appearance
+			return false
+		}
+		if strings.Contains(strings.ToLower(string(out)), "dark") {
+			return true
+		}
+		return false
+	}
+
+	// 4. Default fallback to true (Dark mode)
 	return true
 }
 
