@@ -184,6 +184,11 @@ func (c *Client) ChatCompletion(ctx context.Context, messages []ChatMessage) (*A
 	}
 
 	choice := resp.Choices[0]
+	if choice.FinishReason == "length" {
+		return nil, errors.New(errors.CodeInternal, "AI response was truncated because it exceeded output token limit (max_tokens). Please provide a more concise report/summary without embedding excessively large raw datasets.", map[string]any{
+			"finish_reason": choice.FinishReason,
+		})
+	}
 	msg := choice.Message
 
 	if len(msg.ToolCalls) > 0 {

@@ -450,6 +450,14 @@ func TestChatCompletion_InvalidToolArgumentsAndEdgeCases(t *testing.T) {
 			}`,
 			wantErr: "empty choices",
 		},
+		{
+			name: "truncated by max_tokens limit",
+			respJSON: `{
+				"id": "cmpl-7", "object": "chat.completion", "created": 1, "model": "gpt-4o",
+				"choices": [{"index": 0, "finish_reason": "length", "message": {"role": "assistant", "content": "half message"}}]
+			}`,
+			wantErr: "exceeded output token limit",
+		},
 	}
 
 	for _, tc := range testCases {

@@ -24,7 +24,7 @@ ENVIRONMENT & SPECIFICATIONS:
 - Tool Calling Guidelines:
   * Always use the structured tool calling interface with strictly valid JSON arguments (all newlines and double quotes in code/text strings must be properly escaped).
   * 'export_data': Use ONLY to export a raw cached session dataset (e.g. res1, res2) to 'csv' or 'json'.
-  * 'export_report': When the user asks to generate, save, or export an analysis report / summary / Markdown document, assemble the full comprehensive Markdown content (including titles, insights, conclusions, and embedded markdown tables) and call 'export_report'.
+  * 'export_report': When the user asks to generate, save, or export an analysis report / summary / Markdown document, assemble the comprehensive Markdown content (including titles, insights, conclusions, and key aggregated tables) and call 'export_report'. Focus on concise analytical conclusions and avoid dumping excessively large raw records.
 `
 
 func FormatDBName(dbType string) string {

@@ -120,7 +120,7 @@ func Resolve(opts Options) (Resolved, *errors.XError) {
 		aiConfig.Model = "gpt-4o"
 	}
 	if aiConfig.MaxTokens == 0 {
-		aiConfig.MaxTokens = 2048
+		aiConfig.MaxTokens = 8192
 	}
 
 	if opts.EnvAIBaseURL != "" {

@@ -48,7 +48,7 @@
     base_url: 'https://api.openai.com/v1',
     api_key: '',
     model: 'gpt-4o',
-    max_tokens: 2048,
+    max_tokens: 8192,
     allow_plaintext: true
   });
 
@@ -133,7 +133,7 @@
       base_url: ai?.base_url || 'https://api.openai.com/v1',
       api_key: ai?.api_key || '',
       model: ai?.model || 'gpt-4o',
-      max_tokens: Number(ai?.max_tokens || 2048),
+      max_tokens: Number(ai?.max_tokens || 8192),
       allow_plaintext: ai?.allow_plaintext !== undefined ? Boolean(ai.allow_plaintext) : true
     };
   }
