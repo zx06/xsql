@@ -11,6 +11,7 @@ import (
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/glamour/ansi"
 	"github.com/charmbracelet/lipgloss"
@@ -43,10 +44,8 @@ func uintPtr(u uint) *uint {
 // and ensures crisp contrast for tables, headers, lists, code, and text on dark terminal backgrounds.
 var XSQLDarkMarkdownStyle = ansi.StyleConfig{
 	Document: ansi.StyleBlock{
-		StylePrimitive: ansi.StylePrimitive{
-			Color: stringPtr("#F8FAFC"), // Crisp bright text
-		},
-		Margin: uintPtr(0),
+		StylePrimitive: ansi.StylePrimitive{},
+		Margin:         uintPtr(0),
 	},
 	BlockQuote: ansi.StyleBlock{
 		StylePrimitive: ansi.StylePrimitive{
@@ -108,9 +107,7 @@ var XSQLDarkMarkdownStyle = ansi.StyleConfig{
 			Bold:   boolPtr(false),
 		},
 	},
-	Text: ansi.StylePrimitive{
-		Color: stringPtr("#F1F5F9"),
-	},
+	Text: ansi.StylePrimitive{},
 	Strikethrough: ansi.StylePrimitive{
 		CrossedOut: boolPtr(true),
 	},
@@ -270,10 +267,8 @@ var XSQLDarkMarkdownStyle = ansi.StyleConfig{
 // It uses dark readable text on light backgrounds with vibrant Indigo/Sky accents.
 var XSQLLightMarkdownStyle = ansi.StyleConfig{
 	Document: ansi.StyleBlock{
-		StylePrimitive: ansi.StylePrimitive{
-			Color: stringPtr("#0F172A"), // Crisp deep slate
-		},
-		Margin: uintPtr(0),
+		StylePrimitive: ansi.StylePrimitive{},
+		Margin:         uintPtr(0),
 	},
 	BlockQuote: ansi.StyleBlock{
 		StylePrimitive: ansi.StylePrimitive{
@@ -335,9 +330,7 @@ var XSQLLightMarkdownStyle = ansi.StyleConfig{
 			Bold:   boolPtr(false),
 		},
 	},
-	Text: ansi.StylePrimitive{
-		Color: stringPtr("#0F172A"),
-	},
+	Text: ansi.StylePrimitive{},
 	Strikethrough: ansi.StylePrimitive{
 		CrossedOut: boolPtr(true),
 	},
@@ -631,4 +624,24 @@ func HighlightSQL(sqlStr string) string {
 // HighlightJS applies adaptive high-contrast syntax highlighting to JavaScript code blocks.
 func HighlightJS(jsStr string) string {
 	return HighlightCode(jsStr, "javascript")
+}
+
+// ThemeChangedMsg is dispatched when the terminal/system background theme changes.
+type ThemeChangedMsg struct {
+	IsDark bool
+}
+
+// WatchThemeChangesCmd watches for appearance changes in the background without blocking the UI.
+func WatchThemeChangesCmd(currentIsDark bool) tea.Cmd {
+	return func() tea.Msg {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			newDark := DetectDarkBackground()
+			if newDark != currentIsDark {
+				return ThemeChangedMsg{IsDark: newDark}
+			}
+		}
+		return nil
+	}
 }

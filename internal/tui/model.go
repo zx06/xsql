@@ -199,6 +199,7 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.spinner.Tick,
 		m.loadSchemaCmd(),
+		WatchThemeChangesCmd(m.isDark),
 	)
 }
 
@@ -555,6 +556,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.textarea.SetWidth(max(20, msg.Width-6))
 		m.viewport.Width = max(20, msg.Width-4)
 		m.viewport.Height = max(5, msg.Height-15)
+
+	case ThemeChangedMsg:
+		if m.isDark != msg.IsDark {
+			m.isDark = msg.IsDark
+			SetThemeDark(m.isDark)
+			for i := range m.toolCalls {
+				m.renderToolCall(i)
+			}
+			m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+		}
+		return m, WatchThemeChangesCmd(m.isDark)
 
 	case schemaLoadedMsg:
 		if msg.err != nil {
