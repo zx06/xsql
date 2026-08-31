@@ -18,6 +18,7 @@ const (
 	TypeSQL    ResponseType = "sql"
 	TypeJS     ResponseType = "js"
 	TypeExport ResponseType = "export"
+	TypeReport ResponseType = "report"
 	TypeText   ResponseType = "text"
 )
 
@@ -29,6 +30,7 @@ type ToolAction struct {
 	DatasetID   string       `json:"dataset_id,omitempty"`
 	Format      string       `json:"format,omitempty"`
 	FilePath    string       `json:"filepath,omitempty"`
+	Content     string       `json:"content,omitempty"`
 	Explanation string       `json:"explanation,omitempty"`
 }
 
@@ -39,6 +41,7 @@ type AIResponse struct {
 	DatasetID   string       `json:"dataset_id,omitempty"`
 	Format      string       `json:"format,omitempty"`
 	FilePath    string       `json:"filepath,omitempty"`
+	Content     string       `json:"content,omitempty"`
 	Explanation string       `json:"explanation"`
 	Actions     []ToolAction `json:"actions,omitempty"`
 }

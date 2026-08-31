@@ -20,7 +20,7 @@ type AIConfig struct {
 	APIKey         string `yaml:"api_key" json:"api_key"`                 // supports keyring:xxx reference
 	AllowPlaintext bool   `yaml:"allow_plaintext" json:"allow_plaintext"` // allow plaintext API key
 	Model          string `yaml:"model" json:"model"`                     // default "gpt-4o"
-	MaxTokens      int    `yaml:"max_tokens" json:"max_tokens"`           // default 2048
+	MaxTokens      int    `yaml:"max_tokens" json:"max_tokens"`           // default 8192
 }
 
 // SSHProxy defines a reusable SSH proxy configuration.

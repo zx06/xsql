@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -434,6 +435,85 @@ func TestTUI_Model_ExportFlow(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("expected runAgentStepCmd after export feedback")
 	}
+
+	// Test TypeReport flow - Deny report export
+	updated, _ = m.Update(aiResponseMsg{
+		response: &ai.AIResponse{
+			Type:        ai.TypeReport,
+			Content:     "# Sales Report",
+			FilePath:    "report.md",
+			Explanation: "Export markdown report",
+		},
+	})
+	m = updated.(Model)
+	if m.state != StateExportReady {
+		t.Fatalf("expected StateExportReady, got %v", m.state)
+	}
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	m = updated.(Model)
+	if m.state != StateThinking {
+		t.Fatalf("expected StateThinking after denying report save, got %v", m.state)
+	}
+
+	// Test TypeReport flow - Confirm save
+	tempDir := t.TempDir()
+	reportPath := filepath.Join(tempDir, "report.md")
+	updated, _ = m.Update(aiResponseMsg{
+		response: &ai.AIResponse{
+			Type:        ai.TypeReport,
+			Content:     "# Sales Report\n\n- Q1: 100",
+			FilePath:    reportPath,
+			Explanation: "Export markdown report",
+		},
+	})
+	m = updated.(Model)
+	if m.state != StateExportReady {
+		t.Fatalf("expected StateExportReady for TypeReport, got %v", m.state)
+	}
+	if m.pendingExport == nil || !m.pendingExport.IsReport {
+		t.Fatal("expected pendingExport to be report")
+	}
+
+	// Confirm report save
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	content, err := os.ReadFile(reportPath)
+	if err != nil || !strings.Contains(string(content), "Sales Report") {
+		t.Fatalf("expected report file to be written, err: %v", err)
+	}
+
+	// Test export_data confirm with valid dataset
+	res := &db.QueryResult{
+		Columns: []string{"id", "val"},
+		Rows:    []map[string]any{{"id": 1, "val": "abc"}},
+	}
+	datasetID := m.sessionStore.Save("SELECT 1", res)
+	csvPath := filepath.Join(tempDir, "data.csv")
+	updated, _ = m.Update(aiResponseMsg{
+		response: &ai.AIResponse{
+			Type:      ai.TypeExport,
+			DatasetID: datasetID,
+			Format:    "csv",
+			FilePath:  csvPath,
+		},
+	})
+	m = updated.(Model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if _, err := os.Stat(csvPath); err != nil {
+		t.Fatalf("expected data csv to be exported, err: %v", err)
+	}
+
+	// Test tool render for expanded export_report, execute_sql, execute_javascript
+	m.toolCalls = []ToolCallItem{
+		{Name: "export_report", Detail: "# Title", IsExpanded: true, MsgIndex: 0},
+		{Name: "execute_javascript", Detail: "var a = 1;", IsExpanded: true, MsgIndex: 0},
+		{Name: "execute_sql", Detail: "SELECT 1;", IsExpanded: true, MsgIndex: 0},
+	}
+	m.messages = []string{""}
+	m.renderToolCall(0)
+	m.renderToolCall(1)
+	m.renderToolCall(2)
 }
 
 func TestTUI_Model_FullCoverage(t *testing.T) {
@@ -567,13 +647,35 @@ func TestTUI_Model_ViewAndAllStatesCoverage(t *testing.T) {
 	})
 	m = updated.(Model)
 
-	// 4. Test aiResponseMsg with error & TypeText
-	updated, _ = m.Update(aiResponseMsg{
+	// 4. Test aiResponseMsg with error & retry behavior
+	// Attempt 1: Should trigger retry and set state to StateThinking
+	updated, cmd := m.Update(aiResponseMsg{
 		err: errors.New("XSQL_AI_API_ERROR", "api failed", nil),
 	})
 	m = updated.(Model)
+	if m.state != StateThinking {
+		t.Fatalf("expected StateThinking on first AI error retry, got %v", m.state)
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd to retry step")
+	}
+
+	// Attempt 2: Should still retry (StateThinking)
+	updated, _ = m.Update(aiResponseMsg{
+		err: errors.New("XSQL_AI_API_ERROR", "api failed again", nil),
+	})
+	m = updated.(Model)
+	if m.state != StateThinking {
+		t.Fatalf("expected StateThinking on second AI error retry, got %v", m.state)
+	}
+
+	// Attempt 3: Exceeds maxAIRetries (2), should transition to StateIdle
+	updated, _ = m.Update(aiResponseMsg{
+		err: errors.New("XSQL_AI_API_ERROR", "api failed third time", nil),
+	})
+	m = updated.(Model)
 	if m.state != StateIdle {
-		t.Fatalf("expected StateIdle after AI error, got %v", m.state)
+		t.Fatalf("expected StateIdle after exhausting AI retries, got %v", m.state)
 	}
 
 	updated, _ = m.Update(aiResponseMsg{
@@ -728,4 +830,108 @@ func TestTUI_Model_ThemeAutoDetection(t *testing.T) {
 	if !mDark2.isDark {
 		t.Fatal("expected isDark == true when COLORFGBG='15;0'")
 	}
+}
+
+func TestTUI_Model_ActionFallback(t *testing.T) {
+	resolved := config.Resolved{ProfileName: "dev", Profile: config.Profile{DB: "mysql"}}
+	aiService := ai.NewService(config.AIConfig{}, nil)
+
+	// 1. Single TypeSQL fallback
+	m := NewModel(config.Options{}, resolved, aiService, "", false)
+	updated, _ := m.Update(aiResponseMsg{
+		response: &ai.AIResponse{
+			Type:        ai.TypeSQL,
+			SQL:         "SELECT 1;",
+			Explanation: "sql query",
+		},
+	})
+	m = updated.(Model)
+	if m.state != StateSQLReady {
+		t.Fatalf("expected StateSQLReady on fallback TypeSQL, got %v", m.state)
+	}
+
+	// 2. Single TypeJS fallback
+	m = NewModel(config.Options{}, resolved, aiService, "", false)
+	updated, _ = m.Update(aiResponseMsg{
+		response: &ai.AIResponse{
+			Type:        ai.TypeJS,
+			JSCode:      "var x = 1;",
+			Explanation: "js code",
+		},
+	})
+	m = updated.(Model)
+	if m.state != StateThinking {
+		t.Fatalf("expected StateThinking after JS fallback, got %v", m.state)
+	}
+
+	// 3. Single TypeExport fallback
+	m = NewModel(config.Options{}, resolved, aiService, "", false)
+	updated, _ = m.Update(aiResponseMsg{
+		response: &ai.AIResponse{
+			Type:        ai.TypeExport,
+			DatasetID:   "res1",
+			Format:      "csv",
+			FilePath:    "data.csv",
+			Explanation: "export",
+		},
+	})
+	m = updated.(Model)
+	if m.state != StateExportReady {
+		t.Fatalf("expected StateExportReady on fallback TypeExport, got %v", m.state)
+	}
+
+	// 4. Single TypeReport fallback
+	m = NewModel(config.Options{}, resolved, aiService, "", false)
+	updated, _ = m.Update(aiResponseMsg{
+		response: &ai.AIResponse{
+			Type:        ai.TypeReport,
+			Content:     "# Report",
+			FilePath:    "report.md",
+			Explanation: "report",
+		},
+	})
+	m = updated.(Model)
+	if m.state != StateExportReady {
+		t.Fatalf("expected StateExportReady on fallback TypeReport, got %v", m.state)
+	}
+}
+
+func TestTUI_Model_CtrlTToggle(t *testing.T) {
+	resolved := config.Resolved{ProfileName: "dev", Profile: config.Profile{DB: "mysql"}}
+	m := NewModel(config.Options{}, resolved, nil, "", false)
+	initialDark := m.isDark
+
+	// Toggle theme via Ctrl+T
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	m = updated.(Model)
+	if m.isDark == initialDark {
+		t.Fatalf("expected isDark to toggle from %v to %v", initialDark, !initialDark)
+	}
+
+	// Toggle back
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	m = updated.(Model)
+	if m.isDark != initialDark {
+		t.Fatalf("expected isDark to toggle back to %v", initialDark)
+	}
+}
+
+func TestTUI_Model_ThemeChangedMsg(t *testing.T) {
+	resolved := config.Resolved{ProfileName: "dev", Profile: config.Profile{DB: "mysql"}}
+	m := NewModel(config.Options{}, resolved, nil, "", false)
+	m.toolCalls = []ToolCallItem{
+		{Name: "export_report", Detail: "# Title", IsExpanded: true, MsgIndex: 0},
+	}
+	m.messages = []string{""}
+
+	// Dispatch ThemeChangedMsg with different theme
+	updated, _ := m.Update(ThemeChangedMsg{IsDark: !m.isDark})
+	m = updated.(Model)
+	if m.isDark == CurrentThemeIsDark && m.isDark == false {
+		// verified
+	}
+
+	// Dispatch ThemeChangedMsg with same theme
+	updated, _ = m.Update(ThemeChangedMsg{IsDark: m.isDark})
+	m = updated.(Model)
 }

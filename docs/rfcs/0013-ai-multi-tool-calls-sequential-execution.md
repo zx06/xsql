@@ -48,3 +48,18 @@ type AIResponse struct {
 ### 3. System Prompt 数据库上下文与调用规范 (`internal/ai/prompt.go`)
 - 注入 `TARGET DATABASE: %s (Dialect: %s)` 显式标识当前连接数据库与方言。
 - 规范 Agent 调用行为：在执行 SQL、运行 JS 分析或导出文件时统一使用标准的结构化 Tool Calling 协议。
+
+---
+
+## 修订记录 (Revision History)
+
+### 2026-08: 报告导出工具拆分、严格 Schema 校验自动重试与路径展开
+1. **文件导出职责分离**：
+   - `export_data` 专注于原始数据集转储，仅支持 `csv` 和 `json` 格式，不再支持 `markdown`。
+   - 新增 `export_report(content, filepath, explanation)` 工具，专用于将 LLM 总结生成的结构化富文本 Markdown 报告写入本地文件。
+2. **路径自动展开 (Tilde Expansion)**：
+   - 导出路径支持 `~/` 波浪号展开为用户家目录（`$HOME`），防止误拼接为相对路径。
+3. **严格 Schema 校验与自愈重试**：
+   - 保持严格 JSON 反序列化校验。
+   - 当模型返回非法/畸形 Tool Call 参数时，由 TUI Agent 循环捕获并向上下文注入错误反馈，自动触发重试（最大 2 次），无需人工干预输入“继续”。
+

@@ -9,7 +9,7 @@ import (
 	"github.com/zx06/xsql/internal/db"
 )
 
-func TestExportQueryResult_CSV_JSON_MD(t *testing.T) {
+func TestExportQueryResult_CSV_JSON(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "xsql_export_test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
@@ -46,16 +46,10 @@ func TestExportQueryResult_CSV_JSON_MD(t *testing.T) {
 		t.Fatalf("unexpected JSON content: %s", string(content))
 	}
 
-	// 3. Markdown
-	mdPath := filepath.Join(tempDir, "sub", "test.md")
-	res.Rows[1]["status"] = "multiline\ntext|pipe"
-	absPath, xe = ExportQueryResult(res, FormatMarkdown, mdPath)
-	if xe != nil {
-		t.Fatalf("Markdown export failed: %v", xe)
-	}
-	content, _ = os.ReadFile(absPath)
-	if !strings.Contains(string(content), "| username |") || !strings.Contains(string(content), "text\\|pipe") {
-		t.Fatalf("unexpected Markdown content: %s", string(content))
+	// 3. Markdown is no longer supported in export_data
+	mdPath := filepath.Join(tempDir, "test.md")
+	if _, xe = ExportQueryResult(res, ExportFormat("markdown"), mdPath); xe == nil {
+		t.Fatal("expected error for markdown format in ExportQueryResult")
 	}
 
 	// 4. Nil result & empty filePath fallback
@@ -78,4 +72,74 @@ func TestExportQueryResult_CSV_JSON_MD(t *testing.T) {
 	if _, err := os.Stat(invalidPath); !os.IsNotExist(err) {
 		t.Fatalf("unsupported format should not create a file, stat err=%v", err)
 	}
+}
+
+func TestExpandPath(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("failed to get home dir: %v", err)
+	}
+
+	pEmpty, err := ExpandPath("")
+	if err != nil || pEmpty != "" {
+		t.Fatalf("expected empty, got %q, err %v", pEmpty, err)
+	}
+
+	pHomeOnly, err := ExpandPath("~")
+	if err != nil || pHomeOnly != home {
+		t.Fatalf("expected %s, got %s", home, pHomeOnly)
+	}
+
+	p, err := ExpandPath("~/Downloads/report.md")
+	if err != nil {
+		t.Fatalf("ExpandPath failed: %v", err)
+	}
+	expected := filepath.Join(home, "Downloads/report.md")
+	if p != expected {
+		t.Fatalf("expected %s, got %s", expected, p)
+	}
+
+	pWin, err := ExpandPath("~\\Downloads\\report.md")
+	if err != nil {
+		t.Fatalf("ExpandPath failed: %v", err)
+	}
+	expectedWin := filepath.Join(home, "Downloads\\report.md")
+	if pWin != expectedWin {
+		t.Fatalf("expected %s, got %s", expectedWin, pWin)
+	}
+
+	p2, _ := ExpandPath("/absolute/path.txt")
+	if p2 != "/absolute/path.txt" {
+		t.Fatalf("expected /absolute/path.txt, got %s", p2)
+	}
+}
+
+func TestExportReport(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "xsql_report_test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	reportPath := filepath.Join(tempDir, "sub", "summary.md")
+	content := "# Daily Report\n\n- Total users: 100\n"
+	absPath, xe := ExportReport(content, reportPath)
+	if xe != nil {
+		t.Fatalf("ExportReport failed: %v", xe)
+	}
+
+	readBack, err := os.ReadFile(absPath)
+	if err != nil {
+		t.Fatalf("failed to read report: %v", err)
+	}
+	if string(readBack) != content {
+		t.Fatalf("unexpected content: %s", string(readBack))
+	}
+
+	// Test default report name when path is empty
+	absDef, xe := ExportReport("# Test", "")
+	if xe != nil {
+		t.Fatalf("ExportReport with empty path failed: %v", xe)
+	}
+	_ = os.Remove(absDef)
 }

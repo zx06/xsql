@@ -117,13 +117,15 @@ xsql ai --profile dev --attr source=codex-cli --attr agent=codex --attr env=dev 
 `xsql ai` 默认保持只读。只有所选 profile 配置了 `unsafe_allow_write: true`，且本次启动同时携带 `--unsafe-allow-write` 时，TUI 才进入 READ-WRITE 模式；切换 profile 后会重新校验这两个条件。
 
 ### LLM 集成与 Tool Call 机制
-`xsql` 使用 OpenAI 官方 SDK (`github.com/openai/openai-go`) 与大模型交互，基于标准的 **ReAct Agent Loop 循环推理**，支持 3 大核心 Tools 调度：
+`xsql` 使用 OpenAI 官方 SDK (`github.com/openai/openai-go`) 与大模型交互，基于标准的 **ReAct Agent Loop 循环推理**，支持 4 大核心 Tools 调度：
 1. **`execute_sql(sql: string, explanation: string)`**: 数据库 SQL 查询工具（执行成功后宿主自动渲染内嵌交互表格）。
 2. **`execute_javascript(js_code: string, explanation: string)`**: 基于 `goja` 沙箱的本地 JS 数据聚合计算工具（必须遵循 ES5 语法）。
-3. **`export_data(dataset_id: string, format: string, filepath: string, explanation: string)`**: 会话数据集文件导出工具（触发人机交互二次确认）。
+3. **`export_data(dataset_id: string, format: string, filepath: string, explanation: string)`**: 原始数据集转储工具，仅支持 `csv` 和 `json` 格式（触发人机交互二次确认，路径支持 `~/` 展开）。
+4. **`export_report(content: string, filepath: string, explanation: string)`**: 富文本 Markdown 分析报告导出工具（触发人机交互二次确认，路径支持 `~/` 展开）。
 
 #### ReAct Agent Loop 准则
 - **循环驱动**：Agent 会在单次交互中循环执行 Tools，直到不再产生 Tool Call。
+- **自愈重试机制**：当模型返回的 Tool Call 参数格式不符合 JSON Schema 时，Agent 循环自动捕获并将格式错误反馈给模型，触发自动修复与重试（最大 2 次）。
 - **最终回答不变性**：交互轮次的最终输出必定是 AI 总结出的自然语言 / Markdown 格式分析报告。
 - **工具折叠与容器内嵌**：所有的中间 Tool Call 默认以单行 Pill 收起折叠（内嵌表格与指标数据），界面保持极简清爽。
 
@@ -131,7 +133,7 @@ xsql ai --profile dev --attr source=codex-cli --attr agent=codex --attr env=dev 
 - 每次查询成功的结果在本地分配标号（`res1`, `res2`, ...）。
 - 大模型上下文包含数据集的轻量 Catalog 目录结构（字段名与行数），不会自动加入完整查询结果。
 - 本地 JavaScript 的派生结果会以最多 4096 个字符的摘要回传给模型，用于生成最终分析；超出部分会截断并明确标记。
-- AI 可通过 `execute_javascript` 生成纯 Go 沙箱 (`goja`) 执行的代码，在本地对 `res1`, `res2` 等数据集做跨表 Join、占比统计与数据清洗，并通过 `export_data` 安全导出为 CSV/JSON/Markdown。
+- AI 可通过 `execute_javascript` 生成纯 Go 沙箱 (`goja`) 执行的代码，在本地对 `res1`, `res2` 等数据集做跨表 Join、占比统计与数据清洗，并通过 `export_data` 安全导出为 CSV/JSON，或通过 `export_report` 导出完整分析报告。
 
 ### 快捷键操作
 

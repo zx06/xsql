@@ -38,7 +38,7 @@ ai:
   api_key: "keyring:ai/api_key"
   allow_plaintext: false
   model: gpt-4o
-  max_tokens: 2048
+  max_tokens: 8192
 
 stats:
   enabled: true
@@ -133,7 +133,7 @@ profiles:
 | `ai.api_key` | string | AI 服务 API Key，推荐使用 `keyring:` 引用 |
 | `ai.allow_plaintext` | bool | 允许配置文件中的明文 AI API Key（默认 false） |
 | `ai.model` | string | 模型名称，默认 `gpt-4o` |
-| `ai.max_tokens` | int | 单次响应最大 token 数，默认 2048 |
+| `ai.max_tokens` | int | 单次响应最大 token 数，默认 8192 |
 
 配置文件中的明文 `ai.api_key` 默认拒绝。设置 `ai.allow_plaintext: true` 或在 `xsql ai` 显式使用 `--allow-plaintext` 时允许；CLI `--api-key` 和 `XSQL_AI_API_KEY` 本身属于显式运行时输入。
 
