@@ -519,7 +519,7 @@ func DetectDarkBackground() bool {
 	if runtime.GOOS == "darwin" {
 		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, "defaults", "read", "-g", "AppleInterfaceStyle")
+		cmd := exec.CommandContext(ctx, "/usr/bin/defaults", "read", "-g", "AppleInterfaceStyle")
 		out, err := cmd.Output()
 		if err != nil {
 			// On macOS, absence of AppleInterfaceStyle key indicates Light Appearance
