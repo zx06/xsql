@@ -18,10 +18,10 @@ const (
 )
 
 // QueryTruncationHint is returned when results are truncated for agents/humans.
-const QueryTruncationHint = "Result truncated by max_rows. Use SQL LIMIT/OFFSET, aggregation, or schema_list_tables/schema_dump for exploration."
+const QueryTruncationHint = errors.HintQueryResultTruncated
 
 // MCPResponseTruncationHint is appended when MCP byte guard trims rows.
-const MCPResponseTruncationHint = "Result truncated to fit MCP max_response_bytes. Narrow the query with LIMIT or filters."
+const MCPResponseTruncationHint = errors.HintMCPResponseTruncated
 
 // ResolveQueryMaxRows returns the effective row limit for CLI/Web/TUI.
 // limit 0 means unlimited. Negative values are invalid.

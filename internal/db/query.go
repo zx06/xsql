@@ -53,7 +53,7 @@ type QueryOptions struct {
 func Query(ctx context.Context, db *sql.DB, query string, opts QueryOptions) (*QueryResult, *errors.XError) {
 	// UnsafeAllowWrite bypasses all read-only protections
 	if opts.UnsafeAllowWrite {
-		return executeQuery(ctx, db, query, opts.MaxRows)
+		return executeQuery(ctx, db, query, opts.DBType, opts.MaxRows)
 	}
 
 	// Enable dual read-only protection by default
@@ -115,7 +115,7 @@ func queryWithReadOnlyTx(ctx context.Context, db *sql.DB, query string, dbType s
 
 	rows, err := tx.QueryContext(ctx, query)
 	if err != nil {
-		return nil, errors.Wrap(errors.CodeDBExecFailed, "query failed", nil, err)
+		return nil, wrapQueryFailed(dbType, err)
 	}
 	defer rows.Close()
 
@@ -123,10 +123,10 @@ func queryWithReadOnlyTx(ctx context.Context, db *sql.DB, query string, dbType s
 }
 
 // executeQuery executes a query directly (without a transaction).
-func executeQuery(ctx context.Context, db *sql.DB, query string, maxRows int) (*QueryResult, *errors.XError) {
+func executeQuery(ctx context.Context, db *sql.DB, query string, dbType string, maxRows int) (*QueryResult, *errors.XError) {
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
-		return nil, errors.Wrap(errors.CodeDBExecFailed, "query failed", nil, err)
+		return nil, wrapQueryFailed(dbType, err)
 	}
 	defer rows.Close()
 
@@ -169,6 +169,15 @@ func scanRows(rows *sql.Rows, maxRows int) (*QueryResult, *errors.XError) {
 	}
 	result.RowCount = len(result.Rows)
 	return result, nil
+}
+
+func wrapQueryFailed(dbType string, err error) *errors.XError {
+	dialect := normalizeDBType(dbType)
+	details := map[string]any{}
+	if dialect != "" {
+		details["dialect"] = dialect
+	}
+	return errors.Wrap(errors.CodeDBExecFailed, "query failed", details, err)
 }
 
 func convertValue(v any) any {

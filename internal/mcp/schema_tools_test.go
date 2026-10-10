@@ -273,6 +273,10 @@ func TestSchemaDescribeTable_TableNotFound(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	assertToolError(t, result, "CFG_INVALID", "table not found")
+	text := result.Content[0].(*mcp.TextContent).Text
+	if !strings.Contains(text, "schema_list_tables") {
+		t.Fatalf("expected schema_list_tables hint in %s", text)
+	}
 }
 
 func TestSchemaListTablesHandler_Success(t *testing.T) {

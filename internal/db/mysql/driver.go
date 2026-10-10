@@ -95,14 +95,14 @@ func (d *Driver) Open(ctx context.Context, opts db.ConnOptions) (*sql.DB, *error
 	dsn := cfg.FormatDSN()
 	conn, err := sql.Open("mysql", dsn)
 	if err != nil {
-		return nil, errors.Wrap(errors.CodeDBConnectFailed, "failed to open mysql connection", nil, err)
+		return nil, errors.Wrap(errors.CodeDBConnectFailed, "failed to open mysql connection", map[string]any{"dialect": "mysql"}, err)
 	}
 	if err := conn.PingContext(ctx); err != nil {
 		if closeErr := conn.Close(); closeErr != nil {
 			log.Printf("failed to close mysql connection: %v", closeErr)
 		}
 		cleanupDialContext(dialName)
-		return nil, errors.Wrap(errors.CodeDBConnectFailed, "failed to ping mysql", nil, err)
+		return nil, errors.Wrap(errors.CodeDBConnectFailed, "failed to ping mysql", map[string]any{"dialect": "mysql"}, err)
 	}
 	return conn, nil
 }

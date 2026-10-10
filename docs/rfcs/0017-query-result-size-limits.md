@@ -34,7 +34,7 @@ Status: Accepted
   "truncated": true,
   "row_count": 1000,
   "max_rows": 1000,
-  "hint": "Result truncated by max_rows. Use SQL LIMIT/OFFSET, aggregation, or schema tools."
+  "hint": "Result truncated by max_rows; add SQL LIMIT/OFFSET, use aggregation, or run MCP `schema_list_tables` or `xsql schema dump` for schema discovery."
 }
 ```
 

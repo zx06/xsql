@@ -225,7 +225,7 @@ func TestExecuteQuery_Success(t *testing.T) {
 	rows := sqlmock.NewRows([]string{"msg"}).AddRow([]byte("hi"))
 	mock.ExpectQuery("SELECT 'hi'").WillReturnRows(rows)
 
-	result, xe := executeQuery(context.Background(), db, "SELECT 'hi'", 0)
+	result, xe := executeQuery(context.Background(), db, "SELECT 'hi'", "mysql", 0)
 	if xe != nil {
 		t.Fatalf("executeQuery failed: %v", xe)
 	}
@@ -243,7 +243,7 @@ func TestExecuteQuery_Failure(t *testing.T) {
 
 	mock.ExpectQuery("SELECT 1").WillReturnError(errors.New("boom"))
 
-	_, xe := executeQuery(context.Background(), db, "SELECT 1", 0)
+	_, xe := executeQuery(context.Background(), db, "SELECT 1", "mysql", 0)
 	if xe == nil || xe.Code != xsqlerrors.CodeDBExecFailed {
 		t.Fatalf("expected failure, got %v", xe)
 	}

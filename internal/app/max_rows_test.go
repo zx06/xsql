@@ -39,6 +39,26 @@ func TestResolveQueryMaxRows_Invalid(t *testing.T) {
 	}
 }
 
+func TestResolveQueryMaxRows_Env(t *testing.T) {
+	limit, xe := ResolveQueryMaxRows(config.Profile{MaxRows: 100}, "250", 0, false)
+	if xe != nil || limit != 250 {
+		t.Fatalf("got limit=%d xe=%v", limit, xe)
+	}
+	_, xe = ResolveQueryMaxRows(config.Profile{}, "bad", 0, false)
+	if xe == nil {
+		t.Fatal("expected invalid env")
+	}
+}
+
+func TestResolveMCPMaxResponseBytes(t *testing.T) {
+	if got := ResolveMCPMaxResponseBytes(config.MCPConfig{}); got != DefaultMCPMaxResponseBytes {
+		t.Fatalf("default bytes: %d", got)
+	}
+	if got := ResolveMCPMaxResponseBytes(config.MCPConfig{MaxResponseBytes: 1024}); got != 1024 {
+		t.Fatalf("custom bytes: %d", got)
+	}
+}
+
 func TestResolveMCPQueryMaxRows(t *testing.T) {
 	v, xe := ResolveMCPQueryMaxRows(config.Profile{}, config.MCPConfig{}, 0, false)
 	if xe != nil || v != DefaultMCPQueryMaxRows {
@@ -47,5 +67,9 @@ func TestResolveMCPQueryMaxRows(t *testing.T) {
 	_, xe = ResolveMCPQueryMaxRows(config.Profile{}, config.MCPConfig{}, 0, true)
 	if xe == nil {
 		t.Fatal("expected error for mcp max_rows 0")
+	}
+	v, xe = ResolveMCPQueryMaxRows(config.Profile{MaxRows: 800}, config.MCPConfig{MaxRows: 300}, 0, false)
+	if xe != nil || v != 800 {
+		t.Fatalf("profile override: %d %v", v, xe)
 	}
 }

@@ -23,6 +23,42 @@
 - `details`：结构化细节（可选），用于调试/自动化处理
   - **注意**：`cause` 字段不在 JSON/YAML 中暴露，仅在错误字符串输出（`Error()`）和错误解包（`Unwrap()`）中可用
 
+### 2.1 AI/agent 指引字段（`details` 内，只增不改）
+
+以下字段由 `internal/errors` 在 `New`/`Wrap` 时自动合并（不覆盖调用方已设置的同名键）：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `hint` | string | 面向 agent 的简短下一步建议（英文） |
+| `retryable` | bool | 是否建议在相同输入下立即重试 |
+| `category` | string | 稳定语义分类，如 `unknown_table`、`syntax_error`、`read_only_blocked`、`unrecognized_statement`、`auth_failed`、`permission_denied`、`connection` |
+| `dialect` | string | 可选，`mysql` 或 `pg` |
+| `native_code` | string | 可选，MySQL errno 或 PostgreSQL SQLSTATE |
+| `native_code_kind` | string | 可选，`mysql_errno` 或 `pg_sqlstate` |
+
+只读拦截等既有字段（如 `reason`）保持不变。`schema_version` 仍为 `1`（仅追加 `details` 字段，不 bump 版本号）。
+
+示例（未知表）：
+
+```json
+{
+  "ok": false,
+  "schema_version": 1,
+  "error": {
+    "code": "XSQL_DB_EXEC_FAILED",
+    "message": "query failed",
+    "details": {
+      "dialect": "mysql",
+      "category": "unknown_table",
+      "native_code": "1146",
+      "native_code_kind": "mysql_errno",
+      "retryable": false,
+      "hint": "Table or database not found; run `xsql schema dump` ..."
+    }
+  }
+}
+```
+
 安全约束：
 - `details` 中不得包含明文密码、私钥、passphrase、完整 DSN/URL（可脱敏）。
 

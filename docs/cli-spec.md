@@ -103,7 +103,7 @@ xsql query "INSERT INTO logs (msg) VALUES ('test')" --profile dev --unsafe-allow
     "truncated": true,
     "row_count": 2,
     "max_rows": 2,
-    "hint": "Result truncated by max_rows. Use SQL LIMIT/OFFSET, aggregation, or schema_list_tables/schema_dump for exploration."
+    "hint": "Result truncated by max_rows; add SQL LIMIT/OFFSET, use aggregation, or run MCP `schema_list_tables` or `xsql schema dump` for schema discovery."
   }
 }
 ```
