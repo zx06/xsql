@@ -1,6 +1,7 @@
 package errors
 
 import (
+	stderrors "errors"
 	"net"
 	"strings"
 	"syscall"
@@ -141,6 +142,28 @@ func TestClassifyPgMessagePaths(t *testing.T) {
 	c, ok = classifyPgMessage(`relation "missing" does not exist`)
 	if !ok || c.Category != CategoryUnknownTable {
 		t.Fatalf("table: %+v ok=%v", c, ok)
+	}
+}
+
+func TestClassifyDriverError_MessageFallback(t *testing.T) {
+	c, ok := classifyDriverError("mysql", stderrors.New("Error 1064: syntax error"))
+	if !ok || c.Category != CategorySyntaxError {
+		t.Fatalf("mysql message fallback: %+v ok=%v", c, ok)
+	}
+	c, ok = classifyDriverError("pg", stderrors.New(`ERROR: syntax error at or near "FROM"`))
+	if !ok || c.Category != CategorySyntaxError {
+		t.Fatalf("pg message fallback: %+v ok=%v", c, ok)
+	}
+	_, ok = classifyDriverError("mysql", stderrors.New("something else entirely"))
+	if ok {
+		t.Fatal("expected no classification")
+	}
+}
+
+func TestClassifyMySQLMessage_noMatch(t *testing.T) {
+	_, ok := classifyMySQLMessage("generic database failure")
+	if ok {
+		t.Fatal("expected no match")
 	}
 }
 

@@ -125,6 +125,25 @@ func TestReadOnlyGuidance_TypoSELEC(t *testing.T) {
 	}
 }
 
+func TestReadOnlyGuidance_ForbiddenStart(t *testing.T) {
+	xe := New(CodeROBlocked, "blocked", map[string]any{"reason": "forbidden_start: INSERT"})
+	if xe.Details["category"] != categoryReadOnlyBlocked {
+		t.Errorf("category = %v", xe.Details["category"])
+	}
+	if !containsFold(xe.Details["hint"].(string), "non-read-only") {
+		t.Errorf("hint = %v", xe.Details["hint"])
+	}
+}
+
+func TestIsReadOnlyUnrecognizedReason(t *testing.T) {
+	if !isReadOnlyUnrecognizedReason("tokenize_error: bad") {
+		t.Error("expected tokenize_error prefix")
+	}
+	if isReadOnlyUnrecognizedReason("forbidden_keyword: DELETE") {
+		t.Error("write keyword should not be unrecognized")
+	}
+}
+
 func TestReadOnlyBlockedGuidance_ForbiddenKeyword(t *testing.T) {
 	xe := New(CodeROBlocked, "write blocked", map[string]any{"reason": "forbidden_keyword: DELETE"})
 	if xe.Details["category"] != categoryReadOnlyBlocked {

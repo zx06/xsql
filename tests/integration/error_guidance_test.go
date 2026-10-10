@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -16,8 +17,109 @@ import (
 	_ "github.com/zx06/xsql/internal/db/pg"    // register PostgreSQL driver
 )
 
+type errorGuidanceEngine struct {
+	label        string
+	driver       string
+	dsnEnv       string
+	dbType       string
+	dsn          string
+	badDSN       func(string) string
+	authHintSub  string
+}
+
+type errorGuidanceScenario struct {
+	suffix       string
+	sql          string
+	openOnly     bool
+	useBadDSN    bool
+	wantCode     errors.Code
+	wantCategory string
+	wantHintSub  string
+	checkDialect bool
+}
+
+var errorGuidanceScenarios = []errorGuidanceScenario{
+	{
+		suffix: "unknown_table", sql: "SELECT * FROM definitely_nonexistent_table_12345",
+		wantCode: errors.CodeDBExecFailed, wantCategory: "unknown_table", wantHintSub: "schema", checkDialect: true,
+	},
+	{
+		suffix: "syntax_error", sql: "SELECT 1 +",
+		wantCode: errors.CodeDBExecFailed, wantCategory: "syntax_error", wantHintSub: "syntax",
+	},
+	{
+		suffix: "read_only_write", sql: "DELETE FROM nonexistent_table_xsql_ro",
+		wantCode: errors.CodeROBlocked, wantCategory: "read_only_blocked", wantHintSub: "unsafe_allow_write",
+	},
+	{
+		suffix: "unrecognized_typo", sql: "SELEC 1",
+		wantCode: errors.CodeROBlocked, wantCategory: "unrecognized_statement", wantHintSub: "spelling",
+	},
+	{
+		suffix: "auth_failed", openOnly: true, useBadDSN: true,
+		wantCode: errors.CodeDBConnectFailed, wantCategory: "auth_failed",
+	},
+}
+
+func TestErrorGuidance(t *testing.T) {
+	engines := []errorGuidanceEngine{
+		{
+			label: "mysql", driver: "mysql", dsnEnv: "XSQL_TEST_MYSQL_DSN", dbType: "mysql",
+			dsn: os.Getenv("XSQL_TEST_MYSQL_DSN"), badDSN: badMySQLDSN, authHintSub: "keyring",
+		},
+		{
+			label: "pg", driver: "pg", dsnEnv: "XSQL_TEST_PG_DSN", dbType: "pg",
+			dsn: os.Getenv("XSQL_TEST_PG_DSN"), badDSN: badPgDSN, authHintSub: "Authentication",
+		},
+	}
+
+	var runnable int
+	for _, eng := range engines {
+		if eng.dsn != "" {
+			runnable++
+		}
+	}
+	if runnable == 0 {
+		t.Skip("XSQL_TEST_MYSQL_DSN and XSQL_TEST_PG_DSN not set")
+	}
+
+	for _, eng := range engines {
+		if eng.dsn == "" {
+			continue
+		}
+		for _, sc := range errorGuidanceScenarios {
+			t.Run(fmt.Sprintf("%s_%s", eng.label, sc.suffix), func(t *testing.T) {
+				runErrorGuidanceCase(t, guidanceCaseFrom(eng, sc))
+			})
+		}
+	}
+}
+
+func guidanceCaseFrom(eng errorGuidanceEngine, sc errorGuidanceScenario) errorGuidanceCase {
+	hintSub := sc.wantHintSub
+	if sc.useBadDSN {
+		hintSub = eng.authHintSub
+	}
+	tc := errorGuidanceCase{
+		driver:       eng.driver,
+		dsnEnv:       eng.dsnEnv,
+		dbType:       eng.dbType,
+		openOnly:     sc.openOnly,
+		sql:          sc.sql,
+		wantCode:     sc.wantCode,
+		wantCategory: sc.wantCategory,
+		wantHintSub:  hintSub,
+	}
+	if sc.useBadDSN {
+		tc.dsnOverride = eng.badDSN(eng.dsn)
+	}
+	if sc.checkDialect {
+		tc.checkDialect = eng.dbType
+	}
+	return tc
+}
+
 type errorGuidanceCase struct {
-	name         string
 	driver       string
 	dsnEnv       string
 	dbType       string
@@ -28,74 +130,6 @@ type errorGuidanceCase struct {
 	wantCategory string
 	wantHintSub  string
 	checkDialect string
-}
-
-func TestErrorGuidance(t *testing.T) {
-	mysqlDSN := os.Getenv("XSQL_TEST_MYSQL_DSN")
-	pgDSN := os.Getenv("XSQL_TEST_PG_DSN")
-	if mysqlDSN == "" && pgDSN == "" {
-		t.Skip("XSQL_TEST_MYSQL_DSN and XSQL_TEST_PG_DSN not set")
-	}
-
-	cases := []errorGuidanceCase{
-		{
-			name: "mysql_unknown_table", driver: "mysql", dsnEnv: "XSQL_TEST_MYSQL_DSN", dbType: "mysql",
-			sql: "SELECT * FROM definitely_nonexistent_table_12345",
-			wantCode: errors.CodeDBExecFailed, wantCategory: "unknown_table", wantHintSub: "schema",
-			checkDialect: "mysql",
-		},
-		{
-			name: "mysql_syntax_error", driver: "mysql", dsnEnv: "XSQL_TEST_MYSQL_DSN", dbType: "mysql",
-			sql: "SELECT 1 +",
-			wantCode: errors.CodeDBExecFailed, wantCategory: "syntax_error", wantHintSub: "syntax",
-		},
-		{
-			name: "mysql_read_only_write", driver: "mysql", dsnEnv: "XSQL_TEST_MYSQL_DSN", dbType: "mysql",
-			sql: "DELETE FROM nonexistent_table_xsql_ro",
-			wantCode: errors.CodeROBlocked, wantCategory: "read_only_blocked", wantHintSub: "unsafe_allow_write",
-		},
-		{
-			name: "mysql_unrecognized_typo", driver: "mysql", dsnEnv: "XSQL_TEST_MYSQL_DSN", dbType: "mysql",
-			sql: "SELEC 1",
-			wantCode: errors.CodeROBlocked, wantCategory: "unrecognized_statement", wantHintSub: "spelling",
-		},
-		{
-			name: "mysql_auth_failed", driver: "mysql", dsnEnv: "XSQL_TEST_MYSQL_DSN", dbType: "mysql",
-			openOnly: true, dsnOverride: badMySQLDSN(mysqlDSN),
-			wantCode: errors.CodeDBConnectFailed, wantCategory: "auth_failed", wantHintSub: "keyring",
-		},
-		{
-			name: "pg_unknown_table", driver: "pg", dsnEnv: "XSQL_TEST_PG_DSN", dbType: "pg",
-			sql: "SELECT * FROM definitely_nonexistent_table_12345",
-			wantCode: errors.CodeDBExecFailed, wantCategory: "unknown_table", wantHintSub: "schema",
-		},
-		{
-			name: "pg_syntax_error", driver: "pg", dsnEnv: "XSQL_TEST_PG_DSN", dbType: "pg",
-			sql: "SELECT 1 +",
-			wantCode: errors.CodeDBExecFailed, wantCategory: "syntax_error", wantHintSub: "syntax",
-		},
-		{
-			name: "pg_read_only_write", driver: "pg", dsnEnv: "XSQL_TEST_PG_DSN", dbType: "pg",
-			sql: "DELETE FROM nonexistent_table_xsql_ro",
-			wantCode: errors.CodeROBlocked, wantCategory: "read_only_blocked", wantHintSub: "unsafe_allow_write",
-		},
-		{
-			name: "pg_unrecognized_typo", driver: "pg", dsnEnv: "XSQL_TEST_PG_DSN", dbType: "pg",
-			sql: "SELEC 1",
-			wantCode: errors.CodeROBlocked, wantCategory: "unrecognized_statement", wantHintSub: "spelling",
-		},
-		{
-			name: "pg_auth_failed", driver: "pg", dsnEnv: "XSQL_TEST_PG_DSN", dbType: "pg",
-			openOnly: true, dsnOverride: badPgDSN(pgDSN),
-			wantCode: errors.CodeDBConnectFailed, wantCategory: "auth_failed", wantHintSub: "Authentication",
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			runErrorGuidanceCase(t, tc)
-		})
-	}
 }
 
 func runErrorGuidanceCase(t *testing.T, tc errorGuidanceCase) {
