@@ -1,17 +1,29 @@
 #!/usr/bin/env node
 
-const { execFileSync, execSync } = require("child_process");
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
+const { execFileSync } = require("node:child_process");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 
 const { PLATFORM_MAP } = require("./release-artifacts");
+
+const ALLOWED_PLATFORMS = new Set(
+  PLATFORM_MAP.map((p) => `${p.goos}/${p.goarch}`),
+);
 
 function readJSON(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
 
+function assertAllowedPlatform(goos, goarch) {
+  const key = `${goos}/${goarch}`;
+  if (!ALLOWED_PLATFORMS.has(key)) {
+    throw new Error(`unsupported smoke platform: ${key}`);
+  }
+}
+
 function findBinaryArtifact(distDir, goos, goarch) {
+  assertAllowedPlatform(goos, goarch);
   const artifactsPath = path.join(distDir, "artifacts.json");
   if (!fs.existsSync(artifactsPath)) {
     throw new Error(`missing ${artifactsPath}; run GoReleaser build first`);
@@ -37,15 +49,24 @@ function findBinaryArtifact(distDir, goos, goarch) {
   return binaryPath;
 }
 
-function ensureExecutable(binaryPath) {
+/** Owner/group/other read+execute only (no write for group/other). */
+function chmodExecutable(filePath) {
   if (process.platform === "win32") {
     return;
   }
-  fs.chmodSync(binaryPath, 0o755);
+  const stats = fs.statSync(filePath);
+  const withoutWrite = stats.mode & ~0o022;
+  const executable = withoutWrite | 0o111;
+  fs.chmodSync(filePath, executable & 0o755);
+}
+
+function resolveNodeCliTool(toolName) {
+  const ext = process.platform === "win32" ? ".cmd" : "";
+  return path.join(path.dirname(process.execPath), `${toolName}${ext}`);
 }
 
 function runBinarySmoke(binaryPath) {
-  ensureExecutable(binaryPath);
+  chmodExecutable(binaryPath);
   const commands = [
     ["version"],
     ["spec", "--format", "json"],
@@ -67,7 +88,7 @@ function copyBinaryToNpm(distDir, version) {
     fs.mkdirSync(binDir, { recursive: true });
     fs.copyFileSync(src, dest);
     if (platform.ext === "") {
-      fs.chmodSync(dest, 0o755);
+      chmodExecutable(dest);
     }
   }
   updateNpmVersions(npmDir, version);
@@ -100,37 +121,22 @@ function resolveVersion(distDir) {
 }
 
 function runNpm(args, cwd) {
-  if (process.platform === "win32") {
-    execSync(`npm ${args.map((a) => `"${a}"`).join(" ")}`, {
-      cwd,
-      stdio: "inherit",
-      shell: true,
-    });
-    return;
-  }
-  execFileSync("npm", args, { cwd, stdio: "inherit" });
+  execFileSync(resolveNodeCliTool("npm"), args, { cwd, stdio: "inherit" });
 }
 
 function runNpx(args, cwd) {
-  if (process.platform === "win32") {
-    execSync(`npx ${args.map((a) => `"${a}"`).join(" ")}`, {
-      cwd,
-      stdio: "inherit",
-      shell: true,
-    });
-    return;
-  }
-  execFileSync("npx", args, { cwd, stdio: "inherit" });
+  execFileSync(resolveNodeCliTool("npx"), args, { cwd, stdio: "inherit" });
 }
 
 function packTarball(cwd) {
-  const output =
-    process.platform === "win32"
-      ? execSync("npm pack --json", { cwd, encoding: "utf8", shell: true })
-      : execFileSync("npm", ["pack", "--json"], {
-          cwd,
-          encoding: "utf8",
-        });
+  const output = execFileSync(resolveNodeCliTool("npm"), ["pack", "--json"], {
+    cwd,
+    encoding: "utf8",
+  });
+  return parsePackOutput(output, cwd);
+}
+
+function parsePackOutput(output, cwd) {
   const parsed = JSON.parse(output);
   const entry = Array.isArray(parsed) ? parsed[0] : parsed;
   return path.resolve(cwd, entry.filename);

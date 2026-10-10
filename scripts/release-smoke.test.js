@@ -27,3 +27,12 @@ test("findBinaryArtifact resolves binary path from artifacts.json", () => {
   assert.equal(findBinaryArtifact(distDir, "linux", "amd64"), binaryAbs);
   assert.equal(resolveVersion(distDir), "0.0.0-smoke");
 });
+
+test("findBinaryArtifact rejects unknown platform", () => {
+  const distDir = fs.mkdtempSync(path.join(os.tmpdir(), "xsql-dist-"));
+  fs.writeFileSync(path.join(distDir, "artifacts.json"), "[]");
+  assert.throws(
+    () => findBinaryArtifact(distDir, "plan9", "amd64"),
+    /unsupported smoke platform/,
+  );
+});
