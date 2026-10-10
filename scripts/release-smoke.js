@@ -120,19 +120,31 @@ function resolveVersion(distDir) {
   return "0.0.0-smoke";
 }
 
+function runNodeCliTool(toolName, args, cwd, options = {}) {
+  const toolPath = resolveNodeCliTool(toolName);
+  const execOptions = { cwd, ...options };
+  if (process.platform === "win32") {
+    execFileSync(toolPath, args, { ...execOptions, shell: true });
+    return;
+  }
+  execFileSync(toolPath, args, execOptions);
+}
+
 function runNpm(args, cwd) {
-  execFileSync(resolveNodeCliTool("npm"), args, { cwd, stdio: "inherit" });
+  runNodeCliTool("npm", args, cwd, { stdio: "inherit" });
 }
 
 function runNpx(args, cwd) {
-  execFileSync(resolveNodeCliTool("npx"), args, { cwd, stdio: "inherit" });
+  runNodeCliTool("npx", args, cwd, { stdio: "inherit" });
 }
 
 function packTarball(cwd) {
-  const output = execFileSync(resolveNodeCliTool("npm"), ["pack", "--json"], {
-    cwd,
-    encoding: "utf8",
-  });
+  const toolPath = resolveNodeCliTool("npm");
+  const execOptions = { cwd, encoding: "utf8" };
+  const output =
+    process.platform === "win32"
+      ? execFileSync(toolPath, ["pack", "--json"], { ...execOptions, shell: true })
+      : execFileSync(toolPath, ["pack", "--json"], execOptions);
   return parsePackOutput(output, cwd);
 }
 

@@ -9,6 +9,7 @@ on:
       - "scripts/npm-publish.js"
       - "scripts/release-smoke.js"
       - "scripts/release-artifacts.js"
+      - ".github/tools/**"
   workflow_dispatch:
 
 permissions:
@@ -30,9 +31,8 @@ jobs:
           cache: false
 
       - name: Run actionlint
-        run: |
-          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
-          "$(go env GOPATH)/bin/actionlint" -color
+        working-directory: .github/tools
+        run: go run github.com/rhysd/actionlint/cmd/actionlint -color ../..
 
   build:
     name: GoReleaser snapshot build
