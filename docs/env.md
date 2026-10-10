@@ -8,6 +8,7 @@
 - `XSQL_MCP_TRANSPORT`：MCP 传输（`stdio` 或 `streamable_http`）
 - `XSQL_MCP_HTTP_ADDR`：Streamable HTTP 监听地址
 - `XSQL_MCP_HTTP_AUTH_TOKEN`：Streamable HTTP 鉴权 token
+- `XSQL_MCP_UNSAFE_ALLOW_WRITE`：MCP server 会话是否申请写入（`true`/`false`）；仅当 profile 同时 `unsafe_allow_write: true` 时生效；CLI `--unsafe-allow-write` 优先于本变量
 - `XSQL_WEB_HTTP_ADDR`：Web 服务监听地址
 - `XSQL_WEB_HTTP_AUTH_TOKEN`：Web 鉴权 token
 - `XSQL_STATS_ENABLED`：是否启用使用统计（`true`/`false`）

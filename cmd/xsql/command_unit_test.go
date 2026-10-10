@@ -644,6 +644,55 @@ func TestResolveMCPServerOptions_CLIOverridesEnvConfig(t *testing.T) {
 	}
 }
 
+func TestResolveMCPServerOptions_UnsafeAllowWriteEnv(t *testing.T) {
+	t.Setenv("XSQL_MCP_UNSAFE_ALLOW_WRITE", "true")
+	cfg := config.File{
+		Profiles:   map[string]config.Profile{},
+		SSHProxies: map[string]config.SSHProxy{},
+	}
+	resolved, xe := resolveMCPServerOptions(&mcpServerOptions{}, cfg)
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+	if !resolved.unsafeAllowWrite {
+		t.Fatal("expected unsafeAllowWrite from env")
+	}
+}
+
+func TestResolveMCPServerOptions_UnsafeAllowWriteCLIOverridesEnv(t *testing.T) {
+	t.Setenv("XSQL_MCP_UNSAFE_ALLOW_WRITE", "true")
+	cfg := config.File{
+		Profiles:   map[string]config.Profile{},
+		SSHProxies: map[string]config.SSHProxy{},
+	}
+	opts := &mcpServerOptions{
+		unsafeAllowWrite:    false,
+		unsafeAllowWriteSet: true,
+	}
+	resolved, xe := resolveMCPServerOptions(opts, cfg)
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+	if resolved.unsafeAllowWrite {
+		t.Fatal("expected CLI false to override env true")
+	}
+}
+
+func TestResolveMCPServerOptions_UnsafeAllowWriteInvalidEnv(t *testing.T) {
+	t.Setenv("XSQL_MCP_UNSAFE_ALLOW_WRITE", "not-a-bool")
+	cfg := config.File{
+		Profiles:   map[string]config.Profile{},
+		SSHProxies: map[string]config.SSHProxy{},
+	}
+	_, xe := resolveMCPServerOptions(&mcpServerOptions{}, cfg)
+	if xe == nil {
+		t.Fatal("expected error for invalid env")
+	}
+	if xe.Code != errors.CodeCfgInvalid {
+		t.Fatalf("expected CodeCfgInvalid, got %s", xe.Code)
+	}
+}
+
 func TestResolveMCPServerOptions_ConfigTokenPlaintextNotAllowed(t *testing.T) {
 	cfg := config.File{
 		Profiles:   map[string]config.Profile{},
