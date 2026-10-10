@@ -126,7 +126,14 @@ func ListTables(ctx context.Context, driverName string, db *sql.DB, opts SchemaO
 		return nil, errors.New(errors.CodeDBDriverUnsupported, "driver does not support schema browsing: "+driverName, nil)
 	}
 
-	return sd.ListTables(ctx, db, opts)
+	result, xe := sd.ListTables(ctx, db, opts)
+	if xe != nil {
+		return nil, xe
+	}
+	if result != nil && result.Tables == nil {
+		result.Tables = []TableSummary{}
+	}
+	return result, nil
 }
 
 // DescribeTable returns the schema details for a single table.

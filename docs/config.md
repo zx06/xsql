@@ -123,6 +123,10 @@ profiles:
 | `mcp.http.addr` | string | Streamable HTTP 监听地址 |
 | `mcp.http.auth_token` | string | Streamable HTTP 鉴权 token（支持 `keyring:` 引用） |
 | `mcp.http.allow_plaintext_token` | bool | 允许在配置中使用明文 token |
+| `mcp.max_rows` | int | MCP `query` tool 默认行数上限（默认 500；profile `max_rows` 优先） |
+| `mcp.max_response_bytes` | int | MCP query 响应 JSON 体积上限（默认 524288） |
+
+Profile 还可设置 `max_rows`（query 默认行数上限，CLI/Web 默认 1000）、`query_timeout`、`schema_timeout`。
 
 ## AI 配置项
 

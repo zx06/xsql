@@ -209,7 +209,7 @@ func TestQueryWithReadOnlyTx_QueryFailure(t *testing.T) {
 	mock.ExpectQuery("SELECT 1").WillReturnError(errors.New("query failed"))
 	mock.ExpectRollback()
 
-	_, xe := queryWithReadOnlyTx(context.Background(), db, "SELECT 1", "mysql")
+	_, xe := queryWithReadOnlyTx(context.Background(), db, "SELECT 1", "mysql", 0)
 	if xe == nil || xe.Code != xsqlerrors.CodeDBExecFailed {
 		t.Fatalf("expected query failure, got %v", xe)
 	}
@@ -225,7 +225,7 @@ func TestExecuteQuery_Success(t *testing.T) {
 	rows := sqlmock.NewRows([]string{"msg"}).AddRow([]byte("hi"))
 	mock.ExpectQuery("SELECT 'hi'").WillReturnRows(rows)
 
-	result, xe := executeQuery(context.Background(), db, "SELECT 'hi'")
+	result, xe := executeQuery(context.Background(), db, "SELECT 'hi'", 0)
 	if xe != nil {
 		t.Fatalf("executeQuery failed: %v", xe)
 	}
@@ -243,7 +243,7 @@ func TestExecuteQuery_Failure(t *testing.T) {
 
 	mock.ExpectQuery("SELECT 1").WillReturnError(errors.New("boom"))
 
-	_, xe := executeQuery(context.Background(), db, "SELECT 1")
+	_, xe := executeQuery(context.Background(), db, "SELECT 1", 0)
 	if xe == nil || xe.Code != xsqlerrors.CodeDBExecFailed {
 		t.Fatalf("expected failure, got %v", xe)
 	}
@@ -265,7 +265,7 @@ func TestScanRows_MultipleRows(t *testing.T) {
 	}
 	defer rows.Close()
 
-	result, xe := scanRows(rows)
+	result, xe := scanRows(rows, 0)
 	if xe != nil {
 		t.Fatalf("scanRows failed: %v", xe)
 	}

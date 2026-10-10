@@ -43,6 +43,8 @@ func (a App) BuildSpec() spec.Spec {
 					spec.FlagSpec{Name: "unsafe-allow-write", Default: "false", Description: "Allow writes when profile unsafe_allow_write is true"},
 					spec.FlagSpec{Name: "allow-plaintext", Default: "false", Description: "Allow plaintext secrets in config"},
 					spec.FlagSpec{Name: "ssh-skip-known-hosts-check", Default: "false", Description: "Skip SSH known_hosts check (dangerous)"},
+					spec.FlagSpec{Name: "max-rows", Env: "XSQL_MAX_ROWS", Default: "1000", Description: "Maximum rows to return (0 = unlimited)"},
+					spec.FlagSpec{Name: "query-timeout", Default: "30", Description: "Query timeout in seconds"},
 				),
 			},
 			{

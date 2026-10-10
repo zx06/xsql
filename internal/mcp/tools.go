@@ -20,6 +20,7 @@ const defaultMCPQueryTimeout = 30 * time.Second
 type QueryInput struct {
 	SQL     string `json:"sql" jsonschema:"SQL query to execute"`
 	Profile string `json:"profile" jsonschema:"Profile name to use"`
+	MaxRows *int   `json:"max_rows,omitempty" jsonschema:"Maximum rows to return (positive integer; MCP default 500)"`
 }
 
 // ProfileShowInput represents the input for the profile_show tool
@@ -88,6 +89,10 @@ func (h *ToolHandler) RegisterTools(server *mcp.Server) {
 				Type:        "string",
 				Description: "Profile name to use",
 				Enum:        profileEnums,
+			},
+			"max_rows": {
+				Type:        "integer",
+				Description: "Maximum rows to return (positive integer; default from profile/mcp config or 500)",
 			},
 		},
 	}
@@ -158,6 +163,16 @@ func (h *ToolHandler) Query(ctx context.Context, req *mcp.CallToolRequest, input
 		return h.errorResult(xe), nil, nil
 	}
 
+	argSet := input.MaxRows != nil
+	argVal := 0
+	if argSet {
+		argVal = *input.MaxRows
+	}
+	maxRows, xe := app.ResolveMCPQueryMaxRows(profile, h.config.MCP, argVal, argSet)
+	if xe != nil {
+		return h.errorResult(xe), nil, nil
+	}
+
 	timeout := app.QueryTimeout(profile, 0, false, defaultMCPQueryTimeout)
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -169,12 +184,15 @@ func (h *ToolHandler) Query(ctx context.Context, req *mcp.CallToolRequest, input
 		AllowPlaintext:   profile.AllowPlaintext,
 		SkipHostKeyCheck: false,
 		UnsafeAllowWrite: WriteAllowed(h.serverAllowsWrite, profile.UnsafeAllowWrite),
+		MaxRows:          maxRows,
+		TruncationHint:   app.QueryTruncationHint,
 	})
 	h.recordMCPStats("query", input.Profile, xe == nil, time.Since(start), xe, input.SQL)
 
 	if xe != nil {
 		return h.errorResult(xe), nil, nil
 	}
+	result = applyMCPResponseByteLimit(result, app.ResolveMCPMaxResponseBytes(h.config.MCP))
 	return h.successResult(result)
 }
 

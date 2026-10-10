@@ -581,3 +581,82 @@ func TestPg_Query_CTE(t *testing.T) {
 		t.Errorf("expected 3 rows, got %d", len(result.Rows))
 	}
 }
+
+func TestMySQL_Query_MaxRowsDefaultTruncation(t *testing.T) {
+	dsn := os.Getenv("XSQL_TEST_MYSQL_DSN")
+	if dsn == "" {
+		t.Skip("XSQL_TEST_MYSQL_DSN not set")
+	}
+	drv, _ := db.Get("mysql")
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	conn, xe := drv.Open(ctx, db.ConnOptions{DSN: dsn})
+	if xe != nil {
+		t.Fatalf("failed to open: %v", xe)
+	}
+	defer conn.Close()
+
+	sql := `
+		WITH RECURSIVE seq AS (
+			SELECT 1 AS n
+			UNION ALL
+			SELECT n + 1 FROM seq WHERE n < 50
+		)
+		SELECT n FROM seq`
+	result, xe := db.Query(ctx, conn, sql, db.QueryOptions{DBType: "mysql", MaxRows: 10})
+	if xe != nil {
+		t.Fatalf("query failed: %v", xe)
+	}
+	if len(result.Rows) != 10 || !result.Truncated {
+		t.Fatalf("expected 10 truncated rows, got len=%d truncated=%v", len(result.Rows), result.Truncated)
+	}
+}
+
+func TestMySQL_Query_MaxRowsUnlimited(t *testing.T) {
+	dsn := os.Getenv("XSQL_TEST_MYSQL_DSN")
+	if dsn == "" {
+		t.Skip("XSQL_TEST_MYSQL_DSN not set")
+	}
+	drv, _ := db.Get("mysql")
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	conn, xe := drv.Open(ctx, db.ConnOptions{DSN: dsn})
+	if xe != nil {
+		t.Fatalf("failed to open: %v", xe)
+	}
+	defer conn.Close()
+
+	result, xe := db.Query(ctx, conn, `
+		WITH RECURSIVE seq AS (
+			SELECT 1 AS n UNION ALL SELECT n + 1 FROM seq WHERE n < 5
+		) SELECT n FROM seq`, db.QueryOptions{DBType: "mysql", MaxRows: 0})
+	if xe != nil {
+		t.Fatalf("query failed: %v", xe)
+	}
+	if len(result.Rows) != 5 || result.Truncated {
+		t.Fatalf("expected 5 rows unlimited, got len=%d truncated=%v", len(result.Rows), result.Truncated)
+	}
+}
+
+func TestPg_Query_MaxRowsTruncation(t *testing.T) {
+	dsn := os.Getenv("XSQL_TEST_PG_DSN")
+	if dsn == "" {
+		t.Skip("XSQL_TEST_PG_DSN not set")
+	}
+	drv, _ := db.Get("pg")
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	conn, xe := drv.Open(ctx, db.ConnOptions{DSN: dsn})
+	if xe != nil {
+		t.Fatalf("failed to open: %v", xe)
+	}
+	defer conn.Close()
+
+	result, xe := db.Query(ctx, conn, "SELECT generate_series(1, 40) AS n", db.QueryOptions{DBType: "pg", MaxRows: 5})
+	if xe != nil {
+		t.Fatalf("query failed: %v", xe)
+	}
+	if len(result.Rows) != 5 || !result.Truncated || result.MaxRows != 5 {
+		t.Fatalf("got len=%d truncated=%v max_rows=%d", len(result.Rows), result.Truncated, result.MaxRows)
+	}
+}

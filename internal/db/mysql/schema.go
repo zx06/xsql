@@ -19,7 +19,7 @@ func (d *Driver) ListTables(ctx context.Context, conn *sql.DB, opts db.SchemaOpt
 		return nil, xe
 	}
 
-	tables, xe := d.listTables(ctx, conn, database, opts.TablePattern)
+	tables, xe := d.listTables(ctx, conn, database, opts.TablePattern, opts.IncludeSystem)
 	if xe != nil {
 		return nil, xe
 	}
@@ -96,18 +96,25 @@ func currentDatabase(ctx context.Context, conn *sql.DB) (string, *errors.XError)
 	return database, nil
 }
 
-func (d *Driver) listTables(ctx context.Context, conn *sql.DB, database, tablePattern string) ([]db.TableSummary, *errors.XError) {
+func (d *Driver) listTables(ctx context.Context, conn *sql.DB, database, tablePattern string, includeSystem bool) ([]db.TableSummary, *errors.XError) {
 	query := `
-		SELECT table_name, table_comment
+		SELECT table_schema, table_name, table_comment
 		FROM information_schema.tables
-		WHERE table_schema = ? AND table_type = 'BASE TABLE'
+		WHERE table_type = 'BASE TABLE'
 	`
-	args := []any{database}
+	args := []any{}
+	if includeSystem {
+		query += " AND (table_schema = ? OR table_schema IN ('information_schema','mysql','performance_schema','sys'))"
+		args = append(args, database)
+	} else {
+		query += " AND table_schema = ?"
+		args = append(args, database)
+	}
 	if tablePattern != "" {
 		query += " AND table_name LIKE ?"
 		args = append(args, toLikePattern(tablePattern))
 	}
-	query += " ORDER BY table_name"
+	query += " ORDER BY table_schema, table_name"
 
 	rows, err := conn.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -115,14 +122,14 @@ func (d *Driver) listTables(ctx context.Context, conn *sql.DB, database, tablePa
 	}
 	defer rows.Close()
 
-	var tables []db.TableSummary
+	tables := make([]db.TableSummary, 0)
 	for rows.Next() {
-		var name, comment string
-		if err := rows.Scan(&name, &comment); err != nil {
+		var schemaName, name, comment string
+		if err := rows.Scan(&schemaName, &name, &comment); err != nil {
 			return nil, errors.Wrap(errors.CodeDBExecFailed, "failed to scan table row", nil, err)
 		}
 		tables = append(tables, db.TableSummary{
-			Schema:  database,
+			Schema:  schemaName,
 			Name:    name,
 			Comment: comment,
 		})

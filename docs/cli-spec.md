@@ -74,6 +74,8 @@ xsql query "INSERT INTO logs (msg) VALUES ('test')" --profile dev --unsafe-allow
 | `--unsafe-allow-write` | false | 本次命令申请写入；仅当 profile 同时设置 `unsafe_allow_write: true` 时生效 |
 | `--allow-plaintext` | false | 允许配置中使用明文密码（也可在配置文件中设置 `allow_plaintext: true`） |
 | `--ssh-skip-known-hosts-check` | false | 跳过 SSH 主机密钥验证（危险） |
+| `--max-rows` | 1000 | 最多返回行数（`0` = 不限；ENV：`XSQL_MAX_ROWS`；可被 profile `max_rows` 覆盖默认值） |
+| `--query-timeout` | 30 | 查询超时（秒）；profile 可用 `query_timeout` 覆盖 |
 
 **输出示例（JSON）：**
 ```json
@@ -86,6 +88,22 @@ xsql query "INSERT INTO logs (msg) VALUES ('test')" --profile dev --unsafe-allow
       {"id": 1, "name": "Alice"},
       {"id": 2, "name": "Bob"}
     ]
+  }
+}
+```
+
+**截断示例（JSON，字段只增）：**
+```json
+{
+  "ok": true,
+  "schema_version": 1,
+  "data": {
+    "columns": ["n"],
+    "rows": [{"n": 1}, {"n": 2}],
+    "truncated": true,
+    "row_count": 2,
+    "max_rows": 2,
+    "hint": "Result truncated by max_rows. Use SQL LIMIT/OFFSET, aggregation, or schema_list_tables/schema_dump for exploration."
   }
 }
 ```
@@ -272,6 +290,8 @@ Web UI 使用以下 HTTP API，统一返回 JSON Envelope：
 | `POST` | `/api/v1/query` | 执行只读 SQL 查询 |
 
 Web 查询强制只读，即使 profile 配置了 `unsafe_allow_write: true`，也不会在 Web 接口中生效。
+
+`POST /api/v1/query` JSON body：`{"profile":"...","sql":"...","max_rows":1000}`（`max_rows` 可选；省略时使用 profile / `XSQL_MAX_ROWS` / 默认 1000；`0` = 不限）。
 
 **配置 API 脱敏**：`GET /api/v1/config` 与 `GET /api/v1/profiles/{name}` 不会在响应中返回明文密码、DSN、SSH passphrase、AI `api_key` 或 HTTP `auth_token`。明文值以占位符 `***` 表示；`keyring:` 引用会原样返回（不解析 keyring 内容）。通过 Web UI 保存配置时，若客户端未修改某敏感字段（提交空值或 `***`），服务端会保留磁盘上已有值，而不会用占位符覆盖。
 
@@ -544,7 +564,8 @@ xsql mcp server --transport streamable_http --http-addr 127.0.0.1:8787 --http-au
        "type": "object",
        "properties": {
          "sql": {"type": "string", "description": "SQL query to execute"},
-         "profile": {"type": "string", "description": "Profile name to use"}
+         "profile": {"type": "string", "description": "Profile name to use"},
+         "max_rows": {"type": "integer", "description": "Maximum rows to return (positive integer; MCP default 500)"}
        },
        "required": ["sql", "profile"]
      }

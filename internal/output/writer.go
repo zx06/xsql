@@ -66,6 +66,11 @@ type TableFormatter interface {
 	ToTableData() (columns []string, rows []map[string]any, ok bool)
 }
 
+// QueryMetaFormatter exposes truncation metadata for query table output.
+type QueryMetaFormatter interface {
+	QueryMeta() (truncated bool, rowCount, maxRows int, hint string, ok bool)
+}
+
 // SchemaFormatter is the interface for data structures that support schema output.
 type SchemaFormatter interface {
 	ToSchemaData() (database string, tables []SchemaTable, ok bool)
@@ -96,7 +101,18 @@ func writeTable(out io.Writer, env Envelope) error {
 	// First check if the data implements the TableFormatter interface (no JSON encode/decode)
 	if formatter, ok := env.Data.(TableFormatter); ok {
 		if cols, rows, ok := formatter.ToTableData(); ok {
-			return writeQueryResultTable(out, cols, rows)
+			if err := writeQueryResultTable(out, cols, rows); err != nil {
+				return err
+			}
+			if meta, ok := env.Data.(QueryMetaFormatter); ok {
+				if truncated, rowCount, maxRows, hint, ok := meta.QueryMeta(); ok && truncated {
+					_, _ = fmt.Fprintf(out, "(truncated at max_rows=%d; showing %d rows)\n", maxRows, rowCount)
+					if hint != "" {
+						_, _ = fmt.Fprintf(out, "hint: %s\n", hint)
+					}
+				}
+			}
+			return nil
 		}
 	}
 

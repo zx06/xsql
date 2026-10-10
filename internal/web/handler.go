@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -50,6 +51,7 @@ type handler struct {
 type queryRequest struct {
 	Profile string `json:"profile"`
 	SQL     string `json:"sql"`
+	MaxRows *int   `json:"max_rows,omitempty"`
 }
 
 // NewHandler creates the web server handler.
@@ -257,6 +259,22 @@ func (h *handler) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var maxRows int
+	if req.MaxRows != nil {
+		if *req.MaxRows < 0 {
+			writeError(w, http.StatusBadRequest, errors.New(errors.CodeCfgInvalid, "max_rows must be >= 0", map[string]any{"max_rows": *req.MaxRows}))
+			return
+		}
+		maxRows = *req.MaxRows
+	} else {
+		var mxe *errors.XError
+		maxRows, mxe = app.ResolveQueryMaxRows(profile, os.Getenv("XSQL_MAX_ROWS"), 0, false)
+		if mxe != nil {
+			writeError(w, http.StatusBadRequest, mxe)
+			return
+		}
+	}
+
 	timeout := app.QueryTimeout(profile, 0, false, 30*time.Second)
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
@@ -268,6 +286,8 @@ func (h *handler) handleQuery(w http.ResponseWriter, r *http.Request) {
 		AllowPlaintext:   h.allowPlaintext,
 		SkipHostKeyCheck: h.skipHostKeyCheck,
 		UnsafeAllowWrite: false,
+		MaxRows:          maxRows,
+		TruncationHint:   app.QueryTruncationHint,
 	})
 
 	// Record stats

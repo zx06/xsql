@@ -82,6 +82,12 @@ DB 类：
 }
 ```
 
+当结果被 `max_rows` 截断时，`data` 可附加（`schema_version` 仍为 `1`）：
+- `truncated`（bool）
+- `row_count`（int，已返回行数）
+- `max_rows`（int，生效上限）
+- `hint`（string，建议使用 `LIMIT`/聚合或 schema 工具）
+
 ### Table 格式（人类可读）
 ```
 id      name    email
@@ -110,5 +116,7 @@ id,name,email
 | 终端查看 | table (auto) |
 | 数据导出 | csv |
 
-## 7. 大结果集（计划中）
-- `--jsonl`（NDJSON）：每行一个 JSON 对象，用于大结果集/流式消费
+## 7. 大结果集
+- 默认对 query 结果施加 `max_rows`（CLI/Web 默认 1000；MCP 默认 500），扫描阶段提前停止。
+- CLI/Web 可用 `--max-rows 0` 或请求体 `max_rows: 0` 显式取消上限。
+- 未来可选：`--jsonl`（NDJSON）流式消费。

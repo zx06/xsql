@@ -242,12 +242,18 @@ func (m Model) executeSQLCmd(sqlStr string) tea.Cmd {
 		timeout := app.QueryTimeout(m.profile, 0, false, defaultTUIQueryTimeout)
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
+		maxRows, mxe := app.ResolveQueryMaxRows(m.profile, "", 0, false)
+		if mxe != nil {
+			return queryExecutedMsg{err: mxe}
+		}
 		res, xe := app.Query(ctx, app.QueryRequest{
 			Profile:          m.profile,
 			SQL:              sqlStr,
 			AllowPlaintext:   m.profile.AllowPlaintext,
 			SkipHostKeyCheck: m.profile.SSHConfig != nil && m.profile.SSHConfig.SkipHostKey,
 			UnsafeAllowWrite: m.unsafeAllowWrite,
+			MaxRows:          maxRows,
+			TruncationHint:   app.QueryTruncationHint,
 		})
 		elapsed := time.Since(start)
 		return queryExecutedMsg{result: res, err: xe, duration: elapsed}

@@ -174,7 +174,7 @@ xsql query "<SQL>" -p <profile> -f json --attr source=codex-cli --attr agent=cod
 | 命令 | 说明 |
 |------|------|
 | `xsql ai [PROMPT]` | 启动全屏交互式 AI 终端模式（TUI） |
-| `xsql query <SQL>` | 执行 SQL 查询（默认只读） |
+| `xsql query <SQL>` | 执行 SQL 查询（默认只读；默认最多 1000 行，`--max-rows` 可调） |
 | `xsql schema dump` | 导出数据库结构（表、列、索引、外键） |
 | `xsql profile list` | 列出所有 profile |
 | `xsql profile show <name>` | 查看 profile 详情（密码脱敏） |

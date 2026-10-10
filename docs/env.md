@@ -17,6 +17,7 @@
 - `XSQL_AI_MODEL`：AI 模型名称
 - `XSQL_AI_BASE_URL`：OpenAI 兼容服务 Base URL
 - `XSQL_AI_API_KEY`：AI 服务 API Key（明文仅保存在当前进程环境中）
+- `XSQL_MAX_ROWS`：query 默认最大返回行数（非负整数；`0` = 不限；优先级低于 CLI `--max-rows`）
 
 ## 2. 连接参数（计划中，当前未实现）
 > 当前版本连接参数通过 config 文件的 profile 配置，ENV 支持计划在后续版本实现。
