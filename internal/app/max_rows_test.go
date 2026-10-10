@@ -72,4 +72,8 @@ func TestResolveMCPQueryMaxRows(t *testing.T) {
 	if xe != nil || v != 800 {
 		t.Fatalf("profile override: %d %v", v, xe)
 	}
+	v, xe = ResolveMCPQueryMaxRows(config.Profile{}, config.MCPConfig{MaxRows: 300}, 0, false)
+	if xe != nil || v != 300 {
+		t.Fatalf("mcp config override: %d %v", v, xe)
+	}
 }

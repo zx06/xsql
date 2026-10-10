@@ -36,6 +36,15 @@ func TestQuery_MaxRows_Unlimited_MySQL(t *testing.T) {
 	}
 }
 
+func TestQuery_MaxRows_InvalidNegative(t *testing.T) {
+	dsn := mysqlDSN(t)
+	config := mysqlTestConfig(t, dsn)
+	_, _, exitCode := runXSQL(t, "query", "SELECT 1", "--config", config, "--profile", "test", "--format", "json", "--max-rows", "-1")
+	if exitCode != 2 {
+		t.Fatalf("expected exit 2, got %d", exitCode)
+	}
+}
+
 func TestQuery_MaxRows_PG(t *testing.T) {
 	dsn := pgDSN(t)
 	config := createTempConfig(t, `profiles:

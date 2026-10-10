@@ -119,6 +119,39 @@ func TestWriteOK_TableFormat_QueryResult(t *testing.T) {
 	}
 }
 
+type truncatedQueryTable struct {
+	cols []string
+	rows []map[string]any
+}
+
+func (truncatedQueryTable) QueryMeta() (truncated bool, rowCount, maxRows int, hint string, ok bool) {
+	return true, 1, 1, "use LIMIT", true
+}
+
+func (t truncatedQueryTable) ToTableData() ([]string, []map[string]any, bool) {
+	return t.cols, t.rows, true
+}
+
+func TestWriteOK_TableFormat_TruncatedQueryMeta(t *testing.T) {
+	var out bytes.Buffer
+	w := New(&out, &bytes.Buffer{})
+
+	result := truncatedQueryTable{
+		cols: []string{"n"},
+		rows: []map[string]any{{"n": 1}},
+	}
+	if err := w.WriteOK(FormatTable, result); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	if !strings.Contains(text, "(truncated at max_rows=1") {
+		t.Fatalf("missing truncation footer: %s", text)
+	}
+	if !strings.Contains(text, "hint: use LIMIT") {
+		t.Fatalf("missing hint line: %s", text)
+	}
+}
+
 func TestWriteOK_TableFormat_NonQueryResult(t *testing.T) {
 	var out bytes.Buffer
 	w := New(&out, &bytes.Buffer{})

@@ -29,6 +29,17 @@ func TestConvertValue(t *testing.T) {
 
 // Query 函数的集成测试在 tests/integration/query_test.go 中
 
+func TestQueryResult_QueryMeta(t *testing.T) {
+	if _, _, _, _, ok := (&QueryResult{}).QueryMeta(); ok {
+		t.Fatal("non-truncated should not report meta")
+	}
+	tr := &QueryResult{Truncated: true, RowCount: 2, MaxRows: 2, Hint: "h"}
+	truncated, rowCount, maxRows, hint, ok := tr.QueryMeta()
+	if !ok || !truncated || rowCount != 2 || maxRows != 2 || hint != "h" {
+		t.Fatalf("meta=%v %d %d %q ok=%v", truncated, rowCount, maxRows, hint, ok)
+	}
+}
+
 func TestQueryResultToTableData(t *testing.T) {
 	var result *QueryResult
 	cols, rows, ok := result.ToTableData()

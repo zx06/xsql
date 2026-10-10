@@ -7,6 +7,14 @@ import (
 	"github.com/zx06/xsql/internal/db"
 )
 
+func TestApplyMCPResponseByteLimit_Noop(t *testing.T) {
+	result := &db.QueryResult{Columns: []string{"n"}, Rows: []map[string]any{{"n": 1}}}
+	out := applyMCPResponseByteLimit(result, 0)
+	if out != result || out.Truncated {
+		t.Fatalf("expected noop, got %+v", out)
+	}
+}
+
 func TestApplyMCPResponseByteLimit(t *testing.T) {
 	rows := make([]map[string]any, 0, 50)
 	for i := 0; i < 50; i++ {
