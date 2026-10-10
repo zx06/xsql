@@ -575,7 +575,55 @@ xsql mcp server --transport streamable_http --http-addr 127.0.0.1:8787 --http-au
    }
    ```
 
-**输出格式：** MCP tool 调用返回 JSON 格式，遵循 xsql 的标准输出契约（`ok`、`schema_version`、`data`/`error`）。
+4. **schema_list_tables**: 轻量表清单（schema discovery 首选）
+   ```json
+   {
+     "name": "schema_list_tables",
+     "inputSchema": {
+       "type": "object",
+       "required": ["profile"],
+       "properties": {
+         "profile": {"type": "string"},
+         "table_pattern": {"type": "string", "description": "Optional glob filter (*, ?)"},
+         "include_system": {"type": "boolean", "description": "Include system tables"}
+       }
+     }
+   }
+   ```
+
+5. **schema_dump**: 导出表结构（与 `xsql schema dump` JSON `data` 同形）
+   ```json
+   {
+     "name": "schema_dump",
+     "inputSchema": {
+       "type": "object",
+       "required": ["profile"],
+       "properties": {
+         "profile": {"type": "string"},
+         "table_pattern": {"type": "string"},
+         "include_system": {"type": "boolean"}
+       }
+     }
+   }
+   ```
+
+6. **schema_describe_table**: 单表结构详情
+   ```json
+   {
+     "name": "schema_describe_table",
+     "inputSchema": {
+       "type": "object",
+       "required": ["profile", "table"],
+       "properties": {
+         "profile": {"type": "string"},
+         "schema": {"type": "string", "description": "PostgreSQL schema (optional on MySQL)"},
+         "table": {"type": "string"}
+       }
+     }
+   }
+   ```
+
+**输出格式：** MCP tool 调用返回 JSON 格式，遵循 xsql 的标准输出契约（`ok`、`schema_version`、`data`/`error`）。MCP 数据库路径复用 `internal/app`（SSH `skip_host_key` 等与 CLI 一致）。
 
 **安全说明：**
 - query tool 默认只读模式（双重保护：SQL 静态分析 + DB 事务级只读）

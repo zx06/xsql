@@ -64,35 +64,7 @@ func TestNewToolHandler(t *testing.T) {
 	}
 }
 
-func TestGetProfile_Default(t *testing.T) {
-	cfg := &config.File{
-		Profiles: map[string]config.Profile{
-			"default": {
-				DB:   "mysql",
-				Host: "localhost",
-			},
-			"other": {
-				DB:   "pg",
-				Host: "localhost",
-			},
-		},
-	}
-
-	handler := NewToolHandler(cfg, stats.StatsConfig{}, ServerOptions{})
-
-	// Get default profile (empty name)
-	profile := handler.getProfile("")
-	if profile == nil {
-		t.Fatal("expected non-nil profile")
-	}
-
-	// Should return one of the profiles (order is not guaranteed)
-	if profile.DB != "mysql" && profile.DB != "pg" {
-		t.Errorf("expected db=mysql or db=pg, got %s", profile.DB)
-	}
-}
-
-func TestGetProfile_ByName(t *testing.T) {
+func TestResolveProfile_ByName(t *testing.T) {
 	cfg := &config.File{
 		Profiles: map[string]config.Profile{
 			"dev": {
@@ -108,10 +80,9 @@ func TestGetProfile_ByName(t *testing.T) {
 
 	handler := NewToolHandler(cfg, stats.StatsConfig{}, ServerOptions{})
 
-	// Get dev profile
-	profile := handler.getProfile("dev")
-	if profile == nil {
-		t.Fatal("expected non-nil profile")
+	profile, xe := handler.resolveProfile("dev")
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
 	}
 
 	if profile.DB != "mysql" {
@@ -122,10 +93,9 @@ func TestGetProfile_ByName(t *testing.T) {
 		t.Errorf("expected host=dev.example.com, got %s", profile.Host)
 	}
 
-	// Get prod profile
-	profile = handler.getProfile("prod")
-	if profile == nil {
-		t.Fatal("expected non-nil profile")
+	profile, xe = handler.resolveProfile("prod")
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
 	}
 
 	if profile.DB != "pg" {
@@ -133,7 +103,7 @@ func TestGetProfile_ByName(t *testing.T) {
 	}
 }
 
-func TestGetProfile_NotFound(t *testing.T) {
+func TestResolveProfile_NotFound(t *testing.T) {
 	cfg := &config.File{
 		Profiles: map[string]config.Profile{
 			"dev": {
@@ -144,24 +114,9 @@ func TestGetProfile_NotFound(t *testing.T) {
 
 	handler := NewToolHandler(cfg, stats.StatsConfig{}, ServerOptions{})
 
-	// Get non-existent profile
-	profile := handler.getProfile("nonexistent")
-	if profile != nil {
-		t.Error("expected nil profile")
-	}
-}
-
-func TestGetProfile_EmptyProfiles(t *testing.T) {
-	cfg := &config.File{
-		Profiles: map[string]config.Profile{},
-	}
-
-	handler := NewToolHandler(cfg, stats.StatsConfig{}, ServerOptions{})
-
-	// Get default profile with empty config
-	profile := handler.getProfile("")
-	if profile != nil {
-		t.Error("expected nil profile when no profiles exist")
+	_, xe := handler.resolveProfile("nonexistent")
+	if xe == nil {
+		t.Error("expected error for missing profile")
 	}
 }
 
@@ -774,12 +729,11 @@ func TestQuery_AllFields(t *testing.T) {
 	// Test with all fields populated
 	// This test requires actual database connection or mocking
 	// For now, we'll just verify that the profile is correctly retrieved
-	profile := handler.getProfile("full")
-	if profile == nil {
-		t.Fatal("expected non-nil profile")
+	profile, xe := handler.resolveProfile("full")
+	if xe != nil {
+		t.Fatalf("resolveProfile: %v", xe)
 	}
 
-	// Verify all fields are set
 	if profile.DB != "mysql" {
 		t.Errorf("expected DB=mysql, got %s", profile.DB)
 	}
@@ -863,7 +817,7 @@ func TestProfileShowHandler_InvalidJSON(t *testing.T) {
 	}
 }
 
-func TestGetProfile_ResolvesSSHProxy(t *testing.T) {
+func TestResolveProfile_ResolvesSSHProxy(t *testing.T) {
 	cfg := &config.File{
 		Profiles: map[string]config.Profile{
 			"dev": {DB: "mysql", SSHProxy: "bastion"},
@@ -874,9 +828,9 @@ func TestGetProfile_ResolvesSSHProxy(t *testing.T) {
 	}
 
 	handler := NewToolHandler(cfg, stats.StatsConfig{}, ServerOptions{})
-	profile := handler.getProfile("dev")
-	if profile == nil {
-		t.Fatal("expected non-nil profile")
+	profile, xe := handler.resolveProfile("dev")
+	if xe != nil {
+		t.Fatalf("resolveProfile: %v", xe)
 	}
 	if profile.SSHConfig == nil {
 		t.Fatal("expected SSHConfig to be resolved")

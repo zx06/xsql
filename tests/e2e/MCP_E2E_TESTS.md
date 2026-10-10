@@ -49,7 +49,15 @@
 
 - **TestMCPProfileShow_NotFound**: 测试不存在的配置文件的错误处理
 
-### 4. SSH 代理测试
+### 4. Schema Discovery 测试
+
+- **TestMCPSchema_ListTables_MySQL** / **TestMCPSchema_ListTables_PostgreSQL**: 轻量表清单
+- **TestMCPSchema_Dump_MySQL**: 完整 schema dump JSON 契约
+- **TestMCPSchema_DescribeTable_PostgreSQL**: 单表结构详情
+
+Tools: `schema_list_tables`, `schema_dump`, `schema_describe_table`（经 `internal/app`，与 CLI/Web 一致）
+
+### 5. SSH 代理测试
 
 - **TestMCPQuery_SSHProxy_ConfigurationHandling**: 验证 SSH 代理配置被正确处理
 - **TestMCPQuery_SSHProxy_InvalidConfiguration**: 测试无效的 SSH 代理配置错误
