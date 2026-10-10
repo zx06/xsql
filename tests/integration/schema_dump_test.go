@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"strings"
@@ -14,6 +15,146 @@ import (
 	_ "github.com/zx06/xsql/internal/db/mysql"
 	_ "github.com/zx06/xsql/internal/db/pg"
 )
+
+const schemaDumpCleanupTimeout = 30 * time.Second
+
+func cleanupContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), schemaDumpCleanupTimeout)
+}
+
+// withSchemaDumpCleanupConn opens a fresh connection for t.Cleanup hooks. The test
+// connection is closed via defer before Cleanup runs, and the test ctx may already
+// be cancelled when Cleanup executes.
+func withSchemaDumpCleanupConn(t *testing.T, drv db.Driver, dsn string, fn func(*sql.DB)) {
+	t.Helper()
+	cleanupCtx, cancel := cleanupContext()
+	defer cancel()
+
+	conn, xe := drv.Open(cleanupCtx, db.ConnOptions{DSN: dsn})
+	if xe != nil {
+		t.Logf("cleanup: open connection: %v", xe)
+		return
+	}
+	defer conn.Close()
+	fn(conn)
+}
+
+func dropMySQLSchemaDumpTables(t *testing.T, conn *sql.DB, ordersTable, usersTable string) {
+	t.Helper()
+	cleanupCtx, cancel := cleanupContext()
+	defer cancel()
+	if _, err := conn.ExecContext(cleanupCtx, fmt.Sprintf("DROP TABLE IF EXISTS %s", ordersTable)); err != nil {
+		t.Logf("cleanup: drop table %s: %v", ordersTable, err)
+	}
+	if _, err := conn.ExecContext(cleanupCtx, fmt.Sprintf("DROP TABLE IF EXISTS %s", usersTable)); err != nil {
+		t.Logf("cleanup: drop table %s: %v", usersTable, err)
+	}
+}
+
+func dropPgSchemaDumpSchema(t *testing.T, conn *sql.DB, schema string) {
+	t.Helper()
+	cleanupCtx, cancel := cleanupContext()
+	defer cancel()
+	if _, err := conn.ExecContext(cleanupCtx, fmt.Sprintf("DROP SCHEMA IF EXISTS %s CASCADE", schema)); err != nil {
+		t.Logf("cleanup: drop schema %s: %v", schema, err)
+	}
+}
+
+// cleanupStaleMySQLSchemaDumpArtifacts removes leftover tables from prior interrupted runs.
+func cleanupStaleMySQLSchemaDumpArtifacts(t *testing.T, conn *sql.DB) {
+	t.Helper()
+	cleanupCtx, cancel := cleanupContext()
+	defer cancel()
+
+	rows, err := conn.QueryContext(cleanupCtx, `
+		SELECT table_name
+		FROM information_schema.tables
+		WHERE table_schema = DATABASE()
+		  AND table_name LIKE 'xsql_schema_%'
+		  AND table_type = 'BASE TABLE'
+	`)
+	if err != nil {
+		t.Logf("cleanup stale mysql artifacts: list tables: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	var tables []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			t.Logf("cleanup stale mysql artifacts: scan: %v", err)
+			return
+		}
+		tables = append(tables, name)
+	}
+	if err := rows.Err(); err != nil {
+		t.Logf("cleanup stale mysql artifacts: rows: %v", err)
+		return
+	}
+	if len(tables) == 0 {
+		return
+	}
+
+	_, _ = conn.ExecContext(cleanupCtx, "SET FOREIGN_KEY_CHECKS=0")
+	defer func() {
+		_, _ = conn.ExecContext(cleanupCtx, "SET FOREIGN_KEY_CHECKS=1")
+	}()
+
+	for _, table := range tables {
+		if _, err := conn.ExecContext(cleanupCtx, fmt.Sprintf("DROP TABLE IF EXISTS %s", table)); err != nil {
+			t.Logf("cleanup stale mysql artifacts: drop %s: %v", table, err)
+		}
+	}
+}
+
+// cleanupStalePgSchemaDumpArtifacts removes leftover schemas from prior interrupted runs.
+func cleanupStalePgSchemaDumpArtifacts(t *testing.T, conn *sql.DB) {
+	t.Helper()
+	cleanupCtx, cancel := cleanupContext()
+	defer cancel()
+
+	rows, err := conn.QueryContext(cleanupCtx, `
+		SELECT schema_name
+		FROM information_schema.schemata
+		WHERE schema_name LIKE 'xsql_schema_%'
+	`)
+	if err != nil {
+		t.Logf("cleanup stale pg artifacts: list schemas: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	var schemas []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			t.Logf("cleanup stale pg artifacts: scan: %v", err)
+			return
+		}
+		schemas = append(schemas, name)
+	}
+	if err := rows.Err(); err != nil {
+		t.Logf("cleanup stale pg artifacts: rows: %v", err)
+		return
+	}
+
+	for _, schema := range schemas {
+		if _, err := conn.ExecContext(cleanupCtx, fmt.Sprintf("DROP SCHEMA IF EXISTS %s CASCADE", schema)); err != nil {
+			t.Logf("cleanup stale pg artifacts: drop schema %s: %v", schema, err)
+		}
+	}
+}
+
+func countTablesInSchema(tables []db.TableSummary, schema string) int {
+	n := 0
+	for _, table := range tables {
+		if table.Schema == schema {
+			n++
+		}
+	}
+	return n
+}
 
 func TestSchemaDump_MySQL_RealDB(t *testing.T) {
 	dsn := os.Getenv("XSQL_TEST_MYSQL_DSN")
@@ -35,6 +176,8 @@ func TestSchemaDump_MySQL_RealDB(t *testing.T) {
 	}
 	defer conn.Close()
 
+	cleanupStaleMySQLSchemaDumpArtifacts(t, conn)
+
 	suffix := time.Now().UnixNano()
 	prefix := fmt.Sprintf("xsql_schema_%d", suffix)
 	usersTable := prefix + "_users"
@@ -43,6 +186,12 @@ func TestSchemaDump_MySQL_RealDB(t *testing.T) {
 	// 清理旧表
 	_, _ = conn.ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", ordersTable))
 	_, _ = conn.ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", usersTable))
+
+	t.Cleanup(func() {
+		withSchemaDumpCleanupConn(t, drv, dsn, func(cleanupConn *sql.DB) {
+			dropMySQLSchemaDumpTables(t, cleanupConn, ordersTable, usersTable)
+		})
+	})
 
 	// 创建表结构（包含注释与默认值）
 	_, err := conn.ExecContext(ctx, fmt.Sprintf(`
@@ -74,11 +223,6 @@ func TestSchemaDump_MySQL_RealDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create orders table failed: %v", err)
 	}
-
-	t.Cleanup(func() {
-		_, _ = conn.ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", ordersTable))
-		_, _ = conn.ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", usersTable))
-	})
 
 	info, xe := db.DumpSchema(ctx, "mysql", conn, db.SchemaOptions{
 		TablePattern: prefix + "*",
@@ -206,6 +350,8 @@ func TestSchemaDump_Pg_RealDB(t *testing.T) {
 	}
 	defer conn.Close()
 
+	cleanupStalePgSchemaDumpArtifacts(t, conn)
+
 	suffix := time.Now().UnixNano()
 	schema := fmt.Sprintf("xsql_schema_%d", suffix)
 	usersTable := "users"
@@ -214,6 +360,12 @@ func TestSchemaDump_Pg_RealDB(t *testing.T) {
 
 	// 清理旧 schema
 	_, _ = conn.ExecContext(ctx, fmt.Sprintf("DROP SCHEMA IF EXISTS %s CASCADE", schema))
+
+	t.Cleanup(func() {
+		withSchemaDumpCleanupConn(t, drv, dsn, func(cleanupConn *sql.DB) {
+			dropPgSchemaDumpSchema(t, cleanupConn, schema)
+		})
+	})
 
 	// 创建 schema 与表
 	_, err := conn.ExecContext(ctx, fmt.Sprintf("CREATE SCHEMA %s", schema))
@@ -279,10 +431,6 @@ func TestSchemaDump_Pg_RealDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create index failed: %v", err)
 	}
-
-	t.Cleanup(func() {
-		_, _ = conn.ExecContext(ctx, fmt.Sprintf("DROP SCHEMA IF EXISTS %s CASCADE", schema))
-	})
 
 	info, xe := db.DumpSchema(ctx, "pg", conn, db.SchemaOptions{
 		TablePattern: prefix + "*",
@@ -375,8 +523,11 @@ func TestSchemaDump_Pg_RealDB(t *testing.T) {
 	if xe != nil {
 		t.Fatalf("ListTables error: %v", xe)
 	}
-	if tableList.Database == "" || len(tableList.Tables) != 2 {
-		t.Fatalf("unexpected table list: %#v", tableList)
+	if tableList.Database == "" {
+		t.Fatalf("unexpected table list database: %#v", tableList)
+	}
+	if count := countTablesInSchema(tableList.Tables, schema); count != 2 {
+		t.Fatalf("unexpected table list for schema %s: got %d tables in schema, full list: %#v", schema, count, tableList)
 	}
 
 	describeUsers, xe := db.DescribeTable(ctx, "pg", conn, db.TableDescribeOptions{
