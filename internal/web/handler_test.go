@@ -822,3 +822,79 @@ func TestHandler_ConfigAIAndTesting(t *testing.T) {
 	}
 }
 
+func TestHandler_ConfigSecretsMaskedAndPreserved(t *testing.T) {
+	const plaintextPassword = "db-password-should-never-leak"
+	const keyringPassword = "keyring:prod/mysql_password"
+	configPath := createConfigFile(t, `
+profiles:
+  dev:
+    db: mysql
+    host: 127.0.0.1
+    user: root
+    password: `+plaintextPassword+`
+    database: app
+  kr:
+    db: mysql
+    host: 127.0.0.1
+    user: root
+    password: `+keyringPassword+`
+    database: app
+ssh_proxies:
+  bastion:
+    host: bastion.example.com
+    user: admin
+    passphrase: ssh-pass-secret
+ai:
+  api_key: sk-openai-secret
+  provider: openai
+  base_url: https://api.openai.com/v1
+  model: gpt-4o
+`)
+	handler := NewHandler(HandlerOptions{ConfigPath: configPath})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/config", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET config status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if strings.Contains(body, plaintextPassword) || strings.Contains(body, "ssh-pass-secret") || strings.Contains(body, "sk-openai-secret") {
+		t.Fatalf("config GET leaked plaintext secrets: %s", body)
+	}
+	if !strings.Contains(body, keyringPassword) {
+		t.Fatalf("expected keyring reference in config GET: %s", body)
+	}
+
+	saveBody := `{"name":"dev","profile":{"db":"mysql","host":"127.0.0.1","user":"root","password":"***","database":"app-renamed"}}`
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/config/profiles", strings.NewReader(saveBody))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("save profile status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	raw, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	yamlText := string(raw)
+	if !strings.Contains(yamlText, plaintextPassword) {
+		t.Fatalf("password should be preserved on masked save, config:\n%s", yamlText)
+	}
+	if !strings.Contains(yamlText, "app-renamed") {
+		t.Fatalf("non-secret field should update on save, config:\n%s", yamlText)
+	}
+
+	profileReq := httptest.NewRequest(http.MethodGet, "/api/v1/profiles/dev", nil)
+	profileRec := httptest.NewRecorder()
+	handler.ServeHTTP(profileRec, profileReq)
+	if profileRec.Code != http.StatusOK {
+		t.Fatalf("profile show status=%d", profileRec.Code)
+	}
+	if strings.Contains(profileRec.Body.String(), plaintextPassword) {
+		t.Fatalf("profile show leaked password: %s", profileRec.Body.String())
+	}
+}
+
