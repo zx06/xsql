@@ -4,7 +4,9 @@ package e2e
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,7 +16,9 @@ import (
 	"testing"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 // TestMCPServer_Startup tests that MCP server starts correctly and returns tools list
@@ -1599,8 +1603,46 @@ profiles:
 // MCP Schema Discovery E2E Tests
 // ============================================================================
 
+func createMySQLMCPE2ETable(t *testing.T) string {
+	t.Helper()
+	dsn := mysqlDSN(t)
+	conn, err := sql.Open("mysql", dsn)
+	if err != nil {
+		t.Fatalf("open mysql: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+
+	table := fmt.Sprintf("mcp_e2e_%d", time.Now().UnixNano())
+	_, err = conn.Exec(fmt.Sprintf("CREATE TABLE %s (id INT PRIMARY KEY, label VARCHAR(32))", table))
+	if err != nil {
+		t.Fatalf("create table: %v", err)
+	}
+	t.Cleanup(func() { _, _ = conn.Exec("DROP TABLE IF EXISTS " + table) })
+	return table
+}
+
+func createPGMCPE2ETable(t *testing.T) (schema, table string) {
+	t.Helper()
+	dsn := pgDSN(t)
+	conn, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatalf("open pg: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+
+	schema = "public"
+	table = fmt.Sprintf("mcp_e2e_%d", time.Now().UnixNano())
+	_, err = conn.Exec(fmt.Sprintf(`CREATE TABLE %s.%s (id SERIAL PRIMARY KEY, label TEXT)`, schema, table))
+	if err != nil {
+		t.Fatalf("create table: %v", err)
+	}
+	t.Cleanup(func() { _, _ = conn.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s.%s", schema, table)) })
+	return schema, table
+}
+
 func TestMCPSchema_ListTables_MySQL(t *testing.T) {
 	dsn := mysqlDSN(t)
+	table := createMySQLMCPE2ETable(t)
 	config := createTempConfig(t, `profiles:
   test:
     db: mysql
@@ -1608,7 +1650,8 @@ func TestMCPSchema_ListTables_MySQL(t *testing.T) {
 `)
 
 	result, err := callMCPTool(t, config, "schema_list_tables", map[string]any{
-		"profile": "test",
+		"profile":       "test",
+		"table_pattern": table[:10] + "*",
 	})
 	if err != nil {
 		t.Fatalf("schema_list_tables failed: %v", err)
@@ -1636,10 +1679,21 @@ func TestMCPSchema_ListTables_MySQL(t *testing.T) {
 	if response.Data.Database == "" {
 		t.Error("expected non-empty database name")
 	}
+	found := false
+	for _, row := range response.Data.Tables {
+		if row.Name == table {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected created table %q in list, got %+v", table, response.Data.Tables)
+	}
 }
 
 func TestMCPSchema_Dump_MySQL(t *testing.T) {
 	dsn := mysqlDSN(t)
+	table := createMySQLMCPE2ETable(t)
 	config := createTempConfig(t, `profiles:
   test:
     db: mysql
@@ -1647,7 +1701,8 @@ func TestMCPSchema_Dump_MySQL(t *testing.T) {
 `)
 
 	result, err := callMCPTool(t, config, "schema_dump", map[string]any{
-		"profile": "test",
+		"profile":       "test",
+		"table_pattern": table,
 	})
 	if err != nil {
 		t.Fatalf("schema_dump failed: %v", err)
@@ -1670,10 +1725,14 @@ func TestMCPSchema_Dump_MySQL(t *testing.T) {
 	if response.SchemaVersion != 1 {
 		t.Errorf("schema_version want 1 got %d", response.SchemaVersion)
 	}
+	if len(response.Data.Tables) != 1 {
+		t.Fatalf("expected 1 table in dump, got %d", len(response.Data.Tables))
+	}
 }
 
 func TestMCPSchema_ListTables_PostgreSQL(t *testing.T) {
 	dsn := pgDSN(t)
+	schema, table := createPGMCPE2ETable(t)
 	config := createTempConfig(t, `profiles:
   test:
     db: pg
@@ -1681,7 +1740,8 @@ func TestMCPSchema_ListTables_PostgreSQL(t *testing.T) {
 `)
 
 	result, err := callMCPTool(t, config, "schema_list_tables", map[string]any{
-		"profile": "test",
+		"profile":       "test",
+		"table_pattern": table[:10] + "*",
 	})
 	if err != nil {
 		t.Fatalf("schema_list_tables failed: %v", err)
@@ -1689,23 +1749,8 @@ func TestMCPSchema_ListTables_PostgreSQL(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("expected success, got: %v", result.Content)
 	}
-}
 
-func TestMCPSchema_DescribeTable_PostgreSQL(t *testing.T) {
-	dsn := pgDSN(t)
-	config := createTempConfig(t, `profiles:
-  test:
-    db: pg
-    dsn: "`+dsn+`"
-`)
-
-	listResult, err := callMCPTool(t, config, "schema_list_tables", map[string]any{
-		"profile": "test",
-	})
-	if err != nil || listResult.IsError {
-		t.Fatalf("schema_list_tables: err=%v result=%+v", err, listResult)
-	}
-	text := listResult.Content[0].(*mcp.TextContent).Text
+	textContent := result.Content[0].(*mcp.TextContent)
 	var listResp struct {
 		Data struct {
 			Tables []struct {
@@ -1714,18 +1759,72 @@ func TestMCPSchema_DescribeTable_PostgreSQL(t *testing.T) {
 			} `json:"tables"`
 		} `json:"data"`
 	}
-	if err := json.Unmarshal([]byte(text), &listResp); err != nil {
+	if err := json.Unmarshal([]byte(textContent.Text), &listResp); err != nil {
 		t.Fatalf("parse list: %v", err)
 	}
-	if len(listResp.Data.Tables) == 0 {
-		t.Skip("no user tables in test database")
+	found := false
+	for _, row := range listResp.Data.Tables {
+		if row.Schema == schema && row.Name == table {
+			found = true
+			break
+		}
 	}
-	first := listResp.Data.Tables[0]
+	if !found {
+		t.Fatalf("expected table %s.%s in list", schema, table)
+	}
+}
+
+func TestMCPSchema_DescribeTable_PostgreSQL(t *testing.T) {
+	dsn := pgDSN(t)
+	schema, table := createPGMCPE2ETable(t)
+	config := createTempConfig(t, `profiles:
+  test:
+    db: pg
+    dsn: "`+dsn+`"
+`)
 
 	descResult, err := callMCPTool(t, config, "schema_describe_table", map[string]any{
 		"profile": "test",
-		"schema":  first.Schema,
-		"table":   first.Name,
+		"schema":  schema,
+		"table":   table,
+	})
+	if err != nil {
+		t.Fatalf("schema_describe_table failed: %v", err)
+	}
+	if descResult.IsError {
+		t.Fatalf("expected success, got: %v", descResult.Content)
+	}
+
+	text := descResult.Content[0].(*mcp.TextContent).Text
+	var descResp struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Name    string `json:"name"`
+			Columns []struct {
+				Name string `json:"name"`
+			} `json:"columns"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(text), &descResp); err != nil {
+		t.Fatalf("parse describe: %v", err)
+	}
+	if descResp.Data.Name != table || len(descResp.Data.Columns) == 0 {
+		t.Fatalf("unexpected describe payload: %+v", descResp.Data)
+	}
+}
+
+func TestMCPSchema_DescribeTable_MySQL(t *testing.T) {
+	dsn := mysqlDSN(t)
+	table := createMySQLMCPE2ETable(t)
+	config := createTempConfig(t, `profiles:
+  test:
+    db: mysql
+    dsn: "`+dsn+`"
+`)
+
+	descResult, err := callMCPTool(t, config, "schema_describe_table", map[string]any{
+		"profile": "test",
+		"table":   table,
 	})
 	if err != nil {
 		t.Fatalf("schema_describe_table failed: %v", err)

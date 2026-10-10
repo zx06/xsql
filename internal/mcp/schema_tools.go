@@ -9,10 +9,26 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/zx06/xsql/internal/app"
+	"github.com/zx06/xsql/internal/db"
 	"github.com/zx06/xsql/internal/errors"
 )
 
-const defaultMCPSchemaTimeout = 60 * time.Second
+const (
+	defaultMCPSchemaTimeout = 60 * time.Second
+	msgInvalidInput         = "invalid input"
+	msgProfileRequired      = "profile is required"
+)
+
+// schemaApp delegates schema operations to internal/app (overridable in tests).
+var schemaApp = struct {
+	ListTables    func(context.Context, app.TableListRequest) (*db.TableList, *errors.XError)
+	DumpSchema    func(context.Context, app.SchemaDumpRequest) (*db.SchemaInfo, *errors.XError)
+	DescribeTable func(context.Context, app.TableDescribeRequest) (*db.Table, *errors.XError)
+}{
+	ListTables:    app.ListTables,
+	DumpSchema:    app.DumpSchema,
+	DescribeTable: app.DescribeTable,
+}
 
 // SchemaListTablesInput is input for schema_list_tables.
 type SchemaListTablesInput struct {
@@ -96,7 +112,7 @@ func (h *ToolHandler) registerSchemaTools(server *mcp.Server, profileEnums []any
 func (h *ToolHandler) schemaListTablesHandler(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var input SchemaListTablesInput
 	if err := json.Unmarshal(req.Params.Arguments, &input); err != nil {
-		return h.errorFromErr(errors.Wrap(errors.CodeCfgInvalid, "invalid input", nil, err)), nil
+		return h.errorFromErr(errors.Wrap(errors.CodeCfgInvalid, msgInvalidInput, nil, err)), nil
 	}
 	result, _, err := h.SchemaListTables(ctx, req, input)
 	return result, err
@@ -105,7 +121,7 @@ func (h *ToolHandler) schemaListTablesHandler(ctx context.Context, req *mcp.Call
 func (h *ToolHandler) schemaDumpHandler(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var input SchemaDumpInput
 	if err := json.Unmarshal(req.Params.Arguments, &input); err != nil {
-		return h.errorFromErr(errors.Wrap(errors.CodeCfgInvalid, "invalid input", nil, err)), nil
+		return h.errorFromErr(errors.Wrap(errors.CodeCfgInvalid, msgInvalidInput, nil, err)), nil
 	}
 	result, _, err := h.SchemaDump(ctx, req, input)
 	return result, err
@@ -114,7 +130,7 @@ func (h *ToolHandler) schemaDumpHandler(ctx context.Context, req *mcp.CallToolRe
 func (h *ToolHandler) schemaDescribeTableHandler(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var input SchemaDescribeTableInput
 	if err := json.Unmarshal(req.Params.Arguments, &input); err != nil {
-		return h.errorFromErr(errors.Wrap(errors.CodeCfgInvalid, "invalid input", nil, err)), nil
+		return h.errorFromErr(errors.Wrap(errors.CodeCfgInvalid, msgInvalidInput, nil, err)), nil
 	}
 	result, _, err := h.SchemaDescribeTable(ctx, req, input)
 	return result, err
@@ -123,7 +139,7 @@ func (h *ToolHandler) schemaDescribeTableHandler(ctx context.Context, req *mcp.C
 // SchemaListTables lists tables via internal/app.
 func (h *ToolHandler) SchemaListTables(ctx context.Context, req *mcp.CallToolRequest, input SchemaListTablesInput) (*mcp.CallToolResult, any, error) {
 	if input.Profile == "" {
-		return h.errorResult(errors.New(errors.CodeCfgInvalid, "profile is required", nil)), nil, nil
+		return h.errorResult(errors.New(errors.CodeCfgInvalid, msgProfileRequired, nil)), nil, nil
 	}
 	profile, xe := h.resolveProfile(input.Profile)
 	if xe != nil {
@@ -135,7 +151,7 @@ func (h *ToolHandler) SchemaListTables(ctx context.Context, req *mcp.CallToolReq
 	defer cancel()
 
 	start := time.Now()
-	result, xe := app.ListTables(ctx, app.TableListRequest{
+	result, xe := schemaApp.ListTables(ctx, app.TableListRequest{
 		Profile:          profile,
 		TablePattern:     input.TablePattern,
 		IncludeSystem:    input.IncludeSystem,
@@ -153,7 +169,7 @@ func (h *ToolHandler) SchemaListTables(ctx context.Context, req *mcp.CallToolReq
 // SchemaDump dumps schema via internal/app.
 func (h *ToolHandler) SchemaDump(ctx context.Context, req *mcp.CallToolRequest, input SchemaDumpInput) (*mcp.CallToolResult, any, error) {
 	if input.Profile == "" {
-		return h.errorResult(errors.New(errors.CodeCfgInvalid, "profile is required", nil)), nil, nil
+		return h.errorResult(errors.New(errors.CodeCfgInvalid, msgProfileRequired, nil)), nil, nil
 	}
 	profile, xe := h.resolveProfile(input.Profile)
 	if xe != nil {
@@ -165,7 +181,7 @@ func (h *ToolHandler) SchemaDump(ctx context.Context, req *mcp.CallToolRequest, 
 	defer cancel()
 
 	start := time.Now()
-	result, xe := app.DumpSchema(ctx, app.SchemaDumpRequest{
+	result, xe := schemaApp.DumpSchema(ctx, app.SchemaDumpRequest{
 		Profile:          profile,
 		TablePattern:     input.TablePattern,
 		IncludeSystem:    input.IncludeSystem,
@@ -183,7 +199,7 @@ func (h *ToolHandler) SchemaDump(ctx context.Context, req *mcp.CallToolRequest, 
 // SchemaDescribeTable describes one table via internal/app.
 func (h *ToolHandler) SchemaDescribeTable(ctx context.Context, req *mcp.CallToolRequest, input SchemaDescribeTableInput) (*mcp.CallToolResult, any, error) {
 	if input.Profile == "" {
-		return h.errorResult(errors.New(errors.CodeCfgInvalid, "profile is required", nil)), nil, nil
+		return h.errorResult(errors.New(errors.CodeCfgInvalid, msgProfileRequired, nil)), nil, nil
 	}
 	if input.Table == "" {
 		return h.errorResult(errors.New(errors.CodeCfgInvalid, "table is required", nil)), nil, nil
@@ -198,7 +214,7 @@ func (h *ToolHandler) SchemaDescribeTable(ctx context.Context, req *mcp.CallTool
 	defer cancel()
 
 	start := time.Now()
-	result, xe := app.DescribeTable(ctx, app.TableDescribeRequest{
+	result, xe := schemaApp.DescribeTable(ctx, app.TableDescribeRequest{
 		Profile:          profile,
 		Schema:           input.Schema,
 		Name:             input.Table,
