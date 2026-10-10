@@ -8,15 +8,13 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/zx06/xsql/internal/app"
 	"github.com/zx06/xsql/internal/config"
-	"github.com/zx06/xsql/internal/db"
-	_ "github.com/zx06/xsql/internal/db/mysql"
-	_ "github.com/zx06/xsql/internal/db/pg"
 	"github.com/zx06/xsql/internal/errors"
-	"github.com/zx06/xsql/internal/secret"
-	"github.com/zx06/xsql/internal/ssh"
 	"github.com/zx06/xsql/internal/stats"
 )
+
+const defaultMCPQueryTimeout = 30 * time.Second
 
 // QueryInput represents the input for the query tool
 type QueryInput struct {
@@ -63,6 +61,10 @@ func (h *ToolHandler) getProfileNames() []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+func (h *ToolHandler) resolveProfile(name string) (config.Profile, *errors.XError) {
+	return app.ResolveProfile(*h.config, name)
 }
 
 // RegisterTools registers all tools with the MCP server
@@ -118,18 +120,15 @@ func (h *ToolHandler) RegisterTools(server *mcp.Server) {
 		Description: "Show profile details",
 		InputSchema: profileShowSchema,
 	}, h.profileShowHandler)
+
+	h.registerSchemaTools(server, profileEnums)
 }
 
 // queryHandler is the raw handler for query tool
 func (h *ToolHandler) queryHandler(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var input QueryInput
 	if err := json.Unmarshal(req.Params.Arguments, &input); err != nil {
-		return &mcp.CallToolResult{
-			IsError: true,
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: h.formatError(errors.Wrap(errors.CodeCfgInvalid, "invalid input", nil, err))},
-			},
-		}, nil
+		return h.errorFromErr(errors.Wrap(errors.CodeCfgInvalid, "invalid input", nil, err)), nil
 	}
 	result, _, err := h.Query(ctx, req, input)
 	return result, err
@@ -139,194 +138,44 @@ func (h *ToolHandler) queryHandler(ctx context.Context, req *mcp.CallToolRequest
 func (h *ToolHandler) profileShowHandler(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var input ProfileShowInput
 	if err := json.Unmarshal(req.Params.Arguments, &input); err != nil {
-		return &mcp.CallToolResult{
-			IsError: true,
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: h.formatError(errors.Wrap(errors.CodeCfgInvalid, "invalid input", nil, err))},
-			},
-		}, nil
+		return h.errorFromErr(errors.Wrap(errors.CodeCfgInvalid, "invalid input", nil, err)), nil
 	}
 	result, _, err := h.ProfileShow(ctx, req, input)
 	return result, err
 }
 
-// Query executes a SQL query
+// Query executes a SQL query via internal/app.
 func (h *ToolHandler) Query(ctx context.Context, req *mcp.CallToolRequest, input QueryInput) (*mcp.CallToolResult, any, error) {
-	// Validate required fields
 	if input.SQL == "" {
-		return &mcp.CallToolResult{
-			IsError: true,
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: h.formatError(errors.New(errors.CodeCfgInvalid, "sql is required", nil))},
-			},
-		}, nil, nil
+		return h.errorResult(errors.New(errors.CodeCfgInvalid, "sql is required", nil)), nil, nil
 	}
-
 	if input.Profile == "" {
-		return &mcp.CallToolResult{
-			IsError: true,
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: h.formatError(errors.New(errors.CodeCfgInvalid, "profile is required", nil))},
-			},
-		}, nil, nil
+		return h.errorResult(errors.New(errors.CodeCfgInvalid, "profile is required", nil)), nil, nil
 	}
 
-	// Get profile
-	profile := h.getProfile(input.Profile)
-	if profile == nil {
-		return &mcp.CallToolResult{
-			IsError: true,
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: h.formatError(errors.New(errors.CodeCfgInvalid, "profile does not exist", map[string]any{"name": input.Profile, "reason": "profile_not_found"}))},
-			},
-		}, nil, nil
-	}
-
-	// Validate SSH proxy reference if present
-	if profile.SSHProxy != "" && profile.SSHConfig == nil {
-		return &mcp.CallToolResult{
-			IsError: true,
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: h.formatError(errors.New(errors.CodeCfgInvalid, "ssh_proxy not found", map[string]any{"profile": input.Profile, "ssh_proxy": profile.SSHProxy, "reason": "ssh_proxy_not_found"}))},
-			},
-		}, nil, nil
-	}
-
-	if profile.DB == "" {
-		return &mcp.CallToolResult{
-			IsError: true,
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: h.formatError(errors.New(errors.CodeCfgInvalid, "db type is required (mysql|pg)", nil))},
-			},
-		}, nil, nil
-	}
-
-	// Parse password
-	password := profile.Password
-	if password != "" {
-		pw, xe := secret.Resolve(password, secret.Options{AllowPlaintext: profile.AllowPlaintext})
-		if xe != nil {
-			return &mcp.CallToolResult{
-				IsError: true,
-				Content: []mcp.Content{
-					&mcp.TextContent{Text: h.formatError(xe)},
-				},
-			}, nil, nil
-		}
-		password = pw
-	}
-
-	// SSH proxy
-	var sshClient *ssh.Client
-	if profile.SSHConfig != nil {
-		passphrase := profile.SSHConfig.Passphrase
-		if passphrase != "" {
-			pp, xe := secret.Resolve(passphrase, secret.Options{AllowPlaintext: profile.AllowPlaintext})
-			if xe != nil {
-				return &mcp.CallToolResult{
-					IsError: true,
-					Content: []mcp.Content{
-						&mcp.TextContent{Text: h.formatError(xe)},
-					},
-				}, nil, nil
-			}
-			passphrase = pp
-		}
-		sshOpts := ssh.Options{
-			Host:           profile.SSHConfig.Host,
-			Port:           profile.SSHConfig.Port,
-			User:           profile.SSHConfig.User,
-			IdentityFile:   profile.SSHConfig.IdentityFile,
-			Passphrase:     passphrase,
-			KnownHostsFile: profile.SSHConfig.KnownHostsFile,
-		}
-		sc, xe := ssh.Connect(ctx, sshOpts)
-		if xe != nil {
-			return &mcp.CallToolResult{
-				IsError: true,
-				Content: []mcp.Content{
-					&mcp.TextContent{Text: h.formatError(xe)},
-				},
-			}, nil, nil
-		}
-		defer sc.Close()
-		sshClient = sc
-	}
-
-	// Get driver
-	drv, ok := db.Get(profile.DB)
-	if !ok {
-		return &mcp.CallToolResult{
-			IsError: true,
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: h.formatError(errors.New(errors.CodeDBDriverUnsupported, "unsupported db driver", map[string]any{"db": profile.DB}))},
-			},
-		}, nil, nil
-	}
-
-	connOpts := db.ConnOptions{
-		DSN:      profile.DSN,
-		Host:     profile.Host,
-		Port:     profile.Port,
-		User:     profile.User,
-		Password: password,
-		Database: profile.Database,
-	}
-	if sshClient != nil {
-		connOpts.Dialer = sshClient
-	}
-
-	conn, xe := drv.Open(ctx, connOpts)
+	profile, xe := h.resolveProfile(input.Profile)
 	if xe != nil {
-		return &mcp.CallToolResult{
-			IsError: true,
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: h.formatError(xe)},
-			},
-		}, nil, nil
+		return h.errorResult(xe), nil, nil
 	}
-	defer conn.Close()
 
-	// Query options - use read-only mode by default
+	timeout := app.QueryTimeout(profile, 0, false, defaultMCPQueryTimeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
 	start := time.Now()
-	result, xe := db.Query(ctx, conn, input.SQL, db.QueryOptions{
+	result, xe := app.Query(ctx, app.QueryRequest{
+		Profile:          profile,
+		SQL:              input.SQL,
+		AllowPlaintext:   profile.AllowPlaintext,
+		SkipHostKeyCheck: false,
 		UnsafeAllowWrite: WriteAllowed(h.serverAllowsWrite, profile.UnsafeAllowWrite),
-		DBType:           profile.DB,
 	})
-
-	// Record stats
 	h.recordMCPStats("query", input.Profile, xe == nil, time.Since(start), xe, input.SQL)
 
 	if xe != nil {
-		return &mcp.CallToolResult{
-			IsError: true,
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: h.formatError(xe)},
-			},
-		}, nil, nil
+		return h.errorResult(xe), nil, nil
 	}
-
-	output := map[string]any{
-		"ok":             true,
-		"schema_version": 1,
-		"data":           result,
-	}
-	jsonData, err := json.MarshalIndent(output, "", "  ")
-	if err != nil {
-		return &mcp.CallToolResult{
-			IsError: true,
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: h.formatError(errors.Wrap(errors.CodeInternal, "failed to marshal result", nil, err))},
-			},
-		}, nil, nil
-	}
-
-	// Return result directly in content per RFC
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(jsonData)},
-		},
-	}, nil, nil
+	return h.successResult(result)
 }
 
 // ProfileList lists all profiles
@@ -335,47 +184,20 @@ func (h *ToolHandler) ProfileList(ctx context.Context, req *mcp.CallToolRequest,
 	for name, p := range h.config.Profiles {
 		profiles = append(profiles, config.ProfileToInfo(name, p))
 	}
-
-	output := map[string]any{
-		"ok":             true,
-		"schema_version": 1,
-		"data": map[string]any{
-			"profiles": profiles,
-		},
-	}
-	jsonData, err := json.MarshalIndent(output, "", "  ")
-	if err != nil {
-		return &mcp.CallToolResult{
-			IsError: true,
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: h.formatError(errors.Wrap(errors.CodeInternal, "failed to marshal result", nil, err))},
-			},
-		}, nil, nil
-	}
-
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(jsonData)},
-		},
-	}, nil, nil
+	return h.successResult(map[string]any{"profiles": profiles})
 }
 
 // ProfileShow shows profile details
 func (h *ToolHandler) ProfileShow(ctx context.Context, req *mcp.CallToolRequest, input ProfileShowInput) (*mcp.CallToolResult, any, error) {
-	profile, ok := h.config.Profiles[input.Name]
-	if !ok {
-		return &mcp.CallToolResult{
-			IsError: true,
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: h.formatError(errors.New(errors.CodeCfgInvalid, "profile does not exist", map[string]any{"name": input.Name, "reason": "profile_not_found"}))},
-			},
-		}, nil, nil
+	profile, xe := h.resolveProfile(input.Name)
+	if xe != nil {
+		return h.errorResult(xe), nil, nil
 	}
+	p := h.config.Profiles[input.Name]
 
-	// Redact sensitive information
 	result := map[string]any{
 		"name":               input.Name,
-		"description":        profile.Description,
+		"description":        p.Description,
 		"db":                 profile.DB,
 		"host":               profile.Host,
 		"port":               profile.Port,
@@ -384,71 +206,24 @@ func (h *ToolHandler) ProfileShow(ctx context.Context, req *mcp.CallToolRequest,
 		"unsafe_allow_write": profile.UnsafeAllowWrite,
 		"allow_plaintext":    profile.AllowPlaintext,
 	}
-	if profile.DSN != "" {
+	if p.DSN != "" {
 		result["dsn"] = "***"
 	}
-	if profile.Password != "" {
+	if p.Password != "" {
 		result["password"] = "***"
 	}
 	if profile.SSHProxy != "" {
 		result["ssh_proxy"] = profile.SSHProxy
-		if proxy, ok := h.config.SSHProxies[profile.SSHProxy]; ok {
-			result["ssh_host"] = proxy.Host
-			result["ssh_port"] = proxy.Port
-			result["ssh_user"] = proxy.User
-			if proxy.IdentityFile != "" {
-				result["ssh_identity_file"] = proxy.IdentityFile
+		if profile.SSHConfig != nil {
+			result["ssh_host"] = profile.SSHConfig.Host
+			result["ssh_port"] = profile.SSHConfig.Port
+			result["ssh_user"] = profile.SSHConfig.User
+			if profile.SSHConfig.IdentityFile != "" {
+				result["ssh_identity_file"] = profile.SSHConfig.IdentityFile
 			}
 		}
 	}
-
-	output := map[string]any{
-		"ok":             true,
-		"schema_version": 1,
-		"data":           result,
-	}
-	jsonData, err := json.MarshalIndent(output, "", "  ")
-	if err != nil {
-		return &mcp.CallToolResult{
-			IsError: true,
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: h.formatError(errors.Wrap(errors.CodeInternal, "failed to marshal result", nil, err))},
-			},
-		}, nil, nil
-	}
-
-	// Return result directly in content per RFC
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(jsonData)},
-		},
-	}, nil, nil
-}
-
-// getProfile gets a profile by name, or returns the default profile
-// Also resolves SSH proxy reference if present
-func (h *ToolHandler) getProfile(name string) *config.Profile {
-	if name == "" {
-		// Use default profile (first one)
-		for _, p := range h.config.Profiles {
-			return &p
-		}
-		return nil
-	}
-
-	profile, ok := h.config.Profiles[name]
-	if !ok {
-		return nil
-	}
-
-	// Resolve SSH proxy reference
-	if profile.SSHProxy != "" {
-		if proxy, ok := h.config.SSHProxies[profile.SSHProxy]; ok {
-			profile.SSHConfig = &proxy
-		}
-	}
-
-	return &profile
+	return h.successResult(result)
 }
 
 // formatError formats an error as JSON

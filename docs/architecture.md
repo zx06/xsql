@@ -33,4 +33,5 @@
 - DB driver：通过 registry 注册，实现新数据库无需改动核心逻辑。
 - 输出 formatter：通过接口注册新格式。
 - Frontend：CLI/MCP/TUI/Web 仅是调用 `internal/app` 的不同适配层。
+- MCP：`internal/mcp` 注册 MCP tools，数据库与 schema 操作经 `internal/app`（与 Web 相同），不重复实现连接/SSH。
 - Web：本地 HTTP server 与嵌入式前端通过 `internal/web` 适配，复用 `internal/app` 业务服务。

@@ -412,6 +412,23 @@ func TestResolveReconnectableSSH_NilCallback(t *testing.T) {
 	_ = xe
 }
 
+func TestSSHOptionsForProfile_ProfileSkipHostKey(t *testing.T) {
+	profile := config.Profile{
+		SSHConfig: &config.SSHProxy{
+			Host:        "bastion.example.com",
+			SkipHostKey: true,
+		},
+	}
+
+	opts, xe := SSHOptionsForProfile(profile, false, false)
+	if xe != nil {
+		t.Fatalf("unexpected error: %v", xe)
+	}
+	if !opts.SkipKnownHostsCheck {
+		t.Error("expected SkipKnownHostsCheck from profile skip_host_key")
+	}
+}
+
 func TestResolveSSHOptions_Success(t *testing.T) {
 	profile := config.Profile{
 		SSHConfig: &config.SSHProxy{
@@ -422,7 +439,7 @@ func TestResolveSSHOptions_Success(t *testing.T) {
 		},
 	}
 
-	opts, xe := resolveSSHOptions(profile, true, true)
+	opts, xe := SSHOptionsForProfile(profile, true, true)
 	if xe != nil {
 		t.Fatalf("unexpected error: %v", xe)
 	}
