@@ -32,7 +32,7 @@ jobs:
 
       - name: Run actionlint
         working-directory: .github/tools
-        run: go run github.com/rhysd/actionlint/cmd/actionlint -color ../..
+        run: go run github.com/rhysd/actionlint/cmd/actionlint -color "${{ github.workspace }}/.github/workflows"
 
   build:
     name: GoReleaser snapshot build
