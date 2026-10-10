@@ -9,72 +9,65 @@ import (
 	"time"
 
 	"github.com/zx06/xsql/internal/db"
-	_ "github.com/zx06/xsql/internal/db/mysql"
-	_ "github.com/zx06/xsql/internal/db/pg"
+	_ "github.com/zx06/xsql/internal/db/mysql" // register mysql driver
+	_ "github.com/zx06/xsql/internal/db/pg"    // register pg driver
 )
 
-func TestMySQL_ListTables_IncludeSystemDbTable(t *testing.T) {
-	dsn := os.Getenv("XSQL_TEST_MYSQL_DSN")
-	if dsn == "" {
-		t.Skip("XSQL_TEST_MYSQL_DSN not set")
+func TestListTables_IncludeSystem(t *testing.T) {
+	cases := []struct {
+		name       string
+		envDSN     string
+		driver     string
+		pattern    string
+		wantSchema string
+		wantTable  string
+	}{
+		{
+			name:       "mysql_db",
+			envDSN:     "XSQL_TEST_MYSQL_DSN",
+			driver:     "mysql",
+			pattern:    "db",
+			wantSchema: "mysql",
+			wantTable:  "db",
+		},
+		{
+			name:       "pg_pg_namespace",
+			envDSN:     "XSQL_TEST_PG_DSN",
+			driver:     "pg",
+			pattern:    "pg_namespace",
+			wantSchema: "pg_catalog",
+			wantTable:  "pg_namespace",
+		},
 	}
-	drv, _ := db.Get("mysql")
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	conn, xe := drv.Open(ctx, db.ConnOptions{DSN: dsn})
-	if xe != nil {
-		t.Fatalf("open: %v", xe)
-	}
-	defer conn.Close()
 
-	list, xe := db.ListTables(ctx, "mysql", conn, db.SchemaOptions{
-		TablePattern:  "db",
-		IncludeSystem: true,
-	})
-	if xe != nil {
-		t.Fatalf("ListTables: %v", xe)
-	}
-	found := false
-	for _, tbl := range list.Tables {
-		if tbl.Schema == "mysql" && tbl.Name == "db" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("expected mysql.db with include_system, got %d tables", len(list.Tables))
-	}
-}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dsn := os.Getenv(tc.envDSN)
+			if dsn == "" {
+				t.Skip(tc.envDSN + " not set")
+			}
+			drv, _ := db.Get(tc.driver)
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			conn, xe := drv.Open(ctx, db.ConnOptions{DSN: dsn})
+			if xe != nil {
+				t.Fatalf("open: %v", xe)
+			}
+			defer conn.Close()
 
-func TestPg_ListTables_IncludeSystemPgNamespace(t *testing.T) {
-	dsn := os.Getenv("XSQL_TEST_PG_DSN")
-	if dsn == "" {
-		t.Skip("XSQL_TEST_PG_DSN not set")
-	}
-	drv, _ := db.Get("pg")
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	conn, xe := drv.Open(ctx, db.ConnOptions{DSN: dsn})
-	if xe != nil {
-		t.Fatalf("open: %v", xe)
-	}
-	defer conn.Close()
-
-	list, xe := db.ListTables(ctx, "pg", conn, db.SchemaOptions{
-		TablePattern:  "pg_namespace",
-		IncludeSystem: true,
-	})
-	if xe != nil {
-		t.Fatalf("ListTables: %v", xe)
-	}
-	found := false
-	for _, tbl := range list.Tables {
-		if tbl.Schema == "pg_catalog" && tbl.Name == "pg_namespace" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("expected pg_catalog.pg_namespace, got %d tables", len(list.Tables))
+			list, xe := db.ListTables(ctx, tc.driver, conn, db.SchemaOptions{
+				TablePattern:  tc.pattern,
+				IncludeSystem: true,
+			})
+			if xe != nil {
+				t.Fatalf("ListTables: %v", xe)
+			}
+			for _, tbl := range list.Tables {
+				if tbl.Schema == tc.wantSchema && tbl.Name == tc.wantTable {
+					return
+				}
+			}
+			t.Fatalf("expected %s.%s, got %d tables", tc.wantSchema, tc.wantTable, len(list.Tables))
+		})
 	}
 }
