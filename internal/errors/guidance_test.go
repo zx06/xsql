@@ -59,6 +59,21 @@ func TestConfigGuidance(t *testing.T) {
 	}
 }
 
+func TestConfigGuidance_TableNotFound(t *testing.T) {
+	xe := New(CodeCfgInvalid, "table not found", map[string]any{
+		"reason": "table_not_found",
+		"schema": "public",
+		"name":   "missing_tbl",
+	})
+	if xe.Details["category"] != string(CategoryUnknownTable) {
+		t.Errorf("category = %v", xe.Details["category"])
+	}
+	hint, _ := xe.Details["hint"].(string)
+	if !containsFold(hint, "schema_list_tables") {
+		t.Errorf("hint = %q", hint)
+	}
+}
+
 func TestClassifyNetworkTimeout(t *testing.T) {
 	err := &net.DNSError{IsTimeout: true, Err: "timeout"}
 	c, ok := classifyNetworkError(err)

@@ -76,12 +76,15 @@ xsql mcp server --transport streamable_http --http-addr 127.0.0.1:8787 --http-au
 ```
 
 ### MCP Tools
-MCP Server 提供以下 tools：
+MCP Server 提供以下 tools（均经 `internal/app`，SSH/连接行为与 CLI/Web 一致）：
 - **query**: 执行 SQL 查询（默认只读；写入需 profile `unsafe_allow_write: true` 且 server 启动时 `--unsafe-allow-write`）
+- **schema_list_tables**: 轻量表清单（可选 `table_pattern`、`include_system`），适合大库先做 discovery
+- **schema_dump**: 与 `xsql schema dump` 等价的结构化导出（建议配合 `table_pattern` 控制体积）
+- **schema_describe_table**: 单表结构（列、索引、外键）；PostgreSQL 需 `schema`，MySQL 可省略
 - **profile_list**: 列出所有配置的 profiles
 - **profile_show**: 查看 profile 详情
 
-MCP 写入与 CLI 一样采用双重授权：仅在 profile 与 MCP server 启动参数同时开启时，`query` tool 才会绕过只读保护。
+MCP 写入与 CLI 一样采用双重授权：仅在 profile 与 MCP server 启动参数同时开启时，`query` tool 才会绕过只读保护。Schema tools 始终只读。
 
 ### 集成示例
 在 Claude Desktop 配置中添加：

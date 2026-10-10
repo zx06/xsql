@@ -81,7 +81,7 @@ func classifyMySQLError(e *mysql.MySQLError) dbClassification {
 	switch e.Number {
 	case 1146, 1049:
 		c.Category = CategoryUnknownTable
-		c.Hint = "Table or database not found; run `xsql schema dump` (or query information_schema) to list valid tables, then fix the SQL."
+		c.Hint = "Table or database not found; use MCP `schema_list_tables` or `xsql schema dump` to list valid tables, then fix the SQL."
 		c.Retryable = false
 	case 1054, 1109:
 		c.Category = CategoryUnknownColumn
@@ -127,7 +127,7 @@ func classifyPgError(e *pgconn.PgError) dbClassification {
 	switch e.Code {
 	case "42P01", "3F000":
 		c.Category = CategoryUnknownTable
-		c.Hint = "Table or schema not found; run `xsql schema dump` to list tables, then fix the SQL."
+		c.Hint = "Table or schema not found; use MCP `schema_list_tables` or `xsql schema dump` to list tables, then fix the SQL."
 		c.Retryable = false
 	case "42703":
 		c.Category = CategoryUnknownColumn

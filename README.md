@@ -148,7 +148,7 @@ Add the xsql MCP server to your Claude Desktop configuration:
 }
 ```
 
-Once started, Claude can query databases directly via the MCP protocol (read-only by default). To allow writes over MCP, set profile `unsafe_allow_write: true` **and** add `--unsafe-allow-write` to the MCP server `args`.
+Once started, Claude can query databases directly via the MCP protocol (read-only by default). MCP also exposes schema discovery tools (`schema_list_tables`, `schema_dump`, `schema_describe_table`) with the same JSON contract as the CLI. To allow writes over MCP, set profile `unsafe_allow_write: true` **and** add `--unsafe-allow-write` to the MCP server `args`.
 
 ### Option 5: AGENTS.md / Rules (Cursor/Windsurf)
 

@@ -20,6 +20,7 @@
 | [0012](0012-goja-js-data-analysis.md) | goja Data Analysis & ReAct Loop | Implemented |
 | [0013](0013-ai-multi-tool-calls-sequential-execution.md) | AI Multi Tool Call Sequential Execution & Dialect Guidance | Implemented |
 | [0014](0014-mcp-write-dual-authorization.md) | MCP 写入双重授权 | Implemented |
+| [0015](0015-mcp-app-layer-schema-tools.md) | MCP 复用 app 层与 Schema Tools | Implemented |
 | [0016](0016-error-guidance-for-agents.md) | AI Agent 错误指引（Error Guidance） | Accepted |
 
 ## 何时需要 RFC

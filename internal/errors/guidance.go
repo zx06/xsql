@@ -146,6 +146,14 @@ func sshGuidance(xe *XError) map[string]any {
 }
 
 func configGuidance(xe *XError) map[string]any {
+	if reason, _ := xe.Details["reason"].(string); reason == "table_not_found" {
+		return map[string]any{
+			detailCategory:  string(CategoryUnknownTable),
+			detailRetryable: false,
+			detailHint:      "Table not found; call MCP tool `schema_list_tables` (or `xsql schema dump` / `schema describe`) to list valid tables, then retry with the correct name or `table_pattern`.",
+		}
+	}
+
 	out := map[string]any{
 		detailRetryable: false,
 		detailCategory:  "config",

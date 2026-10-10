@@ -24,8 +24,9 @@ Status: Implemented
       auth_token: "keyring:mcp/http_token"
       allow_plaintext_token: false
   ```
-- MCP Server 提供的 tools：
+- MCP Server 提供的 tools（详见 RFC 0015 增量）：
   - `query`: 执行 SQL 查询（支持只读模式）
+  - `schema_list_tables` / `schema_dump` / `schema_describe_table`: schema discovery
   - `profile_list`: 列出所有 profiles
   - `profile_show`: 查看 profile 详情
 
@@ -42,7 +43,7 @@ Status: Implemented
   - Streamable HTTP: 使用 MCP Streamable HTTP 传输，必须启用鉴权
 - 兼容性策略：
   - 新增能力，不影响 CLI 现有功能
-  - MCP server 使用独立的代码路径，复用 internal 层的核心能力
+  - MCP server 经 `internal/app` 复用连接/SSH/schema 能力（RFC 0015）
 
 ### MCP Tools 设计
 1. **query_tool**:

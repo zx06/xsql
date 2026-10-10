@@ -177,6 +177,13 @@ func ResolveReconnectableSSH(ctx context.Context, profile config.Profile, allowP
 	return rd, nil
 }
 
+// SSHOptionsForProfile builds SSH options from a resolved profile, resolving secrets.
+// skipHostKeyCheck is the runtime override (e.g. CLI --ssh-skip-known-hosts-check);
+// profile ssh_proxy.skip_host_key is also honored.
+func SSHOptionsForProfile(profile config.Profile, allowPlaintext, skipHostKeyCheck bool) (ssh.Options, *errors.XError) {
+	return resolveSSHOptions(profile, allowPlaintext, skipHostKeyCheck)
+}
+
 // resolveSSHOptions builds SSH options from a profile, resolving secrets.
 func resolveSSHOptions(profile config.Profile, allowPlaintext, skipHostKeyCheck bool) (ssh.Options, *errors.XError) {
 	passphrase := profile.SSHConfig.Passphrase

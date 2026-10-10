@@ -164,6 +164,7 @@ Table and CSV formats are for humans — they lack the `ok`/`schema_version` env
 
 ```bash
 # MCP server for AI assistant integration (read-only by default)
+# Tools: query, schema_list_tables, schema_dump, schema_describe_table, profile_list, profile_show
 xsql mcp server --attr source=codex-cli --attr agent=codex # stdio transport (default)
 # Writes (only when user explicitly requests): add --unsafe-allow-write and ensure profile unsafe_allow_write: true
 xsql mcp server --unsafe-allow-write --attr source=codex-cli --attr agent=codex
