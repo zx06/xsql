@@ -69,6 +69,10 @@ var forbiddenKeywords = map[string]bool{
 	"UNLOCK":     true,
 	"LOAD":       true,
 	"REPLACE":    true, // MySQL REPLACE
+	// Side-effecting SELECT forms (MySQL / PostgreSQL)
+	"INTO":     true, // SELECT INTO @var / OUTFILE / PG SELECT INTO table
+	"OUTFILE":  true, // MySQL SELECT ... INTO OUTFILE
+	"DUMPFILE": true, // MySQL SELECT ... INTO DUMPFILE
 }
 
 // IsReadOnlySQL performs a conservative check: deny by default; only allow
@@ -82,12 +86,21 @@ func IsReadOnlySQL(sql string) (bool, string) {
 		return false, "empty"
 	}
 
-	// Conservative: if the first character is not a letter, treat as unparseable
-	// (e.g. "(select 1)") to prevent subquery bypass
 	trimmed := stripLeadingCommentsAndSpace(sql)
 	if trimmed == "" {
 		return false, "empty_after_comment"
 	}
+
+	// Allow a single outer parenthesized read-only statement, e.g. "(SELECT 1)".
+	if trimmed[0] == '(' {
+		inner, ok := unwrapOuterParenthesizedSQL(trimmed)
+		if !ok {
+			return false, "invalid_outer_paren"
+		}
+		return IsReadOnlySQL(inner)
+	}
+
+	// Conservative: if the first character is not a letter, treat as unparseable.
 	if !unicode.IsLetter(rune(trimmed[0])) {
 		return false, "non_letter_start"
 	}
@@ -134,6 +147,11 @@ func IsReadOnlySQL(sql string) (bool, string) {
 		return false, "forbidden_share_lock"
 	}
 
+	// MySQL user-variable assignment in SELECT (e.g. SELECT @v := 1)
+	if hasMySQLUserVarAssignment(tokens) {
+		return false, "forbidden_user_var_assignment"
+	}
+
 	// Special handling for WITH (CTE) - check for write operations
 	if firstKeyword == "WITH" {
 		if hasWriteInCTE(tokens) {
@@ -176,6 +194,130 @@ func hasKeywordSequence(keywords []string, seq []string) bool {
 }
 
 // stripLeadingCommentsAndSpace strips leading comments and whitespace
+// unwrapOuterParentheses returns the inner SQL when s is exactly "( ... )" (ignoring trailing semicolon).
+func unwrapOuterParenthesizedSQL(s string) (string, bool) {
+	s = strings.TrimSpace(s)
+	s = strings.TrimSuffix(strings.TrimSpace(s), ";")
+	if len(s) < 2 || s[0] != '(' {
+		return "", false
+	}
+
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		if !advanceStringOrComment(s, &i) {
+			return "", false
+		}
+		if i >= len(s) {
+			break
+		}
+		switch s[i] {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				if i != len(s)-1 {
+					return "", false
+				}
+				return strings.TrimSpace(s[1:i]), true
+			}
+			if depth < 0 {
+				return "", false
+			}
+		}
+	}
+	return "", false
+}
+
+// advanceStringOrComment skips a leading string literal or comment at *i. Returns false on unclosed literals.
+func advanceStringOrComment(s string, i *int) bool {
+	if *i >= len(s) {
+		return true
+	}
+	// Line comment
+	if s[*i] == '-' && *i+1 < len(s) && s[*i+1] == '-' {
+		for *i < len(s) && s[*i] != '\n' {
+			*i++
+		}
+		return true
+	}
+	// Block comment
+	if s[*i] == '/' && *i+1 < len(s) && s[*i+1] == '*' {
+		*i += 2
+		for *i < len(s)-1 {
+			if s[*i] == '*' && s[*i+1] == '/' {
+				*i += 2
+				return true
+			}
+			*i++
+		}
+		return false
+	}
+	// Single-quoted string
+	if s[*i] == '\'' {
+		*i++
+		for *i < len(s) {
+			if s[*i] == '\'' {
+				if *i+1 < len(s) && s[*i+1] == '\'' {
+					*i += 2
+					continue
+				}
+				*i++
+				return true
+			}
+			*i++
+		}
+		return false
+	}
+	// Double-quoted string
+	if s[*i] == '"' {
+		*i++
+		for *i < len(s) {
+			if s[*i] == '"' {
+				if *i+1 < len(s) && s[*i+1] == '"' {
+					*i += 2
+					continue
+				}
+				*i++
+				return true
+			}
+			*i++
+		}
+		return false
+	}
+	// Backtick identifier (MySQL)
+	if s[*i] == '`' {
+		*i++
+		for *i < len(s) {
+			if s[*i] == '`' {
+				*i++
+				return true
+			}
+			*i++
+		}
+		return false
+	}
+	return true
+}
+
+func hasMySQLUserVarAssignment(tokens []SQLToken) bool {
+	for i := 0; i < len(tokens); i++ {
+		if tokens[i].Type != TokenOperator || tokens[i].Value != "@" {
+			continue
+		}
+		if i+2 >= len(tokens) {
+			continue
+		}
+		if tokens[i+1].Type != TokenIdentifier {
+			continue
+		}
+		if tokens[i+2].Type == TokenOperator && tokens[i+2].Value == ":=" {
+			return true
+		}
+	}
+	return false
+}
+
 func stripLeadingCommentsAndSpace(s string) string {
 	for {
 		s = strings.TrimLeftFunc(s, unicode.IsSpace)

@@ -51,6 +51,27 @@ func TestIsReadOnlySQL_BasicCases(t *testing.T) {
 	}
 }
 
+// TestIsReadOnlySQL_SideEffectSelects SELECT 形态副作用语句拦截
+func TestIsReadOnlySQL_SideEffectSelects(t *testing.T) {
+	cases := []struct {
+		sql  string
+		want bool
+	}{
+		{"SELECT * FROM t INTO OUTFILE '/tmp/x'", false},
+		{"SELECT * FROM t INTO DUMPFILE '/tmp/x'", false},
+		{"SELECT id INTO @var FROM t LIMIT 1", false},
+		{"SELECT @var := 1", false},
+		{"SELECT @a:=1", false},
+		{"SELECT * INTO new_tbl FROM old_tbl", false},
+	}
+	for _, tc := range cases {
+		got, reason := IsReadOnlySQL(tc.sql)
+		if got != tc.want {
+			t.Errorf("sql=%q got=%v want=%v reason=%s", tc.sql, got, tc.want, reason)
+		}
+	}
+}
+
 // TestIsReadOnlySQL_WriteOperations 写入操作拦截测试
 func TestIsReadOnlySQL_WriteOperations(t *testing.T) {
 	cases := []struct {
@@ -235,8 +256,12 @@ func TestIsReadOnlySQL_EdgeCases(t *testing.T) {
 		{"-- just a comment", false},
 		{"/* comment only */", false},
 
-		// 以括号开头（子查询）应被拒绝
-		{"(select 1)", false},
+		// 外层括号包裹的只读子查询应允许
+		{"(select 1)", true},
+		{"( SELECT 1 )", true},
+		{"(select 1);", true},
+		{"(delete from t)", false},
+		{"(select 1); select 2", false},
 		{"SELECT * FROM (SELECT 1) t", true}, // 但整体是 SELECT
 	}
 
@@ -356,6 +381,27 @@ func BenchmarkIsReadOnlySQL_ComplexCTE(b *testing.B) {
 // ============================================================================
 // Lexer Helper Function Tests (for coverage)
 // ============================================================================
+
+func TestUnwrapOuterParenthesizedSQL(t *testing.T) {
+	cases := []struct {
+		input   string
+		want    string
+		wantOK  bool
+	}{
+		{"(SELECT 1)", "SELECT 1", true},
+		{"( SELECT 1 )", "SELECT 1", true},
+		{"(SELECT 1);", "SELECT 1", true},
+		{"SELECT 1", "", false},
+		{"(SELECT 1", "", false},
+		{"(SELECT ')' )", "SELECT ')'", true},
+	}
+	for _, tc := range cases {
+		got, ok := unwrapOuterParenthesizedSQL(tc.input)
+		if ok != tc.wantOK || got != tc.want {
+			t.Errorf("unwrapOuterParenthesizedSQL(%q)=(%q,%v), want (%q,%v)", tc.input, got, ok, tc.want, tc.wantOK)
+		}
+	}
+}
 
 func TestStripLeadingCommentsAndSpace(t *testing.T) {
 	cases := []struct {
