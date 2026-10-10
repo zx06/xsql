@@ -8,10 +8,7 @@ import (
 
 // TestIsReadOnlySQL_BasicCases 基础测试用例
 func TestIsReadOnlySQL_BasicCases(t *testing.T) {
-	cases := []struct {
-		sql  string
-		want bool
-	}{
+	cases := []readOnlySQLCase{
 		// 基础 SELECT
 		{"select 1", true},
 		{"SELECT * FROM users", true},
@@ -43,41 +40,12 @@ func TestIsReadOnlySQL_BasicCases(t *testing.T) {
 		{"SELECT * FROM products WHERE name LIKE '%update%'", true},
 	}
 
-	for _, tc := range cases {
-		got, reason := IsReadOnlySQL(tc.sql)
-		if got != tc.want {
-			t.Errorf("sql=%q got=%v want=%v reason=%s", tc.sql, got, tc.want, reason)
-		}
-	}
-}
-
-// TestIsReadOnlySQL_SideEffectSelects SELECT 形态副作用语句拦截
-func TestIsReadOnlySQL_SideEffectSelects(t *testing.T) {
-	cases := []struct {
-		sql  string
-		want bool
-	}{
-		{"SELECT * FROM t INTO OUTFILE '/tmp/x'", false},
-		{"SELECT * FROM t INTO DUMPFILE '/tmp/x'", false},
-		{"SELECT id INTO @var FROM t LIMIT 1", false},
-		{"SELECT @var := 1", false},
-		{"SELECT @a:=1", false},
-		{"SELECT * INTO new_tbl FROM old_tbl", false},
-	}
-	for _, tc := range cases {
-		got, reason := IsReadOnlySQL(tc.sql)
-		if got != tc.want {
-			t.Errorf("sql=%q got=%v want=%v reason=%s", tc.sql, got, tc.want, reason)
-		}
-	}
+	assertIsReadOnlySQL(t, cases)
 }
 
 // TestIsReadOnlySQL_WriteOperations 写入操作拦截测试
 func TestIsReadOnlySQL_WriteOperations(t *testing.T) {
-	cases := []struct {
-		sql  string
-		want bool
-	}{
+	cases := []readOnlySQLCase{
 		// DML
 		{"insert into t values (1)", false},
 		{"INSERT INTO users (name) VALUES ('test')", false},
@@ -109,14 +77,17 @@ func TestIsReadOnlySQL_WriteOperations(t *testing.T) {
 		// SELECT locking clauses
 		{"SELECT * FROM users FOR SHARE", false},
 		{"SELECT * FROM users FOR KEY SHARE", false},
+
+		// SELECT side effects
+		{"SELECT * FROM t INTO OUTFILE '/tmp/x'", false},
+		{"SELECT * FROM t INTO DUMPFILE '/tmp/x'", false},
+		{"SELECT id INTO @var FROM t LIMIT 1", false},
+		{"SELECT @var := 1", false},
+		{"SELECT @a:=1", false},
+		{"SELECT * INTO new_tbl FROM old_tbl", false},
 	}
 
-	for _, tc := range cases {
-		got, reason := IsReadOnlySQL(tc.sql)
-		if got != tc.want {
-			t.Errorf("sql=%q got=%v want=%v reason=%s", tc.sql, got, tc.want, reason)
-		}
-	}
+	assertIsReadOnlySQL(t, cases)
 }
 
 // TestIsReadOnlySQL_TransactionAndSessionControl 事务和会话控制拦截
@@ -394,6 +365,9 @@ func TestUnwrapOuterParenthesizedSQL(t *testing.T) {
 		{"SELECT 1", "", false},
 		{"(SELECT 1", "", false},
 		{"(SELECT ')' )", "SELECT ')'", true},
+		{"(/* c */ SELECT 1)", "/* c */ SELECT 1", true},
+		{"(-- c\nSELECT 1)", "-- c\nSELECT 1", true},
+		{"(`tbl`)", "`tbl`", true},
 	}
 	for _, tc := range cases {
 		got, ok := unwrapOuterParenthesizedSQL(tc.input)
@@ -550,6 +524,21 @@ func TestHasMultipleValidStatements(t *testing.T) {
 		got := hasMultipleValidStatements(tokens)
 		if got != tc.want {
 			t.Errorf("hasMultipleValidStatements(%q)=%v, want %v", tc.sql, got, tc.want)
+		}
+	}
+}
+
+type readOnlySQLCase struct {
+	sql  string
+	want bool
+}
+
+func assertIsReadOnlySQL(t *testing.T, cases []readOnlySQLCase) {
+	t.Helper()
+	for _, tc := range cases {
+		got, reason := IsReadOnlySQL(tc.sql)
+		if got != tc.want {
+			t.Errorf("sql=%q got=%v want=%v reason=%s", tc.sql, got, tc.want, reason)
 		}
 	}
 }
