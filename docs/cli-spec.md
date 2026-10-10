@@ -520,6 +520,7 @@ xsql mcp server --transport streamable_http --http-addr 127.0.0.1:8787 --http-au
 | `--transport` | MCP 传输方式：`stdio`（默认）或 `streamable_http` |
 | `--http-addr` | Streamable HTTP 监听地址（默认 `127.0.0.1:8787`） |
 | `--http-auth-token` | Streamable HTTP 鉴权 token（仅 `streamable_http` 必填） |
+| `--unsafe-allow-write` | 本次 MCP server 会话申请写入；仅当 profile 同时设置 `unsafe_allow_write: true` 时生效 |
 
 **MCP Tools:**
 
@@ -567,12 +568,21 @@ xsql mcp server --transport streamable_http --http-addr 127.0.0.1:8787 --http-au
 
 **安全说明：**
 - query tool 默认只读模式（双重保护：SQL 静态分析 + DB 事务级只读）
-- 写操作需要显式设置 `unsafe_allow_write: true`
+- MCP 写入双重授权：profile 必须 `unsafe_allow_write: true`，且启动 MCP server 时必须携带 `--unsafe-allow-write`（或 ENV `XSQL_MCP_UNSAFE_ALLOW_WRITE=true`）；任一缺失保持只读
 - Streamable HTTP 传输要求鉴权，请在请求中提供 `Authorization: Bearer <token>` 头
+
+**写入授权对比（只读策略例外，不按 CLI/ENV/Config 优先级合并）：**
+
+| 入口 | profile `unsafe_allow_write` | 运行时第二因子 |
+|------|------------------------------|----------------|
+| `xsql query` | 必须 | `--unsafe-allow-write` |
+| `xsql ai` (TUI) | 必须 | `--unsafe-allow-write` |
+| `xsql mcp server` | 必须 | `--unsafe-allow-write`（或 `XSQL_MCP_UNSAFE_ALLOW_WRITE`） |
+| Web UI / `serve` | 忽略（强制只读） | 不适用 |
 
 ## 参数来源优先级
 - CLI > ENV > Config
-- `unsafe_allow_write` 是安全策略例外，不按覆盖优先级合并：CLI 的 `--unsafe-allow-write` 与 profile 的 `unsafe_allow_write: true` 必须同时满足。
+- 上表中的「运行时第二因子」与 profile 的 `unsafe_allow_write: true` 必须同时满足；二者缺一不可。
 
 ### `xsql stats`
 

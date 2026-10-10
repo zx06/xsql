@@ -15,7 +15,7 @@ func TestStreamableHTTPAuthRequired(t *testing.T) {
 	server, err := CreateServer("test", &config.File{
 		Profiles:   map[string]config.Profile{},
 		SSHProxies: map[string]config.SSHProxy{},
-	}, stats.StatsConfig{})
+	}, stats.StatsConfig{}, ServerOptions{})
 	if err != nil {
 		t.Fatalf("CreateServer error: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestNewStreamableHTTPHandler_Validation(t *testing.T) {
 	server, err := CreateServer("test", &config.File{
 		Profiles:   map[string]config.Profile{},
 		SSHProxies: map[string]config.SSHProxy{},
-	}, stats.StatsConfig{})
+	}, stats.StatsConfig{}, ServerOptions{})
 	if err != nil {
 		t.Fatalf("CreateServer error: %v", err)
 	}
