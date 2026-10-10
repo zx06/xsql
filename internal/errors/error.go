@@ -27,11 +27,15 @@ func (e *XError) Error() string {
 func (e *XError) Unwrap() error { return e.cause }
 
 func New(code Code, message string, details map[string]any) *XError {
-	return &XError{Code: code, Message: message, Details: details}
+	xe := &XError{Code: code, Message: message, Details: details}
+	enrichDetails(xe)
+	return xe
 }
 
 func Wrap(code Code, message string, details map[string]any, cause error) *XError {
-	return &XError{Code: code, Message: message, Details: details, cause: cause}
+	xe := &XError{Code: code, Message: message, Details: details, cause: cause}
+	enrichDetails(xe)
+	return xe
 }
 
 func As(err error) (*XError, bool) {

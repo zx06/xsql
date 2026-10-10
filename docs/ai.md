@@ -10,6 +10,7 @@
 ## 规范建议
 - 非 TTY 默认输出 JSON；TTY 默认 table。
 - 错误对象：`code/message/details`；并保证退出码与 code 对应。
+- 失败时优先读取 `error.details.hint`、`error.details.category` 与 `error.details.retryable`（见 `docs/error-contract.md` §2.1），再决定是否改 SQL、拉 schema、修连接或开启写入；不要仅根据 `message` 字符串盲重试。
 - 提供 `xsql spec --format json` 导出：
   - commands/flags/env mapping
   - output schema
