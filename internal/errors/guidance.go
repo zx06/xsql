@@ -61,18 +61,46 @@ func guidanceFor(xe *XError) map[string]any {
 	}
 }
 
+const (
+	categoryReadOnlyBlocked     = "read_only_blocked"
+	categoryUnrecognizedStmt    = "unrecognized_statement"
+	hintROWriteAuthorization    = "Writes require profile `unsafe_allow_write: true` AND `--unsafe-allow-write` on `xsql query` / `xsql ai` or MCP server startup."
+	hintROForbiddenKeyword      = "Statement contains a write keyword blocked by read-only policy; use SELECT-only SQL, or enable profile `unsafe_allow_write` and `--unsafe-allow-write` if the user explicitly requested writes."
+	hintROForbiddenStart        = "Statement starts with a non-read-only command; use SELECT-only SQL, or enable profile `unsafe_allow_write` and `--unsafe-allow-write` if the user explicitly requested writes."
+	hintROUnrecognizedStatement = "Statement not recognized as read-only SQL; check spelling and syntax (must start with an allowed read-only keyword such as SELECT)."
+)
+
 func readOnlyGuidance(details map[string]any) map[string]any {
-	out := map[string]any{
-		detailCategory:  "read_only_blocked",
-		detailRetryable: false,
-		detailHint:      "Writes require profile `unsafe_allow_write: true` AND `--unsafe-allow-write` on `xsql query` / `xsql ai` or MCP server startup.",
-	}
-	if reason, _ := details["reason"].(string); reason != "" {
-		if strings.HasPrefix(reason, "forbidden_keyword:") {
-			out[detailHint] = "Statement contains a write keyword blocked by read-only policy; use SELECT-only SQL, or enable profile `unsafe_allow_write` and `--unsafe-allow-write` if the user explicitly requested writes."
+	reason, _ := details["reason"].(string)
+	if isReadOnlyUnrecognizedReason(reason) {
+		return map[string]any{
+			detailCategory:  categoryUnrecognizedStmt,
+			detailRetryable: false,
+			detailHint:      hintROUnrecognizedStatement,
 		}
 	}
+	out := map[string]any{
+		detailCategory:  categoryReadOnlyBlocked,
+		detailRetryable: false,
+		detailHint:      hintROWriteAuthorization,
+	}
+	switch {
+	case strings.HasPrefix(reason, "forbidden_keyword:"):
+		out[detailHint] = hintROForbiddenKeyword
+	case strings.HasPrefix(reason, "forbidden_start:"):
+		out[detailHint] = hintROForbiddenStart
+	case strings.HasPrefix(reason, "cte_write_operation"):
+		out[detailHint] = hintROForbiddenKeyword
+	}
 	return out
+}
+
+func isReadOnlyUnrecognizedReason(reason string) bool {
+	switch reason {
+	case "no_keyword", "non_letter_start", "empty", "empty_after_comment", "invalid_outer_paren", "multiple_statements":
+		return true
+	}
+	return strings.HasPrefix(reason, "tokenize_error:")
 }
 
 func dbExecGuidance(xe *XError) map[string]any {
@@ -111,9 +139,9 @@ func connectGuidance(xe *XError) map[string]any {
 		}
 		msg := strings.ToLower(xe.cause.Error())
 		if xe.Code == CodeDBAuthFailed || strings.Contains(msg, "access denied") || strings.Contains(msg, "password authentication failed") {
-			out[detailCategory] = string(CategoryPermissionDenied)
+			out[detailCategory] = string(CategoryAuthFailed)
 			out[detailRetryable] = false
-			out[detailHint] = "Authentication failed; verify username/password or keyring secret for this profile (avoid plaintext in logs)."
+			out[detailHint] = hintAuthFailed
 		}
 	}
 	return out

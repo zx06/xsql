@@ -31,7 +31,7 @@
 |------|------|------|
 | `hint` | string | 面向 agent 的简短下一步建议（英文） |
 | `retryable` | bool | 是否建议在相同输入下立即重试 |
-| `category` | string | 稳定语义分类，如 `unknown_table`、`syntax_error`、`read_only_blocked`、`connection` |
+| `category` | string | 稳定语义分类，如 `unknown_table`、`syntax_error`、`read_only_blocked`、`unrecognized_statement`、`auth_failed`、`permission_denied`、`connection` |
 | `dialect` | string | 可选，`mysql` 或 `pg` |
 | `native_code` | string | 可选，MySQL errno 或 PostgreSQL SQLSTATE |
 | `native_code_kind` | string | 可选，`mysql_errno` 或 `pg_sqlstate` |

@@ -143,7 +143,7 @@ Structured guidance in `error.details` (when present):
 | Field | Use |
 |-------|-----|
 | `hint` | Short next step (e.g. run `schema dump`, fix syntax, check profile/ssh_proxy) |
-| `category` | Stable class: `unknown_table`, `syntax_error`, `read_only_blocked`, `connection`, … |
+| `category` | Stable class: `unknown_table`, `syntax_error`, `read_only_blocked`, `unrecognized_statement`, `auth_failed`, `permission_denied`, `connection`, … |
 | `retryable` | If `false`, change inputs or config before retrying |
 | `native_code` | MySQL errno or PostgreSQL SQLSTATE when available |
 

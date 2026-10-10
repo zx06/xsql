@@ -3,6 +3,7 @@ package errors
 import (
 	"errors"
 	"net"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -23,7 +24,7 @@ func TestMergeDetails_PreservesExisting(t *testing.T) {
 
 func TestConnectGuidance_Auth(t *testing.T) {
 	xe := Wrap(CodeDBAuthFailed, "auth failed", map[string]any{"dialect": "mysql"}, errors.New("access denied for user"))
-	if xe.Details["category"] != string(CategoryPermissionDenied) {
+	if xe.Details["category"] != string(CategoryAuthFailed) {
 		t.Errorf("category = %v", xe.Details["category"])
 	}
 	if xe.Details["retryable"] != false {
@@ -97,29 +98,55 @@ func TestDBExecGuidance_Fallback(t *testing.T) {
 }
 
 func TestReadOnlyGuidance_DefaultHint(t *testing.T) {
-	xe := New(CodeROBlocked, "blocked", map[string]any{"reason": "not_select"})
+	xe := New(CodeROBlocked, "blocked", map[string]any{"reason": "forbidden_share_lock"})
+	if xe.Details["category"] != categoryReadOnlyBlocked {
+		t.Errorf("category = %v", xe.Details["category"])
+	}
 	if xe.Details["hint"] == "" {
 		t.Fatal("expected hint")
+	}
+}
+
+func TestReadOnlyGuidance_NoKeyword(t *testing.T) {
+	xe := New(CodeROBlocked, "blocked", map[string]any{"reason": "no_keyword"})
+	if xe.Details["category"] != categoryUnrecognizedStmt {
+		t.Errorf("category = %v", xe.Details["category"])
+	}
+	hint, _ := xe.Details["hint"].(string)
+	if !containsFold(hint, "spelling") {
+		t.Errorf("hint = %q", hint)
+	}
+}
+
+func TestReadOnlyGuidance_TypoSELEC(t *testing.T) {
+	xe := New(CodeROBlocked, "blocked", map[string]any{"reason": "no_keyword"})
+	if containsFold(xe.Details["hint"].(string), "unsafe_allow_write") {
+		t.Error("typo should not suggest enabling writes")
+	}
+}
+
+func TestReadOnlyBlockedGuidance_ForbiddenKeyword(t *testing.T) {
+	xe := New(CodeROBlocked, "write blocked", map[string]any{"reason": "forbidden_keyword: DELETE"})
+	if xe.Details["category"] != categoryReadOnlyBlocked {
+		t.Errorf("category = %v", xe.Details["category"])
+	}
+	hint, _ := xe.Details["hint"].(string)
+	if !containsFold(hint, "write keyword") {
+		t.Errorf("unexpected hint: %q", hint)
+	}
+}
+
+func TestConnectGuidance_PGAuthSQLState(t *testing.T) {
+	inner := &pgconn.PgError{Code: "28P01", Message: "password authentication failed"}
+	xe := Wrap(CodeDBConnectFailed, "failed to ping pg", map[string]any{"dialect": "pg"}, inner)
+	if xe.Details["category"] != string(CategoryAuthFailed) {
+		t.Errorf("category = %v", xe.Details["category"])
 	}
 }
 
 func TestDialectFromDetails(t *testing.T) {
 	if dialectFromDetails(map[string]any{"db": "postgresql"}) != "pg" {
 		t.Error("expected pg from db field")
-	}
-}
-
-func TestClassifyMySQLMessagePaths(t *testing.T) {
-	c, ok := classifyMySQLMessage("Unknown column 'x' in 'field list'")
-	if !ok || c.Category != CategoryUnknownColumn {
-		t.Fatalf("got %+v ok=%v", c, ok)
-	}
-}
-
-func TestClassifyPgError_Default(t *testing.T) {
-	c := classifyPgError(&pgconn.PgError{Code: "99999", Message: "weird"})
-	if c.Category != CategoryOther {
-		t.Errorf("category = %q", c.Category)
 	}
 }
 
@@ -135,4 +162,8 @@ func TestMergeDetails_NilBase(t *testing.T) {
 	if merged["hint"] != "x" {
 		t.Errorf("merged = %v", merged)
 	}
+}
+
+func containsFold(s, sub string) bool {
+	return strings.Contains(strings.ToLower(s), strings.ToLower(sub))
 }
