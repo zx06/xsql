@@ -76,6 +76,7 @@ jobs:
           flags: unittests
           report_type: test_results
           fail_ci_if_error: true
+          skip_validation: true
 
       - name: Upload coverage to Codecov
         if: steps.codecov_token.outputs.present == 'true'
@@ -86,6 +87,7 @@ jobs:
           flags: unittests
           name: codecov-${{ matrix.os }}
           fail_ci_if_error: true
+          skip_validation: true
           verbose: true
 
   integration:
@@ -185,6 +187,7 @@ jobs:
           flags: integration,e2e
           report_type: test_results
           fail_ci_if_error: true
+          skip_validation: true
 
       - name: Upload integration coverage to Codecov
         if: steps.codecov_token.outputs.present == 'true'
@@ -195,6 +198,7 @@ jobs:
           flags: integration,e2e
           name: codecov-integration
           fail_ci_if_error: true
+          skip_validation: true
           verbose: true
           disable_search: true
 
