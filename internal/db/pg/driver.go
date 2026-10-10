@@ -42,20 +42,20 @@ func (d *Driver) Open(ctx context.Context, opts db.ConnOptions) (*sql.DB, *error
 			if closeErr := conn.Close(); closeErr != nil {
 				log.Printf("failed to close pg connection: %v", closeErr)
 			}
-			return nil, errors.Wrap(errors.CodeDBConnectFailed, "failed to ping pg", nil, err)
+			return nil, errors.Wrap(errors.CodeDBConnectFailed, "failed to ping pg", map[string]any{"dialect": "pg"}, err)
 		}
 		return conn, nil
 	}
 
 	conn, err := sql.Open("pgx", dsn)
 	if err != nil {
-		return nil, errors.Wrap(errors.CodeDBConnectFailed, "failed to open pg connection", nil, err)
+		return nil, errors.Wrap(errors.CodeDBConnectFailed, "failed to open pg connection", map[string]any{"dialect": "pg"}, err)
 	}
 	if err := conn.PingContext(ctx); err != nil {
 		if closeErr := conn.Close(); closeErr != nil {
 			log.Printf("failed to close pg connection: %v", closeErr)
 		}
-		return nil, errors.Wrap(errors.CodeDBConnectFailed, "failed to ping pg", nil, err)
+		return nil, errors.Wrap(errors.CodeDBConnectFailed, "failed to ping pg", map[string]any{"dialect": "pg"}, err)
 	}
 	return conn, nil
 }
