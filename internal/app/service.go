@@ -191,8 +191,8 @@ func Query(ctx context.Context, req QueryRequest) (*db.QueryResult, *errors.XErr
 	if xe != nil {
 		return nil, xe
 	}
-	if result != nil && result.Truncated && req.TruncationHint != "" {
-		result.Hint = req.TruncationHint
+	if result != nil && result.Truncated && result.Hint == "" {
+		db.RefreshTruncationHint(result)
 	}
 	return result, nil
 }

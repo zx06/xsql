@@ -1,5 +1,7 @@
 package errors
 
+import "strings"
+
 // Shared agent hint strings (single source for Sonar duplicate-literal rules).
 const (
 	hintUnknownTableMySQL    = "Table or database not found; use MCP `schema_list_tables` or `xsql schema dump` to list valid tables, then fix the SQL."
@@ -28,3 +30,18 @@ const HintQueryResultTruncated = hintQueryResultTruncated
 
 // HintMCPResponseTruncated is appended when MCP byte guard trims rows.
 const HintMCPResponseTruncated = hintMCPResponseTruncated
+
+// BuildTruncationHint composes agent hints from a comma-separated truncated_reason value.
+func BuildTruncationHint(truncatedReason string) string {
+	var parts []string
+	if truncatedReason == "" || strings.Contains(truncatedReason, "max_rows") {
+		parts = append(parts, HintQueryResultTruncated)
+	}
+	if strings.Contains(truncatedReason, "max_response_bytes") {
+		parts = append(parts, HintMCPResponseTruncated)
+	}
+	if len(parts) == 0 {
+		return HintQueryResultTruncated
+	}
+	return strings.Join(parts, " ")
+}

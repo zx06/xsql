@@ -118,11 +118,14 @@ DB 类：
 }
 ```
 
-当结果被 `max_rows` 截断时，`data` 可附加（`schema_version` 仍为 `1`）：
+当结果被截断时，`data` 可附加（`schema_version` 仍为 `1`）：
 - `truncated`（bool）
 - `row_count`（int，已返回行数）
-- `max_rows`（int，生效上限）
-- `hint`（string，建议使用 `LIMIT`/聚合或 schema 工具）
+- `max_rows`（int，**生效的配置行数上限**，非当前行数）
+- `truncated_reason`（string：`max_rows` 和/或 `max_response_bytes`）
+- `max_response_bytes`（int，MCP 字节护栏生效时的阈值）
+- `max_rows_requested` / `max_rows_limit`（MCP 请求被 clamp 时）
+- `hint`（string，与 `truncated_reason` 一致；多原因时合并）
 
 ### Table 格式（人类可读）
 ```

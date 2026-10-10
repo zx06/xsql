@@ -73,6 +73,7 @@ type MCPConfig struct {
 	Transport        string        `yaml:"transport" json:"transport"` // stdio | streamable_http
 	HTTP             MCPHTTPConfig `yaml:"http" json:"http"`
 	MaxRows          int           `yaml:"max_rows" json:"max_rows"`                     // default MCP query row cap
+	MaxRowsLimit     int           `yaml:"max_rows_limit" json:"max_rows_limit"`         // hard MCP ceiling for max_rows
 	MaxResponseBytes int           `yaml:"max_response_bytes" json:"max_response_bytes"` // MCP query JSON size cap
 }
 

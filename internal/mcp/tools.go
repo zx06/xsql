@@ -20,7 +20,7 @@ const defaultMCPQueryTimeout = 30 * time.Second
 type QueryInput struct {
 	SQL     string `json:"sql" jsonschema:"SQL query to execute"`
 	Profile string `json:"profile" jsonschema:"Profile name to use"`
-	MaxRows *int   `json:"max_rows,omitempty" jsonschema:"Maximum rows to return (positive integer; MCP default 500)"`
+	MaxRows *int   `json:"max_rows,omitempty" jsonschema:"Maximum rows to return (0 = default; clamped by mcp.max_rows_limit; MCP default 500)"`
 }
 
 // ProfileShowInput represents the input for the profile_show tool
@@ -92,7 +92,7 @@ func (h *ToolHandler) RegisterTools(server *mcp.Server) {
 			},
 			"max_rows": {
 				Type:        "integer",
-				Description: "Maximum rows to return (positive integer; default from profile/mcp config or 500)",
+				Description: "Maximum rows to return (0 = use defaults; clamped by mcp.max_rows_limit; default 500)",
 			},
 		},
 	}
@@ -168,7 +168,7 @@ func (h *ToolHandler) Query(ctx context.Context, req *mcp.CallToolRequest, input
 	if argSet {
 		argVal = *input.MaxRows
 	}
-	maxRows, xe := app.ResolveMCPQueryMaxRows(profile, h.config.MCP, argVal, argSet)
+	maxRows, rowsMeta, xe := app.ResolveMCPQueryMaxRows(profile, h.config.MCP, argVal, argSet)
 	if xe != nil {
 		return h.errorResult(xe), nil, nil
 	}
@@ -192,7 +192,14 @@ func (h *ToolHandler) Query(ctx context.Context, req *mcp.CallToolRequest, input
 	if xe != nil {
 		return h.errorResult(xe), nil, nil
 	}
-	result = applyMCPResponseByteLimit(result, app.ResolveMCPMaxResponseBytes(h.config.MCP))
+	if rowsMeta.Clamped {
+		result.MaxRowsRequested = rowsMeta.Requested
+		result.MaxRowsLimitApplied = rowsMeta.Limit
+	}
+	if result.MaxRows == 0 && maxRows > 0 {
+		result.MaxRows = maxRows
+	}
+	result = applyMCPResponseByteLimit(result, app.ResolveMCPMaxResponseBytes(h.config.MCP), maxRows)
 	return h.successResult(result)
 }
 

@@ -103,6 +103,7 @@ xsql query "INSERT INTO logs (msg) VALUES ('test')" --profile dev --unsafe-allow
     "truncated": true,
     "row_count": 2,
     "max_rows": 2,
+    "truncated_reason": "max_rows",
     "hint": "Result truncated by max_rows; add SQL LIMIT/OFFSET, use aggregation, or run MCP `schema_list_tables` or `xsql schema dump` for schema discovery."
   }
 }
@@ -125,7 +126,7 @@ id,name
 2,Bob
 ```
 
-> 注：Table 和 CSV 格式不包含 `ok` 和 `schema_version` 元数据，直接输出数据。
+> 注：Table 和 CSV 格式不包含 `ok` 和 `schema_version` 元数据，直接输出数据。CSV 若结果被截断，会在 **stderr** 打印一行截断说明与 hint（stdout 仍为纯 CSV，退出码 0）。
 
 ### `xsql schema dump`
 
@@ -565,7 +566,7 @@ xsql mcp server --transport streamable_http --http-addr 127.0.0.1:8787 --http-au
        "properties": {
          "sql": {"type": "string", "description": "SQL query to execute"},
          "profile": {"type": "string", "description": "Profile name to use"},
-         "max_rows": {"type": "integer", "description": "Maximum rows to return (positive integer; MCP default 500)"}
+         "max_rows": {"type": "integer", "description": "Maximum rows to return (0 = defaults; clamped by mcp.max_rows_limit; MCP default 500)"}
        },
        "required": ["sql", "profile"]
      }

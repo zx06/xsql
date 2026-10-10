@@ -35,6 +35,9 @@ func TestAppQuery_TruncationHint_MySQL(t *testing.T) {
 	if len(result.Rows) != 3 || !result.Truncated {
 		t.Fatalf("expected truncated 3 rows, got %d truncated=%v", len(result.Rows), result.Truncated)
 	}
+	if result.TruncatedReason != "max_rows" {
+		t.Fatalf("truncated_reason=%q", result.TruncatedReason)
+	}
 	if result.Hint != app.QueryTruncationHint {
 		t.Fatalf("hint=%q", result.Hint)
 	}

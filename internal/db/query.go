@@ -13,10 +13,16 @@ type QueryResult struct {
 	Columns []string         `json:"columns" yaml:"columns"`
 	Rows    []map[string]any `json:"rows" yaml:"rows"`
 
-	Truncated bool   `json:"truncated,omitempty" yaml:"truncated,omitempty"`
-	RowCount  int    `json:"row_count,omitempty" yaml:"row_count,omitempty"`
-	MaxRows   int    `json:"max_rows,omitempty" yaml:"max_rows,omitempty"`
-	Hint      string `json:"hint,omitempty" yaml:"hint,omitempty"`
+	Truncated bool `json:"truncated,omitempty" yaml:"truncated,omitempty"`
+	RowCount  int  `json:"row_count,omitempty" yaml:"row_count,omitempty"`
+	MaxRows   int  `json:"max_rows,omitempty" yaml:"max_rows,omitempty"`
+	// MaxRowsRequested is set when MCP/user requested more rows than mcp.max_rows_limit.
+	MaxRowsRequested int `json:"max_rows_requested,omitempty" yaml:"max_rows_requested,omitempty"`
+	// MaxRowsLimitApplied is the configured MCP ceiling when clamping occurred.
+	MaxRowsLimitApplied int    `json:"max_rows_limit,omitempty" yaml:"max_rows_limit,omitempty"`
+	TruncatedReason     string `json:"truncated_reason,omitempty" yaml:"truncated_reason,omitempty"`
+	MaxResponseBytes    int    `json:"max_response_bytes,omitempty" yaml:"max_response_bytes,omitempty"`
+	Hint                string `json:"hint,omitempty" yaml:"hint,omitempty"`
 }
 
 // ToTableData implements the output.TableFormatter interface for table output without JSON encoding/decoding.
@@ -160,6 +166,8 @@ func scanRows(rows *sql.Rows, maxRows int) (*QueryResult, *errors.XError) {
 			if rows.Next() {
 				result.Truncated = true
 				result.MaxRows = maxRows
+				result.TruncatedReason = TruncatedReasonMaxRows
+				RefreshTruncationHint(result)
 			}
 			break
 		}

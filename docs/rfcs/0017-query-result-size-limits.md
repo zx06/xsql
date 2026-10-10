@@ -19,7 +19,9 @@ Status: Accepted
 | 场景 | 默认上限 | 取消上限 |
 |------|----------|----------|
 | CLI / Web / TUI | 1000 行 | `--max-rows 0` 或 API `max_rows: 0`（须显式） |
-| MCP | 500 行 | 不支持（`max_rows: 0` 视为未设置，走默认链） |
+| MCP | 500 行 | 不支持无上限；`max_rows: 0` 视为未设置，走默认链 |
+
+MCP 硬上限：**`mcp.max_rows_limit`（默认 10000）**，超过则 clamp 并输出 `max_rows_requested` / `max_rows_limit`。
 
 优先级：**CLI/API 参数 > ENV (`XSQL_MAX_ROWS`) > profile `max_rows` > MCP `mcp.max_rows`（仅 MCP）> 上表默认值**。
 
@@ -34,15 +36,22 @@ Status: Accepted
   "truncated": true,
   "row_count": 1000,
   "max_rows": 1000,
+  "truncated_reason": "max_rows",
   "hint": "Result truncated by max_rows; add SQL LIMIT/OFFSET, use aggregation, or run MCP `schema_list_tables` or `xsql schema dump` for schema discovery."
 }
 ```
 
+字节护栏截断时追加 `truncated_reason: "max_response_bytes"`（可与 `max_rows` 并存）、`max_response_bytes`，且 **`max_rows` 始终为生效的配置行数上限**（不是当前行数）。`hint` 与 `truncated_reason` 一致（两种原因均出现时 hint 合并两句）。
+
 未截断时不输出 `truncated`/`hint`（`row_count` 可选，与现有客户端兼容）。
 
-### MCP 响应字节护栏（可选第二层）
+### CSV
 
-配置 `mcp.max_response_bytes`（默认 524288）。序列化后若超限，从结果尾部删行直至低于阈值，并设置 `truncated: true` 与 `hint` 说明字节限制。
+stdout 仍为纯 CSV；若截断，在 **stderr** 输出一行 `xsql: query result truncated (...)` + hint，**退出码仍为 0**。
+
+### MCP 响应字节护栏（第二层）
+
+配置 `mcp.max_response_bytes`（默认 524288）。序列化后若超限，用二分查找适配行数；metadata 见上。
 
 ### Schema 修复
 

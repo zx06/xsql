@@ -24,8 +24,34 @@ func New(out, err io.Writer) Writer {
 	return Writer{Out: out, Err: err}
 }
 
+// CSVTruncationReporter is implemented by query results that may truncate row output.
+type CSVTruncationReporter interface {
+	CSVTruncationNotice() (string, bool)
+}
+
 func (w Writer) WriteOK(format Format, data any) error {
-	return w.write(format, Envelope{OK: true, SchemaVersion: SchemaVersion, Data: data})
+	if err := w.write(format, Envelope{OK: true, SchemaVersion: SchemaVersion, Data: data}); err != nil {
+		return err
+	}
+	if format == FormatCSV {
+		writeCSVTruncationNotice(w.Err, data)
+	}
+	return nil
+}
+
+func writeCSVTruncationNotice(errOut io.Writer, data any) {
+	if errOut == nil {
+		return
+	}
+	rep, ok := data.(CSVTruncationReporter)
+	if !ok {
+		return
+	}
+	msg, ok := rep.CSVTruncationNotice()
+	if !ok || msg == "" {
+		return
+	}
+	_, _ = fmt.Fprintln(errOut, msg)
 }
 
 func (w Writer) WriteError(format Format, xe *errors.XError) error {
