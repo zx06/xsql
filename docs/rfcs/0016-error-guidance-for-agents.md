@@ -1,4 +1,4 @@
-# RFC 0015: AI Agent 错误指引（Error Guidance）
+# RFC 0016: AI Agent 错误指引（Error Guidance）
 
 Status: Accepted
 
