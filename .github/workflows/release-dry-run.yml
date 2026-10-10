@@ -31,8 +31,13 @@ jobs:
           cache: false
 
       - name: Run actionlint
-        working-directory: .github/tools
-        run: go run github.com/rhysd/actionlint/cmd/actionlint -color "${{ github.workspace }}/.github/workflows"
+        env:
+          WORKFLOW_DIR: ${{ github.workspace }}/.github/workflows
+        run: |
+          shopt -s nullglob
+          mapfile -t workflow_files < <(printf '%s\n' "$WORKFLOW_DIR"/*.yml "$WORKFLOW_DIR"/*.yaml)
+          cd .github/tools
+          go run github.com/rhysd/actionlint/cmd/actionlint -color "${workflow_files[@]}"
 
   build:
     name: GoReleaser snapshot build
