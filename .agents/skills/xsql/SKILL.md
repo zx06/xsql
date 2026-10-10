@@ -22,7 +22,7 @@ description: >
 - Use additional attributes to make usage searchable: `agent` (for example `codex`), `env` (for example `prod`), `team`, and `task` are recommended when known.
 - `stdout` is data; `stderr` is logs. Never parse stderr as result data.
 - Validate responses by checking `ok`, `schema_version`, and `error.code` — not by string matching.
-- Assume read-only mode. Writes require both `unsafe_allow_write: true` in the selected profile and `--unsafe-allow-write` on the current CLI invocation; only use both when the user has explicitly requested writes.
+- Assume read-only mode. Writes require both `unsafe_allow_write: true` in the selected profile and a runtime write opt-in: `--unsafe-allow-write` on `xsql query` / `xsql ai`, or `--unsafe-allow-write` when starting `xsql mcp server` (or `XSQL_MCP_UNSAFE_ALLOW_WRITE=true`). Only enable both factors when the user has explicitly requested writes.
 - Never leak secrets, full DSNs, passwords, or private keys in output or summaries.
 - `--ssh-skip-known-hosts-check` is a risky last resort — call out the security tradeoff if it's needed.
 
@@ -153,8 +153,10 @@ Table and CSV formats are for humans — they lack the `ok`/`schema_version` env
 ## Additional Commands
 
 ```bash
-# MCP server for AI assistant integration
+# MCP server for AI assistant integration (read-only by default)
 xsql mcp server --attr source=codex-cli --attr agent=codex # stdio transport (default)
+# Writes (only when user explicitly requests): add --unsafe-allow-write and ensure profile unsafe_allow_write: true
+xsql mcp server --unsafe-allow-write --attr source=codex-cli --attr agent=codex
 xsql mcp server --transport streamable_http --attr source=codex-cli --attr agent=codex # HTTP transport
 xsql mcp server --transport streamable_http \
   --http-addr 127.0.0.1:8787 --http-auth-token <token> \

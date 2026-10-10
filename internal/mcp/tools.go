@@ -29,14 +29,20 @@ type ProfileShowInput struct {
 	Name string `json:"name" jsonschema:"Profile name"`
 }
 
+// ServerOptions configures MCP server behavior passed from the CLI entrypoint.
+type ServerOptions struct {
+	UnsafeAllowWrite bool // server-level write opt-in (dual auth with profile)
+}
+
 // ToolHandler manages MCP tools
 type ToolHandler struct {
-	config *config.File
-	stats  stats.StatsConfig
+	config            *config.File
+	stats             stats.StatsConfig
+	serverAllowsWrite bool
 }
 
 // NewToolHandler creates a new tool handler
-func NewToolHandler(cfg *config.File, st stats.StatsConfig) *ToolHandler {
+func NewToolHandler(cfg *config.File, st stats.StatsConfig, opts ServerOptions) *ToolHandler {
 	if cfg == nil {
 		cfg = &config.File{
 			Profiles:   map[string]config.Profile{},
@@ -44,8 +50,9 @@ func NewToolHandler(cfg *config.File, st stats.StatsConfig) *ToolHandler {
 		}
 	}
 	return &ToolHandler{
-		config: cfg,
-		stats:  st,
+		config:            cfg,
+		stats:             st,
+		serverAllowsWrite: opts.UnsafeAllowWrite,
 	}
 }
 
@@ -283,7 +290,7 @@ func (h *ToolHandler) Query(ctx context.Context, req *mcp.CallToolRequest, input
 	// Query options - use read-only mode by default
 	start := time.Now()
 	result, xe := db.Query(ctx, conn, input.SQL, db.QueryOptions{
-		UnsafeAllowWrite: profile.UnsafeAllowWrite,
+		UnsafeAllowWrite: WriteAllowed(h.serverAllowsWrite, profile.UnsafeAllowWrite),
 		DBType:           profile.DB,
 	})
 
@@ -469,13 +476,13 @@ func (h *ToolHandler) formatError(err error) string {
 }
 
 // CreateServer creates a new MCP server
-func CreateServer(version string, cfg *config.File, st stats.StatsConfig) (*mcp.Server, error) {
+func CreateServer(version string, cfg *config.File, st stats.StatsConfig, opts ServerOptions) (*mcp.Server, error) {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "xsql",
 		Version: version,
 	}, nil)
 
-	handler := NewToolHandler(cfg, st)
+	handler := NewToolHandler(cfg, st, opts)
 	handler.RegisterTools(server)
 
 	return server, nil

@@ -376,8 +376,9 @@ func listMCPTools(t *testing.T, configPath string) []mcp.Tool {
 	return response.Result.Tools
 }
 
-// callMCPTool calls an MCP tool and returns the result
-func callMCPTool(t *testing.T, configPath string, toolName string, arguments map[string]any) (*mcp.CallToolResult, error) {
+// callMCPTool calls an MCP tool and returns the result.
+// Optional serverExtraArgs are appended to `mcp server` (e.g. --unsafe-allow-write).
+func callMCPTool(t *testing.T, configPath string, toolName string, arguments map[string]any, serverExtraArgs ...string) (*mcp.CallToolResult, error) {
 	t.Helper()
 
 	binary := testBinary
@@ -385,7 +386,9 @@ func callMCPTool(t *testing.T, configPath string, toolName string, arguments map
 		t.Fatal("testBinary is not set")
 	}
 
-	cmd := exec.Command(binary, "mcp", "server", "--config", configPath)
+	args := []string{"mcp", "server", "--config", configPath}
+	args = append(args, serverExtraArgs...)
+	cmd := exec.Command(binary, args...)
 
 	// Start the server
 	stdin, err := cmd.StdinPipe()
@@ -636,6 +639,73 @@ func TestMCPQuery_MySQL_ReadOnlyBlocked(t *testing.T) {
 
 			if response.Error.Code != "XSQL_RO_BLOCKED" {
 				t.Errorf("expected XSQL_RO_BLOCKED, got %s", response.Error.Code)
+			}
+		})
+	}
+}
+
+// TestMCPQuery_MySQL_UnsafeAllowWriteRequiresServerAndProfile verifies MCP dual write authorization.
+func TestMCPQuery_MySQL_UnsafeAllowWriteRequiresServerAndProfile(t *testing.T) {
+	dsn := mysqlDSN(t)
+	readOnlyProfileConfig := createTempConfig(t, `profiles:
+  test:
+    db: mysql
+    dsn: "`+dsn+`"
+`)
+	writeProfileConfig := createTempConfig(t, `profiles:
+  test:
+    db: mysql
+    dsn: "`+dsn+`"
+    unsafe_allow_write: true
+`)
+
+	writeSQL := "DELETE FROM definitely_nonexistent_table_xyz"
+	tests := []struct {
+		name          string
+		configPath    string
+		serverWrite   bool
+		wantROBlocked bool
+	}{
+		{name: "neither enabled", configPath: readOnlyProfileConfig, wantROBlocked: true},
+		{name: "server only", configPath: readOnlyProfileConfig, serverWrite: true, wantROBlocked: true},
+		{name: "profile only", configPath: writeProfileConfig, wantROBlocked: true},
+		{name: "both enabled", configPath: writeProfileConfig, serverWrite: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var serverArgs []string
+			if tt.serverWrite {
+				serverArgs = []string{"--unsafe-allow-write"}
+			}
+			result, err := callMCPTool(t, tt.configPath, "query", map[string]any{
+				"sql":     writeSQL,
+				"profile": "test",
+			}, serverArgs...)
+			if err != nil {
+				t.Fatalf("MCP query failed: %v", err)
+			}
+
+			textContent := result.Content[0].(*mcp.TextContent)
+			var response struct {
+				OK    bool `json:"ok"`
+				Error struct {
+					Code string `json:"code"`
+				} `json:"error"`
+			}
+			if err := json.Unmarshal([]byte(textContent.Text), &response); err != nil {
+				t.Fatalf("invalid JSON: %v", err)
+			}
+
+			gotROBlocked := !response.OK && response.Error.Code == "XSQL_RO_BLOCKED"
+			if gotROBlocked != tt.wantROBlocked {
+				t.Fatalf("RO blocked = %v, want %v; response: %s", gotROBlocked, tt.wantROBlocked, textContent.Text)
+			}
+			if tt.wantROBlocked && !result.IsError {
+				t.Fatal("expected IsError=true when write should be blocked")
+			}
+			if !tt.wantROBlocked && gotROBlocked {
+				t.Fatal("both write gates enabled but query was blocked by read-only policy")
 			}
 		})
 	}
