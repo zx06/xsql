@@ -480,22 +480,6 @@ func IsLoopbackAddr(addr string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// PublicURL converts an effective listener address to a browser URL.
-func PublicURL(addr string) string {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return "http://" + addr + "/"
-	}
-	displayHost := host
-	if host == "" || host == "0.0.0.0" || host == "::" || host == "[::]" {
-		displayHost = "127.0.0.1"
-	}
-	if strings.Contains(displayHost, ":") && !strings.HasPrefix(displayHost, "[") {
-		displayHost = "[" + displayHost + "]"
-	}
-	return "http://" + net.JoinHostPort(displayHost, port) + "/"
-}
-
 func (h *handler) handleConfigGet(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeMethodNotAllowed(w)
@@ -509,14 +493,15 @@ func (h *handler) handleConfigGet(w http.ResponseWriter, r *http.Request) {
 	if configPath == "" {
 		configPath = config.FindConfigPath(config.Options{ConfigPath: h.configPath})
 	}
+	safe := config.FileForAPI(cfg)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":          true,
 		"config_path": configPath,
-		"profiles":    cfg.Profiles,
-		"ssh_proxies": cfg.SSHProxies,
-		"mcp":         cfg.MCP,
-		"web":         cfg.Web,
-		"ai":          cfg.AI,
+		"profiles":    safe.Profiles,
+		"ssh_proxies": safe.SSHProxies,
+		"mcp":         safe.MCP,
+		"web":         safe.Web,
+		"ai":          safe.AI,
 	})
 }
 
@@ -562,6 +547,10 @@ func (h *handler) handleConfigSaveProfile(w http.ResponseWriter, r *http.Request
 		return
 	}
 	configPath := h.getResolvedConfigPath()
+	cfg, _, _ := config.LoadConfig(config.Options{ConfigPath: h.configPath})
+	if existing, ok := cfg.Profiles[name]; ok {
+		req.Profile = config.MergeProfileSecrets(req.Profile, existing)
+	}
 	if xe := config.SaveProfile(configPath, name, req.Profile); xe != nil {
 		writeError(w, statusCodeFor(xe.Code), xe)
 		return
@@ -603,6 +592,10 @@ func (h *handler) handleConfigSaveSSHProxy(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	configPath := h.getResolvedConfigPath()
+	cfg, _, _ := config.LoadConfig(config.Options{ConfigPath: h.configPath})
+	if existing, ok := cfg.SSHProxies[name]; ok {
+		req.SSHProxy = config.MergeSSHProxySecrets(req.SSHProxy, existing)
+	}
 	if xe := config.SaveSSHProxy(configPath, name, req.SSHProxy); xe != nil {
 		writeError(w, statusCodeFor(xe.Code), xe)
 		return
@@ -638,6 +631,8 @@ func (h *handler) handleConfigSaveAI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	configPath := h.getResolvedConfigPath()
+	cfg, _, _ := config.LoadConfig(config.Options{ConfigPath: h.configPath})
+	req.AI = config.MergeAIConfigSecrets(req.AI, cfg.AI)
 	if xe := config.SaveAI(configPath, req.AI); xe != nil {
 		writeError(w, statusCodeFor(xe.Code), xe)
 		return
@@ -662,10 +657,9 @@ func (h *handler) handleConfigTestProfile(w http.ResponseWriter, r *http.Request
 	profile := req.Profile
 	cfg, _, _ := config.LoadConfig(config.Options{ConfigPath: h.configPath})
 
-	// If password is blank but profile already exists in config, preserve saved password
-	if profile.Password == "" && req.Name != "" {
+	if req.Name != "" {
 		if existing, ok := cfg.Profiles[req.Name]; ok {
-			profile.Password = existing.Password
+			profile = config.MergeProfileSecrets(profile, existing)
 		}
 	}
 
@@ -721,9 +715,9 @@ func (h *handler) handleConfigTestSSHProxy(w http.ResponseWriter, r *http.Reques
 
 	proxy := req.SSHProxy
 	cfg, _, _ := config.LoadConfig(config.Options{ConfigPath: h.configPath})
-	if proxy.Passphrase == "" && req.Name != "" {
+	if req.Name != "" {
 		if existing, ok := cfg.SSHProxies[req.Name]; ok {
-			proxy.Passphrase = existing.Passphrase
+			proxy = config.MergeSSHProxySecrets(proxy, existing)
 		}
 	}
 	if proxy.Port == 0 {
@@ -761,9 +755,7 @@ func (h *handler) handleConfigTestAI(w http.ResponseWriter, r *http.Request) {
 
 	aiCfg := req.AI
 	cfg, _, _ := config.LoadConfig(config.Options{ConfigPath: h.configPath})
-	if aiCfg.APIKey == "" {
-		aiCfg.APIKey = cfg.AI.APIKey
-	}
+	aiCfg = config.MergeAIConfigSecrets(aiCfg, cfg.AI)
 	if aiCfg.BaseURL == "" {
 		aiCfg.BaseURL = cfg.AI.BaseURL
 	}

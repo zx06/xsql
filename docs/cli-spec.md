@@ -260,11 +260,22 @@ Web UI 使用以下 HTTP API，统一返回 JSON Envelope：
 | `GET` | `/api/v1/health` | 服务健康检查 |
 | `GET` | `/api/v1/profiles` | 列出 profiles |
 | `GET` | `/api/v1/profiles/{name}` | 查看 profile 详情（脱敏） |
+| `GET` | `/api/v1/config` | 读取完整配置（用于 Web 配置编辑器；敏感字段脱敏） |
+| `POST`/`PUT` | `/api/v1/config/profiles` | 创建或更新 profile |
+| `DELETE` | `/api/v1/config/profiles/{name}` | 删除 profile |
+| `POST`/`PUT` | `/api/v1/config/ssh-proxies` | 创建或更新 SSH proxy |
+| `DELETE` | `/api/v1/config/ssh-proxies/{name}` | 删除 SSH proxy |
+| `POST`/`PUT` | `/api/v1/config/ai` | 更新 AI 配置 |
+| `POST` | `/api/v1/config/test/*` | 测试连接（profile / SSH / AI） |
 | `GET` | `/api/v1/schema/tables` | 列出表（支持 `profile`/`table`/`include_system`） |
 | `GET` | `/api/v1/schema/tables/{schema}/{table}` | 查看单表结构（支持 `profile`） |
 | `POST` | `/api/v1/query` | 执行只读 SQL 查询 |
 
 Web 查询强制只读，即使 profile 配置了 `unsafe_allow_write: true`，也不会在 Web 接口中生效。
+
+**配置 API 脱敏**：`GET /api/v1/config` 与 `GET /api/v1/profiles/{name}` 不会在响应中返回明文密码、DSN、SSH passphrase、AI `api_key` 或 HTTP `auth_token`。明文值以占位符 `***` 表示；`keyring:` 引用会原样返回（不解析 keyring 内容）。通过 Web UI 保存配置时，若客户端未修改某敏感字段（提交空值或 `***`），服务端会保留磁盘上已有值，而不会用占位符覆盖。
+
+> **安全说明**：绑定 loopback 时 Web 默认不要求 Bearer token，本机其他进程仍可能调用上述只读配置接口获取脱敏后的配置与 keyring 引用。生产或共享环境请启用 `web.http.auth_token` 或非 loopback 绑定策略（见 `docs/config.md`）。
 
 ### `xsql spec`
 

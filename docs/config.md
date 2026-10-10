@@ -145,6 +145,8 @@ profiles:
 | `web.http.auth_token` | string | Web 鉴权 token（支持 `keyring:` 引用） |
 | `web.http.allow_plaintext_token` | bool | 允许在配置中使用明文 token |
 
+通过 Web UI 或 `GET /api/v1/config` 读取配置时，明文密码、DSN、passphrase、`api_key` 与 HTTP `auth_token` 会以 `***` 占位符返回，不会泄露实际值；`keyring:` 引用会原样显示。使用 `POST`/`PUT` 保存时，若某敏感字段未修改（提交空字符串或 `***`），服务端保留文件中已有值。
+
 ## SSH Proxy 配置项
 
 | 字段 | 类型 | 说明 |

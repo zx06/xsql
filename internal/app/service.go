@@ -121,10 +121,10 @@ func LoadProfileDetail(opts config.Options, name string) (map[string]any, *error
 	}
 
 	if profile.DSN != "" {
-		result["dsn"] = "***"
+		result["dsn"] = config.MaskedSecret
 	}
 	if profile.Password != "" {
-		result["password"] = "***"
+		result["password"] = config.MaskSecretForDisplay(profile.Password)
 	}
 	if profile.SSHProxy != "" {
 		result["ssh_proxy"] = profile.SSHProxy
