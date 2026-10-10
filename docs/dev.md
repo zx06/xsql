@@ -140,6 +140,27 @@ docs/              # 文档
 - 单元测试（所有平台）
 - 集成测试（MySQL 8.0 + PostgreSQL 16）
 - 代码检查（golangci-lint）
-- 代码覆盖率上报
+- 代码覆盖率上报（仓库内 PR / `main` 推送在配置了 `CODECOV_TOKEN` 时上传；fork / Dependabot PR 无 token 时会跳过上传，且不会因 Codecov 失败而阻塞）
 
 详见 `.github/workflows/ci.yml`。
+
+### 发布与发布前检查
+
+正式发布由 tag 推送触发（`.github/workflows/release.yml`），顺序为：
+
+1. **GoReleaser snapshot 构建**（`goreleaser build --snapshot`），产出各平台二进制到 `dist/` 并上传 artifact。
+2. **冒烟测试**（`.github/workflows/release-smoke-reusable.yml`）：
+   - 二进制：在 linux/amd64、linux/arm64、darwin/arm64、windows/amd64 上运行 `xsql version`、`xsql spec`、`xsql profile list`（脚本：`scripts/release-smoke.js binary`）。
+   - npm：在 Linux / macOS / Windows 上从 `dist/` 填充平台包、`npm pack` 后本地安装 tarball，执行 `npx xsql version` 与 `npx xsql spec`（`scripts/release-smoke.js npm`）。
+3. **GoReleaser release**（`goreleaser release --clean`）——仅在上一步全部通过后创建 GitHub Release 并推送 Homebrew/Scoop 等。
+4. **npm 发布**（`scripts/npm-publish.js`）——从 GitHub Release 下载二进制后发布 `xsql-cli` 与各 `@zx06/xsql-cli-*` 平台包。
+
+修改发布相关文件时，PR 会触发 **Release dry run**（`.github/workflows/release-dry-run.yml`）：`actionlint` 校验 workflow、snapshot 构建与上述冒烟测试（不发布）。也可在 Actions 中手动 **workflow_dispatch** 该 workflow。
+
+本地可复现 snapshot + 冒烟：
+
+```bash
+goreleaser build --snapshot --clean
+node scripts/release-smoke.js binary dist linux amd64
+node scripts/release-smoke.js npm dist
+```
