@@ -368,12 +368,61 @@ func TestUnwrapOuterParenthesizedSQL(t *testing.T) {
 		{"(/* c */ SELECT 1)", "/* c */ SELECT 1", true},
 		{"(-- c\nSELECT 1)", "-- c\nSELECT 1", true},
 		{"(`tbl`)", "`tbl`", true},
+		{"(select 1) extra", "", false},
+		{"not paren", "", false},
 	}
 	for _, tc := range cases {
 		got, ok := unwrapOuterParenthesizedSQL(tc.input)
 		if ok != tc.wantOK || got != tc.want {
 			t.Errorf("unwrapOuterParenthesizedSQL(%q)=(%q,%v), want (%q,%v)", tc.input, got, ok, tc.want, tc.wantOK)
 		}
+	}
+}
+
+func TestAdvanceStringOrComment(t *testing.T) {
+	cases := []struct {
+		input string
+		start int
+		want  int
+		ok    bool
+	}{
+		{"-- comment\nSELECT", 0, 10, true},
+		{"/* block */ x", 0, 11, true},
+		{"'a''b' x", 0, 6, true},
+		{`"x""y" z`, 0, 6, true},
+		{"`id` x", 0, 4, true},
+		{"'unclosed", 0, 10, false},
+		{"/* unclosed", 0, 11, false},
+		{"SELECT", 0, 0, true},
+	}
+
+	for _, tc := range cases {
+		i := tc.start
+		ok := advanceStringOrComment(tc.input, &i)
+		if ok != tc.ok {
+			t.Errorf("advance(%q) ok=%v want %v", tc.input, ok, tc.ok)
+			continue
+		}
+		if ok && i != tc.want {
+			t.Errorf("advance(%q) end=%d want %d", tc.input, i, tc.want)
+		}
+	}
+}
+
+func TestParseString_Escapes(t *testing.T) {
+	got, idx := parseString(`'a''b'`, 0, '\'')
+	if got != "a'b" || idx != 6 {
+		t.Fatalf("doubled quote: got %q idx=%d", got, idx)
+	}
+
+	got, idx = parseString(`'a\'b'`, 0, '\'')
+	if got != "a'b" || idx != 6 {
+		t.Fatalf("backslash escape: got %q idx=%d", got, idx)
+	}
+
+	got, idx = parseString(`"x""y"`, 0, '"')
+	if got != `x"y` || idx != 6 {
+		t.Fatalf("double-quote escape: got %q idx=%d", got, idx)
 	}
 }
 

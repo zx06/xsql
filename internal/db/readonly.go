@@ -193,40 +193,57 @@ func hasKeywordSequence(keywords []string, seq []string) bool {
 	return false
 }
 
-// stripLeadingCommentsAndSpace strips leading comments and whitespace
-// unwrapOuterParentheses returns the inner SQL when s is exactly "( ... )" (ignoring trailing semicolon).
+// unwrapOuterParenthesizedSQL returns the inner SQL when s is exactly "( ... )" (ignoring trailing semicolon).
 func unwrapOuterParenthesizedSQL(s string) (string, bool) {
 	s = strings.TrimSpace(s)
 	s = strings.TrimSuffix(strings.TrimSpace(s), ";")
 	if len(s) < 2 || s[0] != '(' {
 		return "", false
 	}
+	closeIdx, ok := findOuterWrapperCloseParen(s)
+	if !ok {
+		return "", false
+	}
+	return strings.TrimSpace(s[1:closeIdx]), true
+}
 
+func findOuterWrapperCloseParen(s string) (closeIdx int, ok bool) {
 	depth := 0
 	for i := 0; i < len(s); i++ {
 		if !advanceStringOrComment(s, &i) {
-			return "", false
+			return 0, false
 		}
 		if i >= len(s) {
 			break
 		}
-		switch s[i] {
-		case '(':
-			depth++
-		case ')':
-			depth--
-			if depth == 0 {
-				if i != len(s)-1 {
-					return "", false
-				}
-				return strings.TrimSpace(s[1:i]), true
-			}
-			if depth < 0 {
-				return "", false
-			}
+		var done, valid bool
+		depth, done, valid = stepOuterParenDepth(depth, s[i], i, len(s)-1)
+		if !valid {
+			return 0, false
+		}
+		if done {
+			return i, true
 		}
 	}
-	return "", false
+	return 0, false
+}
+
+func stepOuterParenDepth(depth int, ch byte, idx, lastIdx int) (newDepth int, closed bool, ok bool) {
+	switch ch {
+	case '(':
+		return depth + 1, false, true
+	case ')':
+		nd := depth - 1
+		if nd < 0 {
+			return nd, false, false
+		}
+		if nd == 0 {
+			return 0, true, idx == lastIdx
+		}
+		return nd, false, true
+	default:
+		return depth, false, true
+	}
 }
 
 // advanceStringOrComment skips a leading string literal or comment at *i. Returns false on unclosed literals.
@@ -234,70 +251,76 @@ func advanceStringOrComment(s string, i *int) bool {
 	if *i >= len(s) {
 		return true
 	}
-	// Line comment
-	if s[*i] == '-' && *i+1 < len(s) && s[*i+1] == '-' {
-		for *i < len(s) && s[*i] != '\n' {
-			*i++
-		}
+	switch {
+	case hasLineCommentPrefix(s, *i):
+		skipToLineEnd(s, i)
+		return true
+	case hasBlockCommentPrefix(s, *i):
+		return skipBlockCommentBody(s, i)
+	case s[*i] == '\'':
+		return skipDoubledQuoteLiteral(s, i, '\'')
+	case s[*i] == '"':
+		return skipDoubledQuoteLiteral(s, i, '"')
+	case s[*i] == '`':
+		return skipBacktickLiteral(s, i)
+	default:
 		return true
 	}
-	// Block comment
-	if s[*i] == '/' && *i+1 < len(s) && s[*i+1] == '*' {
-		*i += 2
-		for *i < len(s)-1 {
-			if s[*i] == '*' && s[*i+1] == '/' {
-				*i += 2
-				return true
-			}
-			*i++
-		}
-		return false
-	}
-	// Single-quoted string
-	if s[*i] == '\'' {
+}
+
+func hasLineCommentPrefix(s string, i int) bool {
+	return s[i] == '-' && i+1 < len(s) && s[i+1] == '-'
+}
+
+func hasBlockCommentPrefix(s string, i int) bool {
+	return s[i] == '/' && i+1 < len(s) && s[i+1] == '*'
+}
+
+func skipToLineEnd(s string, i *int) {
+	for *i < len(s) && s[*i] != '\n' {
 		*i++
-		for *i < len(s) {
-			if s[*i] == '\'' {
-				if *i+1 < len(s) && s[*i+1] == '\'' {
-					*i += 2
-					continue
-				}
-				*i++
-				return true
-			}
-			*i++
-		}
-		return false
 	}
-	// Double-quoted string
-	if s[*i] == '"' {
+}
+
+func skipBlockCommentBody(s string, i *int) bool {
+	*i += 2
+	for *i < len(s)-1 {
+		if s[*i] == '*' && s[*i+1] == '/' {
+			*i += 2
+			return true
+		}
 		*i++
-		for *i < len(s) {
-			if s[*i] == '"' {
-				if *i+1 < len(s) && s[*i+1] == '"' {
-					*i += 2
-					continue
-				}
-				*i++
-				return true
-			}
-			*i++
-		}
-		return false
 	}
-	// Backtick identifier (MySQL)
-	if s[*i] == '`' {
+	return false
+}
+
+func skipDoubledQuoteLiteral(s string, i *int, quote byte) bool {
+	*i++
+	for *i < len(s) {
+		if s[*i] != quote {
+			*i++
+			continue
+		}
+		if *i+1 < len(s) && s[*i+1] == quote {
+			*i += 2
+			continue
+		}
 		*i++
-		for *i < len(s) {
-			if s[*i] == '`' {
-				*i++
-				return true
-			}
-			*i++
-		}
-		return false
+		return true
 	}
-	return true
+	return false
+}
+
+func skipBacktickLiteral(s string, i *int) bool {
+	*i++
+	for *i < len(s) {
+		if s[*i] == '`' {
+			*i++
+			return true
+		}
+		*i++
+	}
+	return false
 }
 
 func hasMySQLUserVarAssignment(tokens []SQLToken) bool {
@@ -607,9 +630,17 @@ func hasMultipleValidStatements(tokens []SQLToken) bool {
 	return stmtCount > 1
 }
 
+func isDataModifyingKeyword(value string) bool {
+	switch value {
+	case "INSERT", "UPDATE", "DELETE":
+		return true
+	default:
+		return false
+	}
+}
+
 // hasWriteInCTE checks if a WITH statement contains write operations (data-modifying CTE)
 func hasWriteInCTE(tokens []SQLToken) bool {
-	// Simple heuristic: look for INSERT/UPDATE/DELETE after WITH
 	inCTE := false
 	parenDepth := 0
 	for i, tok := range tokens {
@@ -621,31 +652,33 @@ func hasWriteInCTE(tokens []SQLToken) bool {
 			continue
 		}
 
-		// Track parenthesis depth to identify CTE boundaries
 		switch tok.Value {
 		case "(":
 			parenDepth++
 		case ")":
 			parenDepth--
-			// SELECT after CTE definition is allowed
-			if parenDepth == 0 && i+1 < len(tokens) {
-				nextTok := tokens[i+1]
-				switch nextTok.Value {
-				case "INSERT", "UPDATE", "DELETE":
-					return true
-				case "SELECT":
-					return false
-				}
+			if verdict, decided := cteMainStatementVerdict(parenDepth, tokens, i); decided {
+				return verdict
 			}
 		default:
-			// Check for write keywords inside CTE body
-			if parenDepth > 0 {
-				switch tok.Value {
-				case "INSERT", "UPDATE", "DELETE":
-					return true
-				}
+			if parenDepth > 0 && isDataModifyingKeyword(tok.Value) {
+				return true
 			}
 		}
 	}
 	return false
+}
+
+func cteMainStatementVerdict(parenDepth int, tokens []SQLToken, closeIdx int) (writeDetected bool, decided bool) {
+	if parenDepth != 0 || closeIdx+1 >= len(tokens) {
+		return false, false
+	}
+	switch tokens[closeIdx+1].Value {
+	case "INSERT", "UPDATE", "DELETE":
+		return true, true
+	case "SELECT":
+		return false, true
+	default:
+		return false, false
+	}
 }
