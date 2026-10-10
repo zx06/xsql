@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"strings"
 
 	"github.com/zx06/xsql/internal/errors"
 )
@@ -25,6 +26,8 @@ func (r *QueryResult) ToTableData() (columns []string, rows []map[string]any, ok
 type QueryOptions struct {
 	UnsafeAllowWrite bool   // Allow write operations (bypass read-only protection)
 	DBType           string // Database type: mysql or pg
+	// BypassStaticReadOnly skips SQL static analysis (integration tests for DB-layer enforcement only).
+	BypassStaticReadOnly bool
 }
 
 // Query executes a SQL query and returns the result.
@@ -39,19 +42,56 @@ func Query(ctx context.Context, db *sql.DB, query string, opts QueryOptions) (*Q
 	}
 
 	// Enable dual read-only protection by default
-	// First layer: SQL static analysis
-	if xe := EnforceReadOnly(query, false); xe != nil {
-		return nil, xe
+	if !opts.BypassStaticReadOnly {
+		if xe := EnforceReadOnly(query, false); xe != nil {
+			return nil, xe
+		}
 	}
 	// Second layer: database transaction-level read-only
 	return queryWithReadOnlyTx(ctx, db, query, opts.DBType)
 }
 
-// queryWithReadOnlyTx executes a query within a read-only transaction.
-func queryWithReadOnlyTx(ctx context.Context, db *sql.DB, query string, dbType string) (*QueryResult, *errors.XError) {
+func normalizeDBType(dbType string) string {
+	switch strings.ToLower(strings.TrimSpace(dbType)) {
+	case "mysql", "mariadb":
+		return "mysql"
+	case "pg", "postgres", "postgresql":
+		return "pg"
+	default:
+		return strings.ToLower(strings.TrimSpace(dbType))
+	}
+}
+
+// beginReadOnlyTx starts a read-only transaction using dialect-appropriate driver settings.
+func beginReadOnlyTx(ctx context.Context, db *sql.DB, dbType string) (*sql.Tx, *errors.XError) {
+	dialect := normalizeDBType(dbType)
+	details := map[string]any{"dialect": dialect}
+
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		return nil, errors.Wrap(errors.CodeDBExecFailed, "failed to begin read-only transaction", nil, err)
+		return nil, errors.Wrap(errors.CodeDBExecFailed, "failed to begin read-only transaction", details, err)
+	}
+
+	// MySQL: go-sql-driver/mysql maps ReadOnly to START TRANSACTION READ ONLY.
+	// Do not use @@transaction_read_only here — on MySQL 8.0 it often stays 0 inside a
+	// read-only transaction while writes are still rejected (ER 1792). Integration tests
+	// assert write blocking for MySQL.
+	if dialect == "pg" {
+		var ro string
+		if err := tx.QueryRowContext(ctx, "SHOW transaction_read_only").Scan(&ro); err == nil && !strings.EqualFold(ro, "on") {
+			_ = tx.Rollback()
+			return nil, errors.New(errors.CodeDBExecFailed, "postgresql connection is not in a read-only transaction", details)
+		}
+	}
+
+	return tx, nil
+}
+
+// queryWithReadOnlyTx executes a query within a read-only transaction.
+func queryWithReadOnlyTx(ctx context.Context, db *sql.DB, query string, dbType string) (*QueryResult, *errors.XError) {
+	tx, xe := beginReadOnlyTx(ctx, db, dbType)
+	if xe != nil {
+		return nil, xe
 	}
 	defer func() {
 		// Read-only transaction needs no commit; just rollback

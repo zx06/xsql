@@ -41,6 +41,11 @@ xsql 实现了完整的 SQL 词法分析器（`internal/db/readonly.go`），而
 - `REPLACE`（MySQL）
 - `COPY`（PostgreSQL 批量操作）
 
+**SELECT 副作用（仍以 SELECT 开头）**：
+- `INTO`：MySQL `SELECT … INTO @var` / `SELECT … INTO OUTFILE`、PostgreSQL `SELECT … INTO table`
+- `OUTFILE` / `DUMPFILE`（MySQL 导出到服务器文件）
+- MySQL 用户变量赋值：`SELECT @var := expr`
+
 **DDL（数据定义）**：
 - `CREATE`、`ALTER`、`DROP`、`TRUNCATE`
 - `GRANT`、`REVOKE`
@@ -89,6 +94,12 @@ SELECT /* DELETE */ 1;
 SELECT 'DELETE FROM users' AS warning;
 ```
 
+**外层括号子查询**：
+```sql
+-- 允许：整条语句仅为括号包裹的只读查询
+(SELECT 1);
+```
+
 ### 第二层：数据库事务级只读（服务端）
 
 当当前入口未授权写入时，xsql 使用 Go 的 `database/sql` 包创建只读事务：
@@ -97,7 +108,9 @@ SELECT 'DELETE FROM users' AS warning;
 tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 ```
 
-这意味着即使 SQL 静态分析被绕过（理论上），数据库层也会阻止任何写入操作。
+驱动会按方言映射为 MySQL 的 `START TRANSACTION READ ONLY` 或 PostgreSQL 的只读访问模式。PostgreSQL 会在事务内校验 `transaction_read_only=on`；MySQL 依赖驱动发起的只读事务（`@@transaction_read_only` 在 MySQL 8.0 上不是可靠指标）。
+
+这意味着即使 SQL 静态分析被绕过（理论上），数据库层也会阻止典型 DML/DDL 写入操作（文件导出类语句仍主要依赖静态层拦截）。
 
 ### 写操作控制
 
