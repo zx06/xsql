@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { execFileSync } = require("child_process");
+const { execFileSync, execSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -37,7 +37,15 @@ function findBinaryArtifact(distDir, goos, goarch) {
   return binaryPath;
 }
 
+function ensureExecutable(binaryPath) {
+  if (process.platform === "win32") {
+    return;
+  }
+  fs.chmodSync(binaryPath, 0o755);
+}
+
 function runBinarySmoke(binaryPath) {
+  ensureExecutable(binaryPath);
   const commands = [
     ["version"],
     ["spec", "--format", "json"],
@@ -93,27 +101,36 @@ function resolveVersion(distDir) {
 
 function runNpm(args, cwd) {
   if (process.platform === "win32") {
-    return execFileSync("npm.cmd", args, { cwd, stdio: "inherit" });
+    execSync(`npm ${args.map((a) => `"${a}"`).join(" ")}`, {
+      cwd,
+      stdio: "inherit",
+      shell: true,
+    });
+    return;
   }
-  return execFileSync("npm", args, { cwd, stdio: "inherit" });
+  execFileSync("npm", args, { cwd, stdio: "inherit" });
 }
 
 function runNpx(args, cwd) {
   if (process.platform === "win32") {
-    return execFileSync("npx.cmd", args, { cwd, stdio: "inherit" });
+    execSync(`npx ${args.map((a) => `"${a}"`).join(" ")}`, {
+      cwd,
+      stdio: "inherit",
+      shell: true,
+    });
+    return;
   }
-  return execFileSync("npx", args, { cwd, stdio: "inherit" });
+  execFileSync("npx", args, { cwd, stdio: "inherit" });
 }
 
 function packTarball(cwd) {
-  const output = execFileSync(
-    process.platform === "win32" ? "npm.cmd" : "npm",
-    ["pack", "--json"],
-    {
-      cwd,
-      encoding: "utf8",
-    },
-  );
+  const output =
+    process.platform === "win32"
+      ? execSync("npm pack --json", { cwd, encoding: "utf8", shell: true })
+      : execFileSync("npm", ["pack", "--json"], {
+          cwd,
+          encoding: "utf8",
+        });
   const parsed = JSON.parse(output);
   const entry = Array.isArray(parsed) ? parsed[0] : parsed;
   return path.resolve(cwd, entry.filename);
