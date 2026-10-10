@@ -46,7 +46,14 @@ func TestMCPServer_Startup(t *testing.T) {
 		toolNames[tool.Name] = true
 	}
 
-	expectedTools := []string{"query", "profile_list", "profile_show"}
+	expectedTools := []string{
+		"query",
+		"profile_list",
+		"profile_show",
+		"schema_list_tables",
+		"schema_dump",
+		"schema_describe_table",
+	}
 	for _, name := range expectedTools {
 		if !toolNames[name] {
 			t.Errorf("expected tool %q not found", name)
@@ -1586,4 +1593,144 @@ profiles:
 
 	// Could fail with SSH_HOST_KEY_MISMATCH or other SSH errors
 	t.Logf("Error code: %s", response.Error.Code)
+}
+
+// ============================================================================
+// MCP Schema Discovery E2E Tests
+// ============================================================================
+
+func TestMCPSchema_ListTables_MySQL(t *testing.T) {
+	dsn := mysqlDSN(t)
+	config := createTempConfig(t, `profiles:
+  test:
+    db: mysql
+    dsn: "`+dsn+`"
+`)
+
+	result, err := callMCPTool(t, config, "schema_list_tables", map[string]any{
+		"profile": "test",
+	})
+	if err != nil {
+		t.Fatalf("schema_list_tables failed: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got: %v", result.Content)
+	}
+
+	textContent := result.Content[0].(*mcp.TextContent)
+	var response struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Database string `json:"database"`
+			Tables   []struct {
+				Name string `json:"name"`
+			} `json:"tables"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(textContent.Text), &response); err != nil {
+		t.Fatalf("parse response: %v", err)
+	}
+	if !response.OK {
+		t.Fatal("expected ok=true")
+	}
+	if response.Data.Database == "" {
+		t.Error("expected non-empty database name")
+	}
+}
+
+func TestMCPSchema_Dump_MySQL(t *testing.T) {
+	dsn := mysqlDSN(t)
+	config := createTempConfig(t, `profiles:
+  test:
+    db: mysql
+    dsn: "`+dsn+`"
+`)
+
+	result, err := callMCPTool(t, config, "schema_dump", map[string]any{
+		"profile": "test",
+	})
+	if err != nil {
+		t.Fatalf("schema_dump failed: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got: %v", result.Content)
+	}
+
+	textContent := result.Content[0].(*mcp.TextContent)
+	var response struct {
+		OK            bool `json:"ok"`
+		SchemaVersion int  `json:"schema_version"`
+		Data          struct {
+			Tables []any `json:"tables"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(textContent.Text), &response); err != nil {
+		t.Fatalf("parse response: %v", err)
+	}
+	if response.SchemaVersion != 1 {
+		t.Errorf("schema_version want 1 got %d", response.SchemaVersion)
+	}
+}
+
+func TestMCPSchema_ListTables_PostgreSQL(t *testing.T) {
+	dsn := pgDSN(t)
+	config := createTempConfig(t, `profiles:
+  test:
+    db: pg
+    dsn: "`+dsn+`"
+`)
+
+	result, err := callMCPTool(t, config, "schema_list_tables", map[string]any{
+		"profile": "test",
+	})
+	if err != nil {
+		t.Fatalf("schema_list_tables failed: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got: %v", result.Content)
+	}
+}
+
+func TestMCPSchema_DescribeTable_PostgreSQL(t *testing.T) {
+	dsn := pgDSN(t)
+	config := createTempConfig(t, `profiles:
+  test:
+    db: pg
+    dsn: "`+dsn+`"
+`)
+
+	listResult, err := callMCPTool(t, config, "schema_list_tables", map[string]any{
+		"profile": "test",
+	})
+	if err != nil || listResult.IsError {
+		t.Fatalf("schema_list_tables: err=%v result=%+v", err, listResult)
+	}
+	text := listResult.Content[0].(*mcp.TextContent).Text
+	var listResp struct {
+		Data struct {
+			Tables []struct {
+				Schema string `json:"schema"`
+				Name   string `json:"name"`
+			} `json:"tables"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(text), &listResp); err != nil {
+		t.Fatalf("parse list: %v", err)
+	}
+	if len(listResp.Data.Tables) == 0 {
+		t.Skip("no user tables in test database")
+	}
+	first := listResp.Data.Tables[0]
+
+	descResult, err := callMCPTool(t, config, "schema_describe_table", map[string]any{
+		"profile": "test",
+		"schema":  first.Schema,
+		"table":   first.Name,
+	})
+	if err != nil {
+		t.Fatalf("schema_describe_table failed: %v", err)
+	}
+	if descResult.IsError {
+		t.Fatalf("expected success, got: %v", descResult.Content)
+	}
 }

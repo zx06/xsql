@@ -148,7 +148,7 @@ xsql query "<SQL>" -p <profile> -f json --attr source=codex-cli --attr agent=cod
 }
 ```
 
-启动后，Claude 可以直接通过 MCP 协议查询数据库（默认只读）。若需经 MCP 写入，除 profile 设置 `unsafe_allow_write: true` 外，还须在 `args` 中加入 `--unsafe-allow-write` 启动 MCP server。
+启动后，Claude 可以直接通过 MCP 协议查询数据库（默认只读）。MCP 还提供 `schema_list_tables`、`schema_dump`、`schema_describe_table` 等 schema discovery tools（与 CLI JSON 契约一致）。若需经 MCP 写入，除 profile 设置 `unsafe_allow_write: true` 外，还须在 `args` 中加入 `--unsafe-allow-write` 启动 MCP server。
 
 ### 方式五：AGENTS.md / Rules（Cursor/Windsurf）
 
