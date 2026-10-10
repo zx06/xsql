@@ -57,6 +57,7 @@ jobs:
 
       - name: Detect Codecov token
         id: codecov_token
+        shell: bash
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         run: |

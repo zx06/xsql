@@ -91,11 +91,29 @@ function resolveVersion(distDir) {
   return "0.0.0-smoke";
 }
 
+function runNpm(args, cwd) {
+  if (process.platform === "win32") {
+    return execFileSync("npm.cmd", args, { cwd, stdio: "inherit" });
+  }
+  return execFileSync("npm", args, { cwd, stdio: "inherit" });
+}
+
+function runNpx(args, cwd) {
+  if (process.platform === "win32") {
+    return execFileSync("npx.cmd", args, { cwd, stdio: "inherit" });
+  }
+  return execFileSync("npx", args, { cwd, stdio: "inherit" });
+}
+
 function packTarball(cwd) {
-  const output = execFileSync("npm", ["pack", "--json"], {
-    cwd,
-    encoding: "utf8",
-  });
+  const output = execFileSync(
+    process.platform === "win32" ? "npm.cmd" : "npm",
+    ["pack", "--json"],
+    {
+      cwd,
+      encoding: "utf8",
+    },
+  );
   const parsed = JSON.parse(output);
   const entry = Array.isArray(parsed) ? parsed[0] : parsed;
   return path.resolve(cwd, entry.filename);
@@ -120,16 +138,10 @@ function smokeNpmFromDist(distDir) {
 
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "xsql-npm-smoke-"));
   console.log(`npm smoke workdir: ${workDir}`);
-  execFileSync("npm", ["init", "-y"], { cwd: workDir, stdio: "inherit" });
-  execFileSync("npm", ["install", platformTgz, mainTgz], {
-    cwd: workDir,
-    stdio: "inherit",
-  });
-  execFileSync("npx", ["xsql", "version"], { cwd: workDir, stdio: "inherit" });
-  execFileSync("npx", ["xsql", "spec", "--format", "json"], {
-    cwd: workDir,
-    stdio: "inherit",
-  });
+  runNpm(["init", "-y"], workDir);
+  runNpm(["install", platformTgz, mainTgz], workDir);
+  runNpx(["xsql", "version"], workDir);
+  runNpx(["xsql", "spec", "--format", "json"], workDir);
 }
 
 function main() {
