@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -45,12 +46,14 @@ func newMCPServerCommand() *cobra.Command {
 			opts.transportSet = cmd.Flags().Changed("transport")
 			opts.httpAddrSet = cmd.Flags().Changed("http-addr")
 			opts.httpAuthTokenSet = cmd.Flags().Changed("http-auth-token")
+			opts.unsafeAllowWriteSet = cmd.Flags().Changed("unsafe-allow-write")
 			return runMCPServer(opts)
 		},
 	}
 	cmd.Flags().StringVar(&opts.transport, "transport", mcp_pkg.TransportStdio, "MCP transport: stdio|streamable_http")
 	cmd.Flags().StringVar(&opts.httpAddr, "http-addr", "127.0.0.1:8787", "Streamable HTTP listen address")
 	cmd.Flags().StringVar(&opts.httpAuthToken, "http-auth-token", "", "Streamable HTTP auth token (required for streamable_http)")
+	cmd.Flags().BoolVar(&opts.unsafeAllowWrite, "unsafe-allow-write", false, "Allow writes when profile unsafe_allow_write is true")
 	return cmd
 }
 
@@ -64,19 +67,19 @@ func runMCPServer(opts *mcpServerOptions) error {
 		return xe
 	}
 
-	// Create MCP server using official SDK
-	server, err := mcp_pkg.CreateServer(version, &cfg, GlobalConfig.Stats)
+	resolved, xe := resolveMCPServerOptions(opts, cfg)
+	if xe != nil {
+		return xe
+	}
+
+	server, err := mcp_pkg.CreateServer(version, &cfg, GlobalConfig.Stats, mcp_pkg.ServerOptions{
+		UnsafeAllowWrite: resolved.unsafeAllowWrite,
+	})
 	if err != nil {
-		// Convert SDK error to XError if needed
 		if xe, ok := err.(*errors.XError); ok {
 			return xe
 		}
 		return errors.Wrap(errors.CodeInternal, "failed to create MCP server", nil, err)
-	}
-
-	resolved, xe := resolveMCPServerOptions(opts, cfg)
-	if xe != nil {
-		return xe
 	}
 
 	switch resolved.transport {
@@ -136,18 +139,21 @@ func runMCPServer(opts *mcpServerOptions) error {
 }
 
 type mcpServerOptions struct {
-	transport        string
-	transportSet     bool
-	httpAddr         string
-	httpAddrSet      bool
-	httpAuthToken    string
-	httpAuthTokenSet bool
+	transport           string
+	transportSet        bool
+	httpAddr            string
+	httpAddrSet         bool
+	httpAuthToken       string
+	httpAuthTokenSet    bool
+	unsafeAllowWrite    bool
+	unsafeAllowWriteSet bool
 }
 
 type mcpServerResolved struct {
-	transport     string
-	httpAddr      string
-	httpAuthToken string
+	transport        string
+	httpAddr         string
+	httpAuthToken    string
+	unsafeAllowWrite bool
 }
 
 func resolveMCPServerOptions(opts *mcpServerOptions, cfg config.File) (mcpServerResolved, *errors.XError) {
@@ -194,10 +200,22 @@ func resolveMCPServerOptions(opts *mcpServerOptions, cfg config.File) (mcpServer
 		return mcpServerResolved{}, errors.New(errors.CodeCfgInvalid, "streamable http transport requires auth token", nil)
 	}
 
+	unsafeAllowWrite := false
+	if opts.unsafeAllowWriteSet {
+		unsafeAllowWrite = opts.unsafeAllowWrite
+	} else if envVal := os.Getenv("XSQL_MCP_UNSAFE_ALLOW_WRITE"); envVal != "" {
+		parsed, err := strconv.ParseBool(envVal)
+		if err != nil {
+			return mcpServerResolved{}, errors.New(errors.CodeCfgInvalid, "invalid XSQL_MCP_UNSAFE_ALLOW_WRITE", map[string]any{"value": envVal})
+		}
+		unsafeAllowWrite = parsed
+	}
+
 	return mcpServerResolved{
-		transport:     transport,
-		httpAddr:      httpAddr,
-		httpAuthToken: authToken,
+		transport:        transport,
+		httpAddr:         httpAddr,
+		httpAuthToken:    authToken,
+		unsafeAllowWrite: unsafeAllowWrite,
 	}, nil
 }
 

@@ -104,7 +104,7 @@ Status: Implemented
 ## 安全与隐私
 - 默认安全策略：
   - query tool 默认只读模式（双重保护：SQL 静态分析 + DB 事务级只读）
-  - 写操作需要显式设置 `unsafe_allow_write: true`
+  - 写操作需要 profile `unsafe_allow_write: true` **且** MCP server 启动时携带 `--unsafe-allow-write`（见 RFC 0014）
   - Streamable HTTP 必须提供 `Authorization: Bearer <token>` 鉴权
 - secrets 管理：
   - 复用现有的 secret 管理（keyring/加密/明文兼容）
