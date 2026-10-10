@@ -55,6 +55,9 @@ type Profile struct {
 	QueryTimeout  int `yaml:"query_timeout" json:"query_timeout"`   // query timeout, default 30s
 	SchemaTimeout int `yaml:"schema_timeout" json:"schema_timeout"` // schema export timeout, default 60s
 
+	// MaxRows caps rows returned by query (0 = unset; use CLI/API 0 for unlimited)
+	MaxRows int `yaml:"max_rows" json:"max_rows"`
+
 	// SSH proxy reference (refers to a name defined in ssh_proxies)
 	SSHProxy string `yaml:"ssh_proxy" json:"ssh_proxy"`
 
@@ -67,8 +70,11 @@ type Profile struct {
 
 // MCPConfig defines the MCP server configuration.
 type MCPConfig struct {
-	Transport string        `yaml:"transport" json:"transport"` // stdio | streamable_http
-	HTTP      MCPHTTPConfig `yaml:"http" json:"http"`
+	Transport        string        `yaml:"transport" json:"transport"` // stdio | streamable_http
+	HTTP             MCPHTTPConfig `yaml:"http" json:"http"`
+	MaxRows          int           `yaml:"max_rows" json:"max_rows"`                     // default MCP query row cap
+	MaxRowsLimit     int           `yaml:"max_rows_limit" json:"max_rows_limit"`         // hard MCP ceiling for max_rows
+	MaxResponseBytes int           `yaml:"max_response_bytes" json:"max_response_bytes"` // MCP query JSON size cap
 }
 
 // MCPHTTPConfig defines the MCP Streamable HTTP transport configuration.

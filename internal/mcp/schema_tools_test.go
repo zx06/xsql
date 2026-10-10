@@ -418,6 +418,31 @@ func assertToolError(t *testing.T, result *mcp.CallToolResult, code, messageCont
 	}
 }
 
+func TestSchemaListTables_EmptyDatabaseTablesArray(t *testing.T) {
+	prev := schemaApp.ListTables
+	t.Cleanup(func() { schemaApp.ListTables = prev })
+	schemaApp.ListTables = func(context.Context, app.TableListRequest) (*db.TableList, *errors.XError) {
+		return &db.TableList{Database: "empty", Tables: []db.TableSummary{}}, nil
+	}
+	cfg := &config.File{
+		Profiles: map[string]config.Profile{"dev": {DB: "mysql"}},
+	}
+	handler := NewToolHandler(cfg, stats.StatsConfig{}, ServerOptions{})
+	result, _, err := handler.SchemaListTables(context.Background(), &mcp.CallToolRequest{}, SchemaListTablesInput{Profile: "dev"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertToolSuccess(t, result, func(data map[string]any) {
+		raw, ok := data["tables"].([]any)
+		if !ok {
+			t.Fatalf("tables should be array, got %T", data["tables"])
+		}
+		if raw == nil || len(raw) != 0 {
+			t.Fatalf("expected empty tables array, got %v", data["tables"])
+		}
+	})
+}
+
 func assertToolSuccess(t *testing.T, result *mcp.CallToolResult, check func(map[string]any)) {
 	t.Helper()
 	if result == nil || result.IsError {

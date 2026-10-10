@@ -119,6 +119,72 @@ func TestWriteOK_TableFormat_QueryResult(t *testing.T) {
 	}
 }
 
+type truncatedQueryTable struct {
+	cols []string
+	rows []map[string]any
+}
+
+func (truncatedQueryTable) QueryMeta() (truncated bool, rowCount, maxRows int, hint string, ok bool) {
+	return true, 1, 1, "use LIMIT", true
+}
+
+func (t truncatedQueryTable) ToTableData() ([]string, []map[string]any, bool) {
+	return t.cols, t.rows, true
+}
+
+type csvTruncStub struct {
+	cols []string
+	rows []map[string]any
+	msg  string
+}
+
+func (c csvTruncStub) ToTableData() ([]string, []map[string]any, bool) {
+	return c.cols, c.rows, true
+}
+
+func (c csvTruncStub) CSVTruncationNotice() (string, bool) {
+	return c.msg, c.msg != ""
+}
+
+func TestWriteOK_CSVTruncationNoticeOnStderr(t *testing.T) {
+	var out, errOut bytes.Buffer
+	w := New(&out, &errOut)
+	data := csvTruncStub{
+		cols: []string{"n"},
+		rows: []map[string]any{{"n": 1}},
+		msg:  "xsql: query result truncated (max_rows); hint text",
+	}
+	if err := w.WriteOK(FormatCSV, data); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "truncated") {
+		t.Fatal("stdout must stay pure CSV")
+	}
+	if !strings.Contains(errOut.String(), "truncated") {
+		t.Fatalf("stderr notice missing: %q", errOut.String())
+	}
+}
+
+func TestWriteOK_TableFormat_TruncatedQueryMeta(t *testing.T) {
+	var out bytes.Buffer
+	w := New(&out, &bytes.Buffer{})
+
+	result := truncatedQueryTable{
+		cols: []string{"n"},
+		rows: []map[string]any{{"n": 1}},
+	}
+	if err := w.WriteOK(FormatTable, result); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	if !strings.Contains(text, "(truncated at max_rows=1") {
+		t.Fatalf("missing truncation footer: %s", text)
+	}
+	if !strings.Contains(text, "hint: use LIMIT") {
+		t.Fatalf("missing hint line: %s", text)
+	}
+}
+
 func TestWriteOK_TableFormat_NonQueryResult(t *testing.T) {
 	var out bytes.Buffer
 	w := New(&out, &bytes.Buffer{})

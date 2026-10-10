@@ -12,6 +12,17 @@ import (
 type QueryResult struct {
 	Columns []string         `json:"columns" yaml:"columns"`
 	Rows    []map[string]any `json:"rows" yaml:"rows"`
+
+	Truncated bool `json:"truncated,omitempty" yaml:"truncated,omitempty"`
+	RowCount  int  `json:"row_count,omitempty" yaml:"row_count,omitempty"`
+	MaxRows   int  `json:"max_rows,omitempty" yaml:"max_rows,omitempty"`
+	// MaxRowsRequested is set when MCP/user requested more rows than mcp.max_rows_limit.
+	MaxRowsRequested int `json:"max_rows_requested,omitempty" yaml:"max_rows_requested,omitempty"`
+	// MaxRowsLimitApplied is the configured MCP ceiling when clamping occurred.
+	MaxRowsLimitApplied int    `json:"max_rows_limit,omitempty" yaml:"max_rows_limit,omitempty"`
+	TruncatedReason     string `json:"truncated_reason,omitempty" yaml:"truncated_reason,omitempty"`
+	MaxResponseBytes    int    `json:"max_response_bytes,omitempty" yaml:"max_response_bytes,omitempty"`
+	Hint                string `json:"hint,omitempty" yaml:"hint,omitempty"`
 }
 
 // ToTableData implements the output.TableFormatter interface for table output without JSON encoding/decoding.
@@ -22,12 +33,22 @@ func (r *QueryResult) ToTableData() (columns []string, rows []map[string]any, ok
 	return r.Columns, r.Rows, true
 }
 
+// QueryMeta reports truncation metadata for table output.
+func (r *QueryResult) QueryMeta() (truncated bool, rowCount, maxRows int, hint string, ok bool) {
+	if r == nil || !r.Truncated {
+		return false, 0, 0, "", false
+	}
+	return true, r.RowCount, r.MaxRows, r.Hint, true
+}
+
 // QueryOptions contains options for query execution.
 type QueryOptions struct {
 	UnsafeAllowWrite bool   // Allow write operations (bypass read-only protection)
 	DBType           string // Database type: mysql or pg
 	// BypassStaticReadOnly skips SQL static analysis (integration tests for DB-layer enforcement only).
 	BypassStaticReadOnly bool
+	// MaxRows limits rows scanned (0 = unlimited).
+	MaxRows int
 }
 
 // Query executes a SQL query and returns the result.
@@ -38,7 +59,7 @@ type QueryOptions struct {
 func Query(ctx context.Context, db *sql.DB, query string, opts QueryOptions) (*QueryResult, *errors.XError) {
 	// UnsafeAllowWrite bypasses all read-only protections
 	if opts.UnsafeAllowWrite {
-		return executeQuery(ctx, db, query, opts.DBType)
+		return executeQuery(ctx, db, query, opts.DBType, opts.MaxRows)
 	}
 
 	// Enable dual read-only protection by default
@@ -48,7 +69,7 @@ func Query(ctx context.Context, db *sql.DB, query string, opts QueryOptions) (*Q
 		}
 	}
 	// Second layer: database transaction-level read-only
-	return queryWithReadOnlyTx(ctx, db, query, opts.DBType)
+	return queryWithReadOnlyTx(ctx, db, query, opts.DBType, opts.MaxRows)
 }
 
 func normalizeDBType(dbType string) string {
@@ -88,7 +109,7 @@ func beginReadOnlyTx(ctx context.Context, db *sql.DB, dbType string) (*sql.Tx, *
 }
 
 // queryWithReadOnlyTx executes a query within a read-only transaction.
-func queryWithReadOnlyTx(ctx context.Context, db *sql.DB, query string, dbType string) (*QueryResult, *errors.XError) {
+func queryWithReadOnlyTx(ctx context.Context, db *sql.DB, query string, dbType string, maxRows int) (*QueryResult, *errors.XError) {
 	tx, xe := beginReadOnlyTx(ctx, db, dbType)
 	if xe != nil {
 		return nil, xe
@@ -104,28 +125,28 @@ func queryWithReadOnlyTx(ctx context.Context, db *sql.DB, query string, dbType s
 	}
 	defer rows.Close()
 
-	return scanRows(rows)
+	return scanRows(rows, maxRows)
 }
 
 // executeQuery executes a query directly (without a transaction).
-func executeQuery(ctx context.Context, db *sql.DB, query string, dbType string) (*QueryResult, *errors.XError) {
+func executeQuery(ctx context.Context, db *sql.DB, query string, dbType string, maxRows int) (*QueryResult, *errors.XError) {
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, wrapQueryFailed(dbType, err)
 	}
 	defer rows.Close()
 
-	return scanRows(rows)
+	return scanRows(rows, maxRows)
 }
 
-// scanRows scans query result rows.
-func scanRows(rows *sql.Rows) (*QueryResult, *errors.XError) {
+// scanRows scans query result rows, stopping after maxRows when maxRows > 0.
+func scanRows(rows *sql.Rows, maxRows int) (*QueryResult, *errors.XError) {
 	cols, err := rows.Columns()
 	if err != nil {
 		return nil, errors.Wrap(errors.CodeDBExecFailed, "failed to get columns", nil, err)
 	}
 
-	result := &QueryResult{Columns: cols, Rows: []map[string]any{}}
+	result := &QueryResult{Columns: cols, Rows: make([]map[string]any, 0)}
 	for rows.Next() {
 		vals := make([]any, len(cols))
 		ptrs := make([]any, len(cols))
@@ -140,10 +161,21 @@ func scanRows(rows *sql.Rows) (*QueryResult, *errors.XError) {
 			row[c] = convertValue(vals[i])
 		}
 		result.Rows = append(result.Rows, row)
+
+		if maxRows > 0 && len(result.Rows) == maxRows {
+			if rows.Next() {
+				result.Truncated = true
+				result.MaxRows = maxRows
+				result.TruncatedReason = TruncatedReasonMaxRows
+				RefreshTruncationHint(result)
+			}
+			break
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, errors.Wrap(errors.CodeDBExecFailed, "rows iteration error", nil, err)
 	}
+	result.RowCount = len(result.Rows)
 	return result, nil
 }
 

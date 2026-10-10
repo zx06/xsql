@@ -174,7 +174,7 @@ Note: Read-only mode by default. Writes require both profile `unsafe_allow_write
 | Command | Description |
 |---------|-------------|
 | `xsql ai [PROMPT]` | Start interactive AI assistant mode (TUI) |
-| `xsql query <SQL>` | Execute SQL queries (read-only by default) |
+| `xsql query <SQL>` | Execute SQL queries (read-only by default; 1000-row default cap, `--max-rows`) |
 | `xsql schema dump` | Export database schema (tables, columns, indexes, foreign keys) |
 | `xsql profile list` | List all profiles |
 | `xsql profile show <name>` | Show profile details (passwords are masked) |

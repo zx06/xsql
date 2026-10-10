@@ -305,6 +305,20 @@ func TestDumpSchema_UnsupportedDriver(t *testing.T) {
 	}
 }
 
+func TestListTables_NormalizesNilTables(t *testing.T) {
+	driverName := fmt.Sprintf("schema-nil-tables-%s", t.Name())
+	Register(driverName, &mockSchemaExplorerDriver{
+		tableList: &TableList{Database: "app", Tables: nil},
+	})
+	list, xe := ListTables(context.Background(), driverName, &sql.DB{}, SchemaOptions{})
+	if xe != nil {
+		t.Fatalf("ListTables: %v", xe)
+	}
+	if list.Tables == nil || len(list.Tables) != 0 {
+		t.Fatalf("expected non-nil empty slice, got %#v", list.Tables)
+	}
+}
+
 func TestListTables_UnsupportedDriver(t *testing.T) {
 	_, xe := ListTables(nil, "nonexistent", nil, SchemaOptions{})
 	if xe == nil {

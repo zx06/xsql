@@ -77,7 +77,7 @@ xsql mcp server --transport streamable_http --http-addr 127.0.0.1:8787 --http-au
 
 ### MCP Tools
 MCP Server 提供以下 tools（均经 `internal/app`，SSH/连接行为与 CLI/Web 一致）：
-- **query**: 执行 SQL 查询（默认只读；写入需 profile `unsafe_allow_write: true` 且 server 启动时 `--unsafe-allow-write`）
+- **query**: 执行 SQL 查询（默认只读；写入需 profile `unsafe_allow_write: true` 且 server 启动时 `--unsafe-allow-write`）。可选 `max_rows`（`0` = 默认；受 `mcp.max_rows_limit` clamp；默认 500 或 profile/mcp 配置）。截断时 `data` 含 `truncated`/`truncated_reason`/`max_rows`/`max_response_bytes`/`hint` 等。
 - **schema_list_tables**: 轻量表清单（可选 `table_pattern`、`include_system`），适合大库先做 discovery
 - **schema_dump**: 与 `xsql schema dump` 等价的结构化导出（建议配合 `table_pattern` 控制体积）
 - **schema_describe_table**: 单表结构（列、索引、外键）；PostgreSQL 需 `schema`，MySQL 可省略

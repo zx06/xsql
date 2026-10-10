@@ -96,10 +96,14 @@ func (d *Driver) listSchemas(ctx context.Context, conn *sql.DB, includeSystem bo
 	query := `
 		SELECT schema_name
 		FROM information_schema.schemata
-		WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
 	`
-	if !includeSystem {
-		query += " AND schema_name NOT LIKE 'pg_%'"
+	if includeSystem {
+		query += " WHERE schema_name NOT LIKE 'pg_toast%'"
+	} else {
+		query += `
+		WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+		  AND schema_name NOT LIKE 'pg_%'
+		`
 	}
 	query += " ORDER BY schema_name"
 
@@ -145,7 +149,7 @@ func (d *Driver) listTables(ctx context.Context, conn *sql.DB, schemas []string,
 	}
 	defer rows.Close()
 
-	var tables []db.TableSummary
+	tables := make([]db.TableSummary, 0)
 	for rows.Next() {
 		var schema, name string
 		var comment sql.NullString

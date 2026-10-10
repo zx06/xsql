@@ -308,6 +308,25 @@ func TestQuery_MissingSQL(t *testing.T) {
 	}
 }
 
+func TestQuery_MaxRowsNegativeRejected(t *testing.T) {
+	cfg := &config.File{
+		Profiles: map[string]config.Profile{"dev": {DB: "mysql"}},
+	}
+	handler := NewToolHandler(cfg, stats.StatsConfig{}, ServerOptions{})
+	neg := -1
+	result, _, err := handler.Query(context.Background(), &mcp.CallToolRequest{}, QueryInput{
+		SQL:     "SELECT 1",
+		Profile: "dev",
+		MaxRows: &neg,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.IsError {
+		t.Fatal("expected error for negative max_rows on MCP")
+	}
+}
+
 func TestQuery_MissingProfile(t *testing.T) {
 	cfg := &config.File{
 		Profiles: map[string]config.Profile{

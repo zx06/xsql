@@ -89,6 +89,8 @@ For long-running queries, set a timeout (default: 30s):
 xsql query "<SQL>" -p <profile> -f json --query-timeout 60 --attr source=codex-cli --attr agent=codex --attr env=<env> --attr task=long-query
 ```
 
+Results are capped at **1000 rows** by default (`--max-rows`; MCP default **500**). Use explicit `LIMIT` in SQL for pagination. If `data.truncated` is true, follow `data.hint`. Pass `--max-rows 0` only when you truly need an unlimited result set.
+
 ### Step 4: Validate the response
 
 Check the JSON envelope:

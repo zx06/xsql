@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -24,6 +25,8 @@ type QueryFlags struct {
 	SSHSkipHostKey   bool
 	QueryTimeout     int
 	QueryTimeoutSet  bool
+	MaxRows          int
+	MaxRowsSet       bool
 }
 
 // NewQueryCommand creates the query command
@@ -36,6 +39,7 @@ func NewQueryCommand(w *output.Writer) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			flags.QueryTimeoutSet = cmd.Flags().Changed("query-timeout")
+			flags.MaxRowsSet = cmd.Flags().Changed("max-rows")
 			return runQuery(args, flags, w)
 		},
 	}
@@ -44,6 +48,7 @@ func NewQueryCommand(w *output.Writer) *cobra.Command {
 	cmd.Flags().BoolVar(&flags.AllowPlaintext, "allow-plaintext", false, "Allow plaintext secrets in config")
 	cmd.Flags().BoolVar(&flags.SSHSkipHostKey, "ssh-skip-known-hosts-check", false, "Skip SSH known_hosts check (dangerous)")
 	cmd.Flags().IntVar(&flags.QueryTimeout, "query-timeout", 0, "Query timeout in seconds (default: 30)")
+	cmd.Flags().IntVar(&flags.MaxRows, "max-rows", 0, "Maximum rows to return (default: 1000; 0 = unlimited)")
 
 	return cmd
 }
@@ -57,6 +62,10 @@ func runQuery(args []string, flags *QueryFlags, w *output.Writer) error {
 	}
 
 	p := GlobalConfig.Resolved.Profile
+	maxRows, xe := app.ResolveQueryMaxRows(p, os.Getenv("XSQL_MAX_ROWS"), flags.MaxRows, flags.MaxRowsSet)
+	if xe != nil {
+		return xe
+	}
 	timeout := app.QueryTimeout(p, flags.QueryTimeout, flags.QueryTimeoutSet, DefaultQueryTimeout)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -68,6 +77,8 @@ func runQuery(args []string, flags *QueryFlags, w *output.Writer) error {
 		AllowPlaintext:   flags.AllowPlaintext,
 		SkipHostKeyCheck: flags.SSHSkipHostKey,
 		UnsafeAllowWrite: cliWriteAllowed(flags.UnsafeAllowWrite, p.UnsafeAllowWrite),
+		MaxRows:          maxRows,
+		TruncationHint:   app.QueryTruncationHint,
 	})
 
 	// Record stats

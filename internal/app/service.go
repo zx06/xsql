@@ -45,6 +45,8 @@ type QueryRequest struct {
 	AllowPlaintext   bool
 	SkipHostKeyCheck bool
 	UnsafeAllowWrite bool
+	MaxRows          int
+	TruncationHint   string
 }
 
 // SchemaDumpRequest contains options for a schema dump operation.
@@ -181,10 +183,18 @@ func Query(ctx context.Context, req QueryRequest) (*db.QueryResult, *errors.XErr
 	}
 	defer func() { _ = conn.Close() }()
 
-	return db.Query(ctx, conn.DB, req.SQL, db.QueryOptions{
+	result, xe := db.Query(ctx, conn.DB, req.SQL, db.QueryOptions{
 		UnsafeAllowWrite: req.UnsafeAllowWrite,
 		DBType:           req.Profile.DB,
+		MaxRows:          req.MaxRows,
 	})
+	if xe != nil {
+		return nil, xe
+	}
+	if result != nil && result.Truncated && result.Hint == "" {
+		db.RefreshTruncationHint(result)
+	}
+	return result, nil
 }
 
 // DumpSchema exports the schema using a resolved profile.
