@@ -72,16 +72,11 @@ func beginReadOnlyTx(ctx context.Context, db *sql.DB, dbType string) (*sql.Tx, *
 		return nil, errors.Wrap(errors.CodeDBExecFailed, "failed to begin read-only transaction", details, err)
 	}
 
-	switch dialect {
-	case "mysql":
-		// go-sql-driver/mysql maps ReadOnly to START TRANSACTION READ ONLY.
-		// Verify the session is in a read-only transaction when the server supports it.
-		var ro int
-		if err := tx.QueryRowContext(ctx, "SELECT @@transaction_read_only").Scan(&ro); err == nil && ro != 1 {
-			_ = tx.Rollback()
-			return nil, errors.New(errors.CodeDBExecFailed, "mysql connection is not in a read-only transaction", details)
-		}
-	case "pg":
+	// MySQL: go-sql-driver/mysql maps ReadOnly to START TRANSACTION READ ONLY.
+	// Do not use @@transaction_read_only here — on MySQL 8.0 it often stays 0 inside a
+	// read-only transaction while writes are still rejected (ER 1792). Integration tests
+	// assert write blocking for MySQL.
+	if dialect == "pg" {
 		var ro string
 		if err := tx.QueryRowContext(ctx, "SHOW transaction_read_only").Scan(&ro); err == nil && !strings.EqualFold(ro, "on") {
 			_ = tx.Rollback()

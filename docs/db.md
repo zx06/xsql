@@ -108,7 +108,7 @@ SELECT 'DELETE FROM users' AS warning;
 tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 ```
 
-驱动会按方言映射为 MySQL 的 `START TRANSACTION READ ONLY` 或 PostgreSQL 的只读访问模式；并在已知方言下校验 `@@transaction_read_only` / `transaction_read_only` 已开启。
+驱动会按方言映射为 MySQL 的 `START TRANSACTION READ ONLY` 或 PostgreSQL 的只读访问模式。PostgreSQL 会在事务内校验 `transaction_read_only=on`；MySQL 依赖驱动发起的只读事务（`@@transaction_read_only` 在 MySQL 8.0 上不是可靠指标）。
 
 这意味着即使 SQL 静态分析被绕过（理论上），数据库层也会阻止典型 DML/DDL 写入操作（文件导出类语句仍主要依赖静态层拦截）。
 

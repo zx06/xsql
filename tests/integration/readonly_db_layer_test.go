@@ -15,6 +15,35 @@ import (
 	_ "github.com/zx06/xsql/internal/db/pg"
 )
 
+func TestMySQL_ReadOnlyTxAllowsSelect(t *testing.T) {
+	dsn := os.Getenv("XSQL_TEST_MYSQL_DSN")
+	if dsn == "" {
+		t.Skip("XSQL_TEST_MYSQL_DSN not set")
+	}
+
+	drv, ok := db.Get("mysql")
+	if !ok {
+		t.Fatal("mysql driver not registered")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	conn, xe := drv.Open(ctx, db.ConnOptions{DSN: dsn})
+	if xe != nil {
+		t.Fatalf("failed to open: %v", xe)
+	}
+	defer conn.Close()
+
+	result, xe := db.Query(ctx, conn, "SELECT 1 AS n", db.QueryOptions{DBType: "mysql"})
+	if xe != nil {
+		t.Fatalf("expected SELECT to succeed in read-only transaction: %v", xe)
+	}
+	if len(result.Rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(result.Rows))
+	}
+}
+
 func TestMySQL_ReadOnlyTxBlocksWrite_BypassStatic(t *testing.T) {
 	dsn := os.Getenv("XSQL_TEST_MYSQL_DSN")
 	if dsn == "" {
