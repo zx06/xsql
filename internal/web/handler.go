@@ -480,22 +480,6 @@ func IsLoopbackAddr(addr string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// PublicURL converts an effective listener address to a browser URL.
-func PublicURL(addr string) string {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return "http://" + addr + "/"
-	}
-	displayHost := host
-	if host == "" || host == "0.0.0.0" || host == "::" || host == "[::]" {
-		displayHost = "127.0.0.1"
-	}
-	if strings.Contains(displayHost, ":") && !strings.HasPrefix(displayHost, "[") {
-		displayHost = "[" + displayHost + "]"
-	}
-	return "http://" + net.JoinHostPort(displayHost, port) + "/"
-}
-
 func (h *handler) handleConfigGet(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeMethodNotAllowed(w)
