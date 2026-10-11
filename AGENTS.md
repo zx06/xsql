@@ -178,3 +178,20 @@
 - 不要“顺手重构”。
 - 不要改变已有输出字段含义。
 - 新功能必须可关闭/可回退（尤其是安全相关选项）。
+
+## Cursor Cloud specific instructions
+
+- Go 1.25 已在基础镜像。Node.js 24 安装在 `/usr/local`，并链接到 `/usr/local/cargo/bin`，从而排在镜像自带的 Node 22 前面。登录 shell 中 `node -v` 应为 v24。
+- 修改 `webui/` 后执行 `npm --prefix webui ci && npm --prefix webui run build`，再 `go build`，嵌入的 `webui/dist` 才会更新。
+- 本环境没有 systemd。`dockerd` 使用 `fuse-overlayfs` 与 iptables-legacy，并用 `sudo setsid --fork dockerd` 启动。不要对 dockerd 发送 SIGHUP，也不要在 daemon 运行时改写 `/etc/docker/daemon.json`，否则 userland proxy 会退出，`127.0.0.1:3306` 与 `127.0.0.1:5432` 会拒绝连接。
+- MySQL 8.0 与 PostgreSQL 16 来自仓库根目录的 `docker-compose.yml`：`sudo docker compose up -d`。容器名为 `xsql-mysql`（`root` / `root`，库 `testdb`，端口 3306）和 `xsql-postgres`（`postgres` / `postgres`，库 `testdb`，端口 5432）。
+- 集成测试：
+
+```bash
+XSQL_TEST_MYSQL_DSN="root:root@tcp(127.0.0.1:3306)/testdb?parseTime=true" \
+XSQL_TEST_PG_DSN="postgres://postgres:postgres@127.0.0.1:5432/testdb?sslmode=disable" \
+go test -tags=integration ./tests/integration/...
+```
+
+- 其他常用命令：`go test ./...`、`go test -tags=e2e ./tests/e2e/...`、`golangci-lint run`。
+- Web UI：`xsql serve --addr 127.0.0.1:8788 --allow-plaintext`。前端开发服务器：`npm --prefix webui run dev`（默认代理到 `http://127.0.0.1:8788`）。
