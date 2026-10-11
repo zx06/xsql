@@ -34,7 +34,7 @@
 ## 3. 架构与目录约束（不要越界）
 推荐结构（实现时请遵循）：
 - `cmd/xsql`：CLI 入口（只做参数解析、调用 app、输出）
-- `internal/app`：应用编排（核心入口，供未来 MCP/TUI/Web 复用）
+- `internal/app`：应用编排（核心入口，供 MCP/Web 等复用）
 - `internal/config`：配置加载/合并/校验 + profile
 - `internal/secret`：keyring/加密/明文兼容
 - `internal/db`：driver registry + 执行引擎

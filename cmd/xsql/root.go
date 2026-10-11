@@ -90,9 +90,9 @@ func NewRootCommand() *cobra.Command {
 			CLIProfileSet: profileSet,
 			CLIFormat:     GlobalConfig.FormatStr,
 			CLIFormatSet:  formatSet,
-			EnvProfile: os.Getenv("XSQL_PROFILE"),
-			EnvFormat:  os.Getenv("XSQL_FORMAT"),
-			WorkDir:    os.Getenv("XSQL_WORKDIR"),
+			EnvProfile:    os.Getenv("XSQL_PROFILE"),
+			EnvFormat:     os.Getenv("XSQL_FORMAT"),
+			WorkDir:       os.Getenv("XSQL_WORKDIR"),
 			HomeDir:       os.Getenv("XSQL_HOMEDIR"),
 		})
 		if xe != nil {

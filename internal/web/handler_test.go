@@ -814,4 +814,3 @@ ssh_proxies:
 		t.Fatalf("profile show leaked password: %s", profileRec.Body.String())
 	}
 }
-
