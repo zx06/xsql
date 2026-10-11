@@ -1,6 +1,8 @@
 # RFC 0012: Integration of goja JS Engine, Session DataStore, and ReAct Tool Agent Loop
 
-Status: Implemented
+Status: **Removed**（随 AI TUI 一并移除；历史记录）
+
+Status (historical): Implemented
 
 ## 摘要
 本 RFC 在 `xsql ai` 中集成纯 Go 实现的 `goja` JavaScript 虚拟机（100% Zero CGO），构建 **Session DataStore（会话数据集存储与召回）** 机制，并实现无硬编码的 **ReAct Tool Agent Loop 循环推理**。

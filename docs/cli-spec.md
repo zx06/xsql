@@ -21,30 +21,6 @@
 
 ## 命令
 
-### `xsql ai [PROMPT]`
-
-启动交互式 AI 终端模式（TUI）。用户可以直接输入自然语言需求（或在参数中指定初始 prompt），AI 自动结合数据库 Schema 生成 SQL，并提供可视化预览与安全执行。
-
-```bash
-# 启动交互式 TUI
-xsql ai -p dev --attr source=codex-cli --attr agent=codex --attr env=dev --attr task=interactive-analysis
-
-# 携带初始 Prompt 启动
-xsql ai "查看用户表前 10 条数据" -p dev --attr source=codex-cli --attr agent=codex --attr env=dev --attr task=targeted-query
-```
-
-**Flags:**
-| Flag | 默认值 | 说明 |
-|------|--------|------|
-| `--profile`, `-p` | - | Profile 名称 |
-| `--model` | `gpt-4o` | AI 模型名称（ENV：`XSQL_AI_MODEL`，配置：`ai.model`） |
-| `--base-url` | `https://api.openai.com/v1` | AI 服务 Base URL（ENV：`XSQL_AI_BASE_URL`，配置：`ai.base_url`） |
-| `--api-key` | - | AI 服务 API Key（ENV：`XSQL_AI_API_KEY`，配置：`ai.api_key`） |
-| `--allow-plaintext` | false | 允许配置文件中的明文 AI API Key（也可设置 `ai.allow_plaintext: true`） |
-| `--unsafe-allow-write` | false | 本次命令申请写入；仅当 profile 同时设置 `unsafe_allow_write: true` 时生效 |
-
----
-
 ### `xsql query <SQL>`
 
 执行 SQL 查询。
@@ -284,8 +260,7 @@ Web UI 使用以下 HTTP API，统一返回 JSON Envelope：
 | `DELETE` | `/api/v1/config/profiles/{name}` | 删除 profile |
 | `POST`/`PUT` | `/api/v1/config/ssh-proxies` | 创建或更新 SSH proxy |
 | `DELETE` | `/api/v1/config/ssh-proxies/{name}` | 删除 SSH proxy |
-| `POST`/`PUT` | `/api/v1/config/ai` | 更新 AI 配置 |
-| `POST` | `/api/v1/config/test/*` | 测试连接（profile / SSH / AI） |
+| `POST` | `/api/v1/config/test/*` | 测试连接（profile / SSH proxy） |
 | `GET` | `/api/v1/schema/tables` | 列出表（支持 `profile`/`table`/`include_system`） |
 | `GET` | `/api/v1/schema/tables/{schema}/{table}` | 查看单表结构（支持 `profile`） |
 | `POST` | `/api/v1/query` | 执行只读 SQL 查询 |
@@ -294,7 +269,7 @@ Web 查询强制只读，即使 profile 配置了 `unsafe_allow_write: true`，�
 
 `POST /api/v1/query` JSON body：`{"profile":"...","sql":"...","max_rows":1000}`（`max_rows` 可选；省略时使用 profile / `XSQL_MAX_ROWS` / 默认 1000；`0` = 不限）。
 
-**配置 API 脱敏**：`GET /api/v1/config` 与 `GET /api/v1/profiles/{name}` 不会在响应中返回明文密码、DSN、SSH passphrase、AI `api_key` 或 HTTP `auth_token`。明文值以占位符 `***` 表示；`keyring:` 引用会原样返回（不解析 keyring 内容）。通过 Web UI 保存配置时，若客户端未修改某敏感字段（提交空值或 `***`），服务端会保留磁盘上已有值，而不会用占位符覆盖。
+**配置 API 脱敏**：`GET /api/v1/config` 与 `GET /api/v1/profiles/{name}` 不会在响应中返回明文密码、DSN、SSH passphrase 或 HTTP `auth_token`。明文值以占位符 `***` 表示；`keyring:` 引用会原样返回（不解析 keyring 内容）。通过 Web UI 保存配置时，若客户端未修改某敏感字段（提交空值或 `***`），服务端会保留磁盘上已有值，而不会用占位符覆盖。
 
 > **安全说明**：绑定 loopback 时 Web 默认不要求 Bearer token，本机其他进程仍可能调用上述只读配置接口获取脱敏后的配置与 keyring 引用。生产或共享环境请启用 `web.http.auth_token` 或非 loopback 绑定策略（见 `docs/config.md`）。
 
@@ -657,7 +632,6 @@ xsql mcp server --transport streamable_http --http-addr 127.0.0.1:8787 --http-au
 | 入口 | profile `unsafe_allow_write` | 运行时第二因子 |
 |------|------------------------------|----------------|
 | `xsql query` | 必须 | `--unsafe-allow-write` |
-| `xsql ai` (TUI) | 必须 | `--unsafe-allow-write` |
 | `xsql mcp server` | 必须 | `--unsafe-allow-write`（或 `XSQL_MCP_UNSAFE_ALLOW_WRITE`） |
 | Web UI / `serve` | 忽略（强制只读） | 不适用 |
 

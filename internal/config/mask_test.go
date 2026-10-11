@@ -39,7 +39,6 @@ func TestFileForAPI_RedactsSecrets(t *testing.T) {
 				Passphrase: "ssh-secret",
 			},
 		},
-		AI: AIConfig{APIKey: "sk-live"},
 		MCP: MCPConfig{
 			HTTP: MCPHTTPConfig{AuthToken: "mcp-token"},
 		},
@@ -57,9 +56,6 @@ func TestFileForAPI_RedactsSecrets(t *testing.T) {
 	if masked.SSHProxies["bastion"].Passphrase != MaskedSecret {
 		t.Fatalf("passphrase not masked")
 	}
-	if masked.AI.APIKey != MaskedSecret {
-		t.Fatalf("api key not masked")
-	}
 	if masked.MCP.HTTP.AuthToken != MaskedSecret {
 		t.Fatalf("mcp token not masked")
 	}
@@ -73,14 +69,10 @@ func TestFileForAPI_ShowsKeyringReferences(t *testing.T) {
 		Profiles: map[string]Profile{
 			"dev": {Password: "keyring:prod/db"},
 		},
-		AI: AIConfig{APIKey: "keyring:openai/api_key"},
 	}
 	masked := FileForAPI(f)
 	if masked.Profiles["dev"].Password != "keyring:prod/db" {
 		t.Fatalf("expected keyring ref for password, got %q", masked.Profiles["dev"].Password)
-	}
-	if masked.AI.APIKey != "keyring:openai/api_key" {
-		t.Fatalf("expected keyring ref for api key, got %q", masked.AI.APIKey)
 	}
 }
 

@@ -1,6 +1,8 @@
 # RFC 0013: AI Multi Tool Call Sequential Execution and Schema Dialect Guidance
 
-Status: Implemented
+Status: **Removed**（随 AI TUI 一并移除；历史记录）
+
+Status (historical): Implemented
 
 ## 摘要
 本 RFC 优化 `xsql ai` 的 ReAct Agent 调用机制：支持模型单轮返回多个 Tool Call 时的**按序依次调度与执行**（Sequential Execution），彻底消除此前由于模型返回多 Tool Call 导致的硬性中断崩溃；同时升级 System Prompt 模板，显式注入当前数据库名与精确的数据库方言元数据查询指引（MySQL vs PostgreSQL），杜绝 Agent 跨方言盲目试探与反复死循环。

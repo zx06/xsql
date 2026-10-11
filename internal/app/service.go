@@ -5,7 +5,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/zx06/xsql/internal/ai"
 	"github.com/zx06/xsql/internal/config"
 	"github.com/zx06/xsql/internal/db"
 	"github.com/zx06/xsql/internal/errors"
@@ -354,32 +353,3 @@ func TestSSHProxyConnection(ctx context.Context, proxy config.SSHProxy, allowPla
 	}, nil
 }
 
-// TestAIConnection tests AI configuration and measures latency.
-func TestAIConnection(ctx context.Context, aiCfg config.AIConfig) (map[string]any, *errors.XError) {
-	if aiCfg.APIKey == "" {
-		return nil, errors.New(errors.CodeCfgInvalid, "api_key is required", nil)
-	}
-	if aiCfg.Model == "" {
-		aiCfg.Model = "gpt-4o"
-	}
-	if aiCfg.BaseURL == "" {
-		aiCfg.BaseURL = "https://api.openai.com/v1"
-	}
-
-	start := time.Now()
-	client := ai.NewClient(aiCfg, nil)
-	resp, xe := client.ChatCompletion(ctx, []ai.ChatMessage{
-		{Role: "user", Content: "Respond with only 'OK'"},
-	})
-	if xe != nil {
-		return nil, xe
-	}
-	latency := time.Since(start).Milliseconds()
-
-	return map[string]any{
-		"ok":         true,
-		"latency_ms": latency,
-		"model":      aiCfg.Model,
-		"response":   resp.Explanation,
-	}, nil
-}

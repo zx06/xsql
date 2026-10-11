@@ -14,11 +14,11 @@
 | [0006](0006-proxy-port-config-set.md) | Proxy Port Config & Config Set | Implemented |
 | [0007](0007-web-ui.md) | Web 查询界面 | Implemented |
 | [0008](0008-usage-stats.md) | Usage Stats & Global Attributes | Implemented |
-| [0009](0009-ai-tui.md) | AI TUI Interactive Mode | Implemented |
-| [0010](0010-openai-sdk-tool-call.md) | OpenAI SDK & Tool Call | Implemented |
-| [0011](0011-tui-visual-redesign.md) | TUI Visual Redesign | Implemented |
-| [0012](0012-goja-js-data-analysis.md) | goja Data Analysis & ReAct Loop | Implemented |
-| [0013](0013-ai-multi-tool-calls-sequential-execution.md) | AI Multi Tool Call Sequential Execution & Dialect Guidance | Implemented |
+| [0009](0009-ai-tui.md) | AI TUI Interactive Mode | Removed |
+| [0010](0010-openai-sdk-tool-call.md) | OpenAI SDK & Tool Call (AI TUI) | Removed |
+| [0011](0011-tui-visual-redesign.md) | TUI Visual Redesign (AI TUI) | Removed |
+| [0012](0012-goja-js-data-analysis.md) | goja Data Analysis & ReAct Loop (AI TUI) | Removed |
+| [0013](0013-ai-multi-tool-calls-sequential-execution.md) | AI Multi Tool Call Sequential Execution (AI TUI) | Removed |
 | [0014](0014-mcp-write-dual-authorization.md) | MCP 写入双重授权 | Implemented |
 | [0015](0015-mcp-app-layer-schema-tools.md) | MCP 复用 app 层与 Schema Tools | Implemented |
 | [0016](0016-error-guidance-for-agents.md) | AI Agent 错误指引（Error Guidance） | Accepted |

@@ -454,22 +454,6 @@ export class WebUIController {
     }
   }
 
-  async saveAIConfig(aiData) {
-    this.errorMessage = '';
-    try {
-      await this.api('/api/v1/config/ai', {
-        method: 'POST',
-        body: JSON.stringify({ ai: aiData })
-      });
-      await this.loadConfig();
-      this.showToast('AI Settings saved successfully', 'success');
-    } catch (error) {
-      this.errorMessage = `Failed to save AI config: ${error.message}`;
-      this.showToast(this.errorMessage, 'error');
-      throw error;
-    }
-  }
-
   async testProfileConnection(name, profileData) {
     return this.api('/api/v1/config/test/profile', {
       method: 'POST',
@@ -481,13 +465,6 @@ export class WebUIController {
     return this.api('/api/v1/config/test/ssh-proxy', {
       method: 'POST',
       body: JSON.stringify({ name, ssh_proxy: proxyData })
-    });
-  }
-
-  async testAIConnection(aiData) {
-    return this.api('/api/v1/config/test/ai', {
-      method: 'POST',
-      body: JSON.stringify({ ai: aiData })
     });
   }
 

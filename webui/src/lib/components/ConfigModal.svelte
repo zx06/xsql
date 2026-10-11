@@ -9,13 +9,11 @@
     onDeleteProfile,
     onSaveSSHProxy,
     onDeleteSSHProxy,
-    onSaveAI,
     onTestProfile,
-    onTestSSHProxy,
-    onTestAI
+    onTestSSHProxy
   } = $props();
 
-  let activeTab = $state('profiles'); // 'profiles' | 'ssh_proxies' | 'ai'
+  let activeTab = $state('profiles'); // 'profiles' | 'ssh_proxies'
 
   // Edit forms state
   let selectedProfileKey = $state('');
@@ -41,15 +39,6 @@
     passphrase: '',
     known_hosts_file: '',
     skip_host_key: false
-  });
-
-  let aiForm = $state({
-    provider: 'openai',
-    base_url: 'https://api.openai.com/v1',
-    api_key: '',
-    model: 'gpt-4o',
-    max_tokens: 8192,
-    allow_plaintext: true
   });
 
   let isSubmitting = $state(false);
@@ -125,19 +114,6 @@
     }
   }
 
-  function syncAIForm() {
-    clearTestResult();
-    const ai = fullConfig?.ai;
-    aiForm = {
-      provider: ai?.provider || 'openai',
-      base_url: ai?.base_url || 'https://api.openai.com/v1',
-      api_key: ai?.api_key || '',
-      model: ai?.model || 'gpt-4o',
-      max_tokens: Number(ai?.max_tokens || 8192),
-      allow_plaintext: ai?.allow_plaintext !== undefined ? Boolean(ai.allow_plaintext) : true
-    };
-  }
-
   $effect(() => {
     if (isOpen && fullConfig) {
       if (activeTab === 'profiles' && !selectedProfileKey) {
@@ -150,8 +126,6 @@
         if (keys.length > 0) {
           selectProxyToEdit(keys[0]);
         }
-      } else if (activeTab === 'ai') {
-        syncAIForm();
       }
     }
   });
@@ -264,38 +238,6 @@
     }
   }
 
-  // --- AI Actions ---
-  async function handleAISubmit(e) {
-    e.preventDefault();
-    isSubmitting = true;
-    formError = '';
-    try {
-      await onSaveAI?.({ ...aiForm, max_tokens: Number(aiForm.max_tokens) });
-    } catch (err) {
-      formError = err.message;
-    } finally {
-      isSubmitting = false;
-    }
-  }
-
-  async function handleTestAI() {
-    isTesting = true;
-    testResult = null;
-    try {
-      const res = await onTestAI?.({ ...aiForm, max_tokens: Number(aiForm.max_tokens) });
-      testResult = {
-        ok: true,
-        message: `AI Model "${res.model || aiForm.model}" connected (${res.latency_ms ?? 0}ms)`
-      };
-    } catch (err) {
-      testResult = {
-        ok: false,
-        message: err.message || 'AI service test failed'
-      };
-    } finally {
-      isTesting = false;
-    }
-  }
 </script>
 
 {#if isOpen}
@@ -346,15 +288,6 @@
           }}
         >
           🔐 SSH Proxies ({Object.keys(fullConfig?.ssh_proxies || {}).length})
-        </button>
-        <button
-          class={['xsql-tab', activeTab === 'ai' && 'xsql-tab-active']}
-          onclick={() => {
-            activeTab = 'ai';
-            syncAIForm();
-          }}
-        >
-          🤖 AI Settings
         </button>
       </div>
 
@@ -661,113 +594,6 @@
                     {isSubmitting ? 'Saving…' : 'Save Proxy'}
                   </button>
                 </div>
-              </div>
-            </form>
-          </div>
-        {:else if activeTab === 'ai'}
-          <!-- AI Settings Tab -->
-          <div class="max-w-2xl mx-auto">
-            <form class="grid gap-4" onsubmit={handleAISubmit}>
-              <div class="rounded-lg bg-[var(--panel-inner)] p-3 border border-[var(--panel-border)] text-xs text-[var(--muted)] leading-relaxed">
-                Configure LLM service provider for NL-to-SQL generation and AI database optimization in xsql.
-              </div>
-
-              <div class="grid grid-cols-2 gap-3">
-                <div>
-                  <label class="block text-xs font-medium text-[var(--muted)] mb-1" for="cfg-aiprovider">Provider</label>
-                  <select id="cfg-aiprovider" class="xsql-input h-8" bind:value={aiForm.provider}>
-                    <option value="openai">OpenAI (or Compatible)</option>
-                    <option value="deepseek">DeepSeek</option>
-                    <option value="anthropic">Anthropic Claude</option>
-                    <option value="ollama">Local Ollama</option>
-                    <option value="custom">Custom Provider</option>
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-xs font-medium text-[var(--muted)] mb-1" for="cfg-aimodel">Model Name</label>
-                  <input
-                    id="cfg-aimodel"
-                    type="text"
-                    required
-                    class="xsql-input h-8 font-mono"
-                    placeholder="e.g. gpt-4o, deepseek-chat, claude-3-5-sonnet"
-                    bind:value={aiForm.model}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label class="block text-xs font-medium text-[var(--muted)] mb-1" for="cfg-aibase">API Base URL</label>
-                <input
-                  id="cfg-aibase"
-                  type="text"
-                  required
-                  class="xsql-input h-8 font-mono"
-                  placeholder="https://api.openai.com/v1"
-                  bind:value={aiForm.base_url}
-                />
-              </div>
-
-              <div class="grid grid-cols-[minmax(0,1fr)_8rem] gap-3">
-                <div>
-                  <label class="block text-xs font-medium text-[var(--muted)] mb-1" for="cfg-aikey">API Key</label>
-                  <input
-                    id="cfg-aikey"
-                    type="password"
-                    class="xsql-input h-8 font-mono"
-                    placeholder="sk-..., or keyring:openai/api_key"
-                    bind:value={aiForm.api_key}
-                  />
-                </div>
-                <div>
-                  <label class="block text-xs font-medium text-[var(--muted)] mb-1" for="cfg-aitokens">Max Tokens</label>
-                  <input
-                    id="cfg-aitokens"
-                    type="number"
-                    class="xsql-input h-8 font-mono"
-                    bind:value={aiForm.max_tokens}
-                  />
-                </div>
-              </div>
-
-              <div class="pt-1">
-                <label class="flex items-center gap-2 text-xs text-[var(--text)] cursor-pointer">
-                  <input type="checkbox" bind:checked={aiForm.allow_plaintext} class="rounded" />
-                  <span>Allow Plaintext API Key in Config</span>
-                </label>
-              </div>
-
-              <!-- Test Result Box -->
-              {#if testResult}
-                <div class={['rounded-lg p-2.5 text-xs font-mono border mt-1', testResult.ok ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20']}>
-                  {testResult.ok ? '✓ ' : '✕ '}{testResult.message}
-                </div>
-              {/if}
-
-              <div class="mt-3 flex items-center justify-between gap-3 border-t border-[var(--panel-border)] pt-3">
-                <button
-                  type="button"
-                  class="xsql-button text-xs"
-                  disabled={isTesting || isSubmitting || !aiForm.api_key.trim()}
-                  onclick={handleTestAI}
-                >
-                  {#if isTesting}
-                    <svg class="h-3 w-3 animate-spin text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <circle cx="12" cy="12" r="10" stroke-opacity="0.3"/><path d="M12 2a10 10 0 0 1 10 10"/>
-                    </svg>
-                    <span>Testing AI API…</span>
-                  {:else}
-                    <span>⚡ Test AI Connection</span>
-                  {/if}
-                </button>
-
-                <button
-                  type="submit"
-                  class="xsql-button xsql-button-primary text-xs"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? 'Saving…' : 'Save AI Settings'}
-                </button>
               </div>
             </form>
           </div>

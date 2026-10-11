@@ -1,6 +1,8 @@
 # RFC 0011: TUI Visual and Interactive Experience Redesign
 
-Status: Implemented
+Status: **Removed**（随 AI TUI 一并移除；历史记录）
+
+Status (historical): Implemented
 
 ## 摘要
 本 RFC 对 `xsql ai` 终端 TUI 进行视觉与交互体验的重构。参考 Catppuccin / Tokyo Night 现代调色盘以及 Charm (Bubbletea / Lipgloss) 社区开源工具（如 `mods`、`glow`、`gh-dash`）的设计精髓，全面优化 Pill 胶囊标签、✦ Prompt 输入框、全主题自适应调色盘与按键指引。

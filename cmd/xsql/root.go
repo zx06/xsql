@@ -55,9 +55,6 @@ func NewRootCommand() *cobra.Command {
 				CLIFormatSet:  formatSet,
 				EnvProfile:    os.Getenv("XSQL_PROFILE"),
 				EnvFormat:     os.Getenv("XSQL_FORMAT"),
-				EnvAIModel:    os.Getenv("XSQL_AI_MODEL"),
-				EnvAIBaseURL:  os.Getenv("XSQL_AI_BASE_URL"),
-				EnvAIAPIKey:   os.Getenv("XSQL_AI_API_KEY"),
 				WorkDir:       os.Getenv("XSQL_WORKDIR"),
 				HomeDir:       os.Getenv("XSQL_HOMEDIR"),
 			})
@@ -93,12 +90,9 @@ func NewRootCommand() *cobra.Command {
 			CLIProfileSet: profileSet,
 			CLIFormat:     GlobalConfig.FormatStr,
 			CLIFormatSet:  formatSet,
-			EnvProfile:    os.Getenv("XSQL_PROFILE"),
-			EnvFormat:     os.Getenv("XSQL_FORMAT"),
-			EnvAIModel:    os.Getenv("XSQL_AI_MODEL"),
-			EnvAIBaseURL:  os.Getenv("XSQL_AI_BASE_URL"),
-			EnvAIAPIKey:   os.Getenv("XSQL_AI_API_KEY"),
-			WorkDir:       os.Getenv("XSQL_WORKDIR"),
+			EnvProfile: os.Getenv("XSQL_PROFILE"),
+			EnvFormat:  os.Getenv("XSQL_FORMAT"),
+			WorkDir:    os.Getenv("XSQL_WORKDIR"),
 			HomeDir:       os.Getenv("XSQL_HOMEDIR"),
 		})
 		if xe != nil {

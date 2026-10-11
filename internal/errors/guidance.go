@@ -64,7 +64,7 @@ func guidanceFor(xe *XError) map[string]any {
 const (
 	categoryReadOnlyBlocked     = "read_only_blocked"
 	categoryUnrecognizedStmt    = "unrecognized_statement"
-	hintROWriteAuthorization    = "Writes require profile `unsafe_allow_write: true` AND `--unsafe-allow-write` on `xsql query` / `xsql ai` or MCP server startup."
+	hintROWriteAuthorization    = "Writes require profile `unsafe_allow_write: true` AND `--unsafe-allow-write` on `xsql query` or MCP server startup."
 	hintROForbiddenKeyword      = "Statement contains a write keyword blocked by read-only policy; use SELECT-only SQL, or enable profile `unsafe_allow_write` and `--unsafe-allow-write` if the user explicitly requested writes."
 	hintROForbiddenStart        = "Statement starts with a non-read-only command; use SELECT-only SQL, or enable profile `unsafe_allow_write` and `--unsafe-allow-write` if the user explicitly requested writes."
 	hintROUnrecognizedStatement = "Statement not recognized as read-only SQL; check spelling and syntax (must start with an allowed read-only keyword such as SELECT)."
