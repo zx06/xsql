@@ -221,10 +221,8 @@
     onDeleteProfile={(name) => ui.deleteProfileConfig(name)}
     onSaveSSHProxy={(name, data) => ui.saveSSHProxyConfig(name, data)}
     onDeleteSSHProxy={(name) => ui.deleteSSHProxyConfig(name)}
-    onSaveAI={(data) => ui.saveAIConfig(data)}
     onTestProfile={(name, data) => ui.testProfileConnection(name, data)}
     onTestSSHProxy={(name, data) => ui.testSSHProxyConnection(name, data)}
-    onTestAI={(data) => ui.testAIConnection(data)}
   />
 
   <!-- Toast Container -->

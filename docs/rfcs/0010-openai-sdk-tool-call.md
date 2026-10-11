@@ -1,6 +1,8 @@
 # RFC 0010: Migrate OpenAI Integration to Official SDK and Tool Call
 
-Status: Implemented
+Status: **Removed**（随 AI TUI 一并移除；历史记录）
+
+Status (historical): Implemented
 
 ## 摘要
 本 RFC 提出将 `xsql` 项目中的 AI 客户端重构为使用 OpenAI 官方 Go SDK (`github.com/openai/openai-go`)，并将 SQL 生成与解析机制从手动字符串/JSON 解析改为标准 OpenAI Tool Call (`execute_sql`) 模式。

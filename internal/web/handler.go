@@ -81,10 +81,8 @@ func NewHandler(opts HandlerOptions) http.Handler {
 	mux.Handle(apiPrefix+"/config/profiles/", h.withAuth(http.HandlerFunc(h.handleConfigDeleteProfile)))
 	mux.Handle(apiPrefix+"/config/ssh-proxies", h.withAuth(http.HandlerFunc(h.handleConfigSaveSSHProxy)))
 	mux.Handle(apiPrefix+"/config/ssh-proxies/", h.withAuth(http.HandlerFunc(h.handleConfigDeleteSSHProxy)))
-	mux.Handle(apiPrefix+"/config/ai", h.withAuth(http.HandlerFunc(h.handleConfigSaveAI)))
 	mux.Handle(apiPrefix+"/config/test/profile", h.withAuth(http.HandlerFunc(h.handleConfigTestProfile)))
 	mux.Handle(apiPrefix+"/config/test/ssh-proxy", h.withAuth(http.HandlerFunc(h.handleConfigTestSSHProxy)))
-	mux.Handle(apiPrefix+"/config/test/ai", h.withAuth(http.HandlerFunc(h.handleConfigTestAI)))
 	mux.Handle(apiPrefix+"/schema/tables/", h.withAuth(http.HandlerFunc(h.handleSchemaTable)))
 	mux.Handle(apiPrefix+"/schema/tables", h.withAuth(http.HandlerFunc(h.handleSchemaTables)))
 	mux.Handle(apiPrefix+"/query", h.withAuth(http.HandlerFunc(h.handleQuery)))
@@ -521,7 +519,6 @@ func (h *handler) handleConfigGet(w http.ResponseWriter, r *http.Request) {
 		"ssh_proxies": safe.SSHProxies,
 		"mcp":         safe.MCP,
 		"web":         safe.Web,
-		"ai":          safe.AI,
 	})
 }
 
@@ -636,30 +633,6 @@ func (h *handler) handleConfigDeleteSSHProxy(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "name": name})
 }
 
-type configAIRequest struct {
-	AI config.AIConfig `json:"ai"`
-}
-
-func (h *handler) handleConfigSaveAI(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost && r.Method != http.MethodPut {
-		writeMethodNotAllowed(w)
-		return
-	}
-	var req configAIRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, errors.Wrap(errors.CodeCfgInvalid, "invalid JSON payload", nil, err))
-		return
-	}
-	configPath := h.getResolvedConfigPath()
-	cfg, _, _ := config.LoadConfig(config.Options{ConfigPath: h.configPath})
-	req.AI = config.MergeAIConfigSecrets(req.AI, cfg.AI)
-	if xe := config.SaveAI(configPath, req.AI); xe != nil {
-		writeError(w, statusCodeFor(xe.Code), xe)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "config_path": configPath})
-}
-
 func (h *handler) handleConfigTestProfile(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeMethodNotAllowed(w)
@@ -753,37 +726,6 @@ func (h *handler) handleConfigTestSSHProxy(w http.ResponseWriter, r *http.Reques
 	}
 
 	result, xe := app.TestSSHProxyConnection(r.Context(), proxy, h.allowPlaintext, h.skipHostKeyCheck)
-	if xe != nil {
-		writeError(w, statusCodeFor(xe.Code), xe)
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
-}
-
-func (h *handler) handleConfigTestAI(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeMethodNotAllowed(w)
-		return
-	}
-	var req struct {
-		AI config.AIConfig `json:"ai"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, errors.Wrap(errors.CodeCfgInvalid, "invalid JSON payload", nil, err))
-		return
-	}
-
-	aiCfg := req.AI
-	cfg, _, _ := config.LoadConfig(config.Options{ConfigPath: h.configPath})
-	aiCfg = config.MergeAIConfigSecrets(aiCfg, cfg.AI)
-	if aiCfg.BaseURL == "" {
-		aiCfg.BaseURL = cfg.AI.BaseURL
-	}
-	if aiCfg.Model == "" {
-		aiCfg.Model = cfg.AI.Model
-	}
-
-	result, xe := app.TestAIConnection(r.Context(), aiCfg)
 	if xe != nil {
 		writeError(w, statusCodeFor(xe.Code), xe)
 		return

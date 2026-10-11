@@ -1,6 +1,8 @@
 # RFC 0009: AI TUI Interactive Mode
 
-Status: Implemented
+Status: **Removed** — 交互式 `xsql ai` TUI 已从产品中移除；本文档仅作历史记录。
+
+Status (historical): Implemented
 
 ## 摘要
 本 RFC 为 `xsql` 增加交互式 AI 模式（TUI）。用户可以通过自然语言在终端提问，AI 自动结合当前数据库的 Schema 结构生成相应的 SQL 语句，并在 TUI 界面中提供可视化预览与安全执行。

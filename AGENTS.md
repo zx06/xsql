@@ -34,7 +34,7 @@
 ## 3. 架构与目录约束（不要越界）
 推荐结构（实现时请遵循）：
 - `cmd/xsql`：CLI 入口（只做参数解析、调用 app、输出）
-- `internal/app`：应用编排（核心入口，供未来 MCP/TUI/Web 复用）
+- `internal/app`：应用编排（核心入口，供 MCP/Web 等复用）
 - `internal/config`：配置加载/合并/校验 + profile
 - `internal/secret`：keyring/加密/明文兼容
 - `internal/db`：driver registry + 执行引擎
@@ -71,7 +71,7 @@
 - 目标数据库：MySQL + PostgreSQL。
 - 可扩展性：通过 driver registry 扩展新 DB。
 - **默认只读**：防止误操作，默认启用双重只读保护（SQL 静态分析 + 数据库事务级只读）。
-- **CLI 写入双重授权**：profile 必须配置 `unsafe_allow_write: true`，且当前 `query` / `ai` 命令必须同时携带 `--unsafe-allow-write`；任一条件缺失都保持只读。
+- **CLI 写入双重授权**：profile 必须配置 `unsafe_allow_write: true`，且当前 `query` 命令必须同时携带 `--unsafe-allow-write`；任一条件缺失都保持只读。
 - **AI 调用标记**：Codex 发起的 xsql CLI 调用必须携带 `--attr source=codex-cli`，建议同时追加 `agent`、`env`、`team`、`task` 等 attr；其他 AI 客户端应使用自己的稳定 source 值，且不得覆盖 source。
 - 只读拦截必须返回明确错误码（退出码=4）。
 

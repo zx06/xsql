@@ -9,11 +9,6 @@
 /cmd/xsql              # CLI 主程序入口
 /internal/app          # 应用编排（解析参数->执行->返回结构化结果）
 /internal/config       # 配置加载/合并/校验 + profiles
-/internal/ai           # AI LLM 客户端与 Context Prompt 组装
-/internal/tui          # Bubbletea TUI 交互式终端UI实现
-/internal/export       # AI 会话数据导出
-/internal/js           # goja 数据分析沙箱
-/internal/session      # AI 会话数据集存储
 /internal/secret       # keyring/加密/明文兼容
 /internal/db           # driver registry + 执行引擎
 /internal/db/mysql     # MySQL 驱动实现

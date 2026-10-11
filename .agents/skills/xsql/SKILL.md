@@ -23,7 +23,7 @@ description: >
 - `stdout` is data; `stderr` is logs. Never parse stderr as result data.
 - Validate responses by checking `ok`, `schema_version`, and `error.code` — not by string matching.
 - On `ok: false`, read `error.details.hint`, `error.details.category`, and `error.details.retryable` before retrying (see `docs/error-contract.md`). Use `hint` as the next action; respect `retryable: false` for SQL/schema/permission fixes instead of blind retries.
-- Assume read-only mode. Writes require both `unsafe_allow_write: true` in the selected profile and a runtime write opt-in: `--unsafe-allow-write` on `xsql query` / `xsql ai`, or `--unsafe-allow-write` when starting `xsql mcp server` (or `XSQL_MCP_UNSAFE_ALLOW_WRITE=true`). Only enable both factors when the user has explicitly requested writes.
+- Assume read-only mode. Writes require both `unsafe_allow_write: true` in the selected profile and a runtime write opt-in: `--unsafe-allow-write` on `xsql query`, or `--unsafe-allow-write` when starting `xsql mcp server` (or `XSQL_MCP_UNSAFE_ALLOW_WRITE=true`). Only enable both factors when the user has explicitly requested writes.
 - Never leak secrets, full DSNs, passwords, or private keys in output or summaries.
 - `--ssh-skip-known-hosts-check` is a risky last resort — call out the security tradeoff if it's needed.
 

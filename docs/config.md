@@ -32,14 +32,6 @@ ssh_proxies:
 
 ```yaml
 # xsql.yaml
-ai:
-  provider: openai
-  base_url: https://api.openai.com/v1
-  api_key: "keyring:ai/api_key"
-  allow_plaintext: false
-  model: gpt-4o
-  max_tokens: 8192
-
 stats:
   enabled: true
   log_sql: false
@@ -129,19 +121,6 @@ profiles:
 
 Profile 还可设置 `max_rows`（query 默认行数上限，CLI/Web 默认 1000）、`query_timeout`、`schema_timeout`。
 
-## AI 配置项
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `ai.provider` | string | AI provider，当前为 `openai` 兼容接口 |
-| `ai.base_url` | string | AI 服务 Base URL，默认 `https://api.openai.com/v1` |
-| `ai.api_key` | string | AI 服务 API Key，推荐使用 `keyring:` 引用 |
-| `ai.allow_plaintext` | bool | 允许配置文件中的明文 AI API Key（默认 false） |
-| `ai.model` | string | 模型名称，默认 `gpt-4o` |
-| `ai.max_tokens` | int | 单次响应最大 token 数，默认 8192 |
-
-配置文件中的明文 `ai.api_key` 默认拒绝。设置 `ai.allow_plaintext: true` 或在 `xsql ai` 显式使用 `--allow-plaintext` 时允许；CLI `--api-key` 和 `XSQL_AI_API_KEY` 本身属于显式运行时输入。
-
 ## Web 配置项
 
 | 字段 | 类型 | 说明 |
@@ -150,7 +129,7 @@ Profile 还可设置 `max_rows`（query 默认行数上限，CLI/Web 默认 1000
 | `web.http.auth_token` | string | Web 鉴权 token（支持 `keyring:` 引用） |
 | `web.http.allow_plaintext_token` | bool | 允许在配置中使用明文 token |
 
-通过 Web UI 或 `GET /api/v1/config` 读取配置时，明文密码、DSN、passphrase、`api_key` 与 HTTP `auth_token` 会以 `***` 占位符返回，不会泄露实际值；`keyring:` 引用会原样显示。使用 `POST`/`PUT` 保存时，若某敏感字段未修改（提交空字符串或 `***`），服务端保留文件中已有值。
+通过 Web UI 或 `GET /api/v1/config` 读取配置时，明文密码、DSN、passphrase 与 HTTP `auth_token` 会以 `***` 占位符返回，不会泄露实际值；`keyring:` 引用会原样显示。使用 `POST`/`PUT` 保存时，若某敏感字段未修改（提交空字符串或 `***`），服务端保留文件中已有值。
 
 ## SSH Proxy 配置项
 
@@ -184,7 +163,7 @@ Profile 还可设置 `max_rows`（query 默认行数上限，CLI/Web 默认 1000
 | `query_timeout` | int | 查询超时秒数（默认 30 秒） |
 | `schema_timeout` | int | Schema 导出超时秒数（默认 60 秒） |
 
-> **CLI 写入双重授权**：`xsql query` 和 `xsql ai` 只有在所选 profile 配置 `unsafe_allow_write: true` 且当前命令同时携带 `--unsafe-allow-write` 时才会绕过只读保护。配置或 flag 单独开启都不会允许 CLI 写入。MCP 仍由 profile 配置控制，Web 始终只读。
+> **CLI 写入双重授权**：`xsql query` 只有在所选 profile 配置 `unsafe_allow_write: true` 且当前命令同时携带 `--unsafe-allow-write` 时才会绕过只读保护。配置或 flag 单独开启都不会允许 CLI 写入。MCP 仍由 profile 配置控制，Web 始终只读。
 
 ## Stats 配置项
 

@@ -49,13 +49,6 @@ func SSHProxyForAPI(sp SSHProxy) SSHProxy {
 	return out
 }
 
-// AIConfigForAPI returns a copy of ai with sensitive fields redacted for HTTP responses.
-func AIConfigForAPI(ai AIConfig) AIConfig {
-	out := ai
-	out.APIKey = MaskSecretForDisplay(ai.APIKey)
-	return out
-}
-
 // MCPHTTPConfigForAPI redacts auth tokens for HTTP responses.
 func MCPHTTPConfigForAPI(c MCPHTTPConfig) MCPHTTPConfig {
 	out := c
@@ -85,7 +78,6 @@ func FileForAPI(f File) File {
 			out.SSHProxies[name] = SSHProxyForAPI(sp)
 		}
 	}
-	out.AI = AIConfigForAPI(f.AI)
 	out.MCP = f.MCP
 	out.MCP.HTTP = MCPHTTPConfigForAPI(f.MCP.HTTP)
 	out.Web = f.Web
@@ -105,12 +97,5 @@ func MergeProfileSecrets(incoming, existing Profile) Profile {
 func MergeSSHProxySecrets(incoming, existing SSHProxy) SSHProxy {
 	out := incoming
 	out.Passphrase = CoalesceSecret(incoming.Passphrase, existing.Passphrase)
-	return out
-}
-
-// MergeAIConfigSecrets copies stored secrets from existing when incoming values are omitted or masked.
-func MergeAIConfigSecrets(incoming, existing AIConfig) AIConfig {
-	out := incoming
-	out.APIKey = CoalesceSecret(incoming.APIKey, existing.APIKey)
 	return out
 }
