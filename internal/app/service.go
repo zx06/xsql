@@ -352,4 +352,3 @@ func TestSSHProxyConnection(ctx context.Context, proxy config.SSHProxy, allowPla
 		"user":       proxy.User,
 	}, nil
 }
-

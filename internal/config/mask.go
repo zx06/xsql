@@ -99,4 +99,3 @@ func MergeSSHProxySecrets(incoming, existing SSHProxy) SSHProxy {
 	out.Passphrase = CoalesceSecret(incoming.Passphrase, existing.Passphrase)
 	return out
 }
-
