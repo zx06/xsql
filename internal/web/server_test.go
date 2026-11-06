@@ -234,7 +234,7 @@ func TestServerTimeouts(t *testing.T) {
 		t.Errorf("expected ReadHeaderTimeout %v, got %v", expectedRead, server.server.ReadHeaderTimeout)
 	}
 
-	expectedWrite := 30 * time.Second
+	expectedWrite := 120 * time.Second
 	if server.server.WriteTimeout != expectedWrite {
 		t.Errorf("expected WriteTimeout %v, got %v", expectedWrite, server.server.WriteTimeout)
 	}

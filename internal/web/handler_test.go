@@ -814,3 +814,33 @@ ssh_proxies:
 		t.Fatalf("profile show leaked password: %s", profileRec.Body.String())
 	}
 }
+
+func TestHandler_CrossOriginBlocked(t *testing.T) {
+	handler := NewHandler(HandlerOptions{
+		AuthRequired: false,
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:8788/api/v1/config/profiles", strings.NewReader(`{"name":"p","profile":{"db":"mysql"}}`))
+	req.Header.Set("Origin", "https://evil.example.com")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for cross-origin Origin header, got %d", rec.Code)
+	}
+
+	req2 := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:8788/api/v1/query", strings.NewReader(`{"profile":"dev","sql":"SELECT 1"}`))
+	req2.Header.Set("Sec-Fetch-Site", "cross-site")
+	rec2 := httptest.NewRecorder()
+	handler.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for Sec-Fetch-Site: cross-site, got %d", rec2.Code)
+	}
+
+	reqSame := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8788/api/v1/config", nil)
+	reqSame.Header.Set("Origin", "http://127.0.0.1:8788")
+	recSame := httptest.NewRecorder()
+	handler.ServeHTTP(recSame, reqSame)
+	if recSame.Code != http.StatusOK {
+		t.Fatalf("expected 200 for same-origin request, got %d", recSame.Code)
+	}
+}

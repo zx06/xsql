@@ -36,11 +36,11 @@ func applyMCPResponseByteLimit(result *db.QueryResult, maxBytes int, effectiveMa
 }
 
 func mcpPayloadSize(result *db.QueryResult) int {
-	payload, err := json.Marshal(map[string]any{
+	payload, err := json.MarshalIndent(map[string]any{
 		"ok":             true,
 		"schema_version": 1,
 		"data":           result,
-	})
+	}, "", "  ")
 	if err != nil {
 		return 0
 	}
@@ -48,21 +48,23 @@ func mcpPayloadSize(result *db.QueryResult) int {
 }
 
 func binarySearchRowFit(result *db.QueryResult, maxBytes int) int {
+	truncatedReason := db.AppendTruncatedReason(result.TruncatedReason, db.TruncatedReasonMaxResponseBytes)
 	low, high := 0, len(result.Rows)
 	for low < high {
 		mid := (low + high + 1) / 2
 		trial := &db.QueryResult{
 			Columns:             result.Columns,
 			Rows:                result.Rows[:mid],
-			Truncated:           result.Truncated,
+			Truncated:           true,
 			RowCount:            mid,
 			MaxRows:             result.MaxRows,
 			MaxRowsRequested:    result.MaxRowsRequested,
 			MaxRowsLimitApplied: result.MaxRowsLimitApplied,
-			TruncatedReason:     result.TruncatedReason,
+			TruncatedReason:     truncatedReason,
 			MaxResponseBytes:    maxBytes,
 			Hint:                result.Hint,
 		}
+		db.RefreshTruncationHint(trial)
 		if mcpPayloadSize(trial) <= maxBytes {
 			low = mid
 		} else {

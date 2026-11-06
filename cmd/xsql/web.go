@@ -101,6 +101,7 @@ func runWebCommand(opts *webCommandOptions, w *output.Writer) error {
 		AuthRequired:     resolved.authRequired,
 		AuthToken:        resolved.authToken,
 		Stats:            GlobalConfig.Stats,
+		Attrs:            GlobalConfig.Attrs,
 	})
 	server := webpkg.NewServer(listener, handler)
 	url := webpkg.PublicURL(server.Addr())
@@ -187,7 +188,7 @@ func resolveWebOptions(opts *webCommandOptions, cfg config.File) (resolvedWebOpt
 		authToken = secretValue
 	}
 
-	authRequired := !webpkg.IsLoopbackAddr(addr)
+	authRequired := !webpkg.IsLoopbackAddr(addr) || authToken != ""
 	if authRequired && authToken == "" {
 		return resolvedWebOptions{}, errors.New(errors.CodeCfgInvalid, "web auth token is required for non-loopback addresses", map[string]any{"addr": addr})
 	}

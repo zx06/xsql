@@ -62,6 +62,8 @@ func runMCPServer(opts *mcpServerOptions) error {
 	// Load config
 	cfg, _, xe := config.LoadConfig(config.Options{
 		ConfigPath: GlobalConfig.ConfigStr,
+		WorkDir:    os.Getenv("XSQL_WORKDIR"),
+		HomeDir:    os.Getenv("XSQL_HOMEDIR"),
 	})
 	if xe != nil {
 		return xe
@@ -74,6 +76,7 @@ func runMCPServer(opts *mcpServerOptions) error {
 
 	server, err := mcp_pkg.CreateServer(version, &cfg, GlobalConfig.Stats, mcp_pkg.ServerOptions{
 		UnsafeAllowWrite: resolved.unsafeAllowWrite,
+		Attrs:            GlobalConfig.Attrs,
 	})
 	if err != nil {
 		if xe, ok := err.(*errors.XError); ok {
@@ -90,10 +93,13 @@ func runMCPServer(opts *mcpServerOptions) error {
 
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+		defer signal.Stop(sigChan)
 		go func() {
-			<-sigChan
-			signal.Stop(sigChan)
-			cancel()
+			select {
+			case <-sigChan:
+				cancel()
+			case <-ctx.Done():
+			}
 		}()
 
 		if err := runMCPStdioServer(ctx, server); err != nil && !stderrors.Is(err, context.Canceled) {
@@ -109,23 +115,29 @@ func runMCPServer(opts *mcpServerOptions) error {
 			return errors.Wrap(errors.CodeInternal, "failed to create streamable http handler", nil, err)
 		}
 		httpServer := &http.Server{
-			Addr:         resolved.httpAddr,
-			Handler:      handler,
-			ReadTimeout:  30 * time.Second,
-			WriteTimeout: 30 * time.Second,
-			IdleTimeout:  120 * time.Second,
+			Addr:              resolved.httpAddr,
+			Handler:           handler,
+			ReadHeaderTimeout: 15 * time.Second,
+			ReadTimeout:       30 * time.Second,
+			WriteTimeout:      120 * time.Second,
+			IdleTimeout:       120 * time.Second,
 		}
 
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+		defer signal.Stop(sigChan)
+		done := make(chan struct{})
+		defer close(done)
 
 		go func() {
-			<-sigChan
-			signal.Stop(sigChan)
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			if shutdownErr := httpServer.Shutdown(ctx); shutdownErr != nil {
-				log.Printf("[mcp] http server shutdown error: %v", shutdownErr)
+			select {
+			case <-sigChan:
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				if shutdownErr := httpServer.Shutdown(ctx); shutdownErr != nil {
+					log.Printf("[mcp] http server shutdown error: %v", shutdownErr)
+				}
+			case <-done:
 			}
 		}()
 

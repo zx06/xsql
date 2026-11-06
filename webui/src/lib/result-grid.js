@@ -180,7 +180,6 @@ export function formatResultCellValue(value) {
   const kind = detectValueKind(value);
   const previewText = buildPreviewText(value, kind);
   const fullText = buildFullText(value, kind);
-  const highlightedHtml = kind === 'json' ? highlightJson(fullText) : '';
 
   return {
     kind,
@@ -188,7 +187,7 @@ export function formatResultCellValue(value) {
     previewText,
     previewDisplay: previewText.length > PREVIEW_LENGTH ? `${previewText.slice(0, PREVIEW_LENGTH - 1)}…` : previewText,
     fullText,
-    highlightedHtml,
+    highlightedHtml: '',
     tooltipText: fullText.length > TOOLTIP_LENGTH ? `${fullText.slice(0, TOOLTIP_LENGTH - 1)}…` : fullText,
     isEmptyString: kind === 'string' && value === '',
     isLong: previewText.length > PREVIEW_LENGTH || /\n/.test(fullText)
@@ -200,7 +199,8 @@ export function buildSelectedResultCell({ rowIndex, columnName, value }) {
   return {
     rowIndex,
     columnName,
-    ...formatted
+    ...formatted,
+    highlightedHtml: formatted.kind === 'json' ? highlightJson(formatted.fullText) : ''
   };
 }
 

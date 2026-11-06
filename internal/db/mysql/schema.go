@@ -329,6 +329,20 @@ func (d *Driver) getForeignKeys(ctx context.Context, conn *sql.DB, schemaName, t
 }
 
 func toLikePattern(pattern string) string {
-	pattern = strings.ReplaceAll(pattern, "*", "%")
-	return strings.ReplaceAll(pattern, "?", "_")
+	var b strings.Builder
+	b.Grow(len(pattern))
+	for i := 0; i < len(pattern); i++ {
+		switch pattern[i] {
+		case '\\', '%', '_':
+			b.WriteByte('\\')
+			b.WriteByte(pattern[i])
+		case '*':
+			b.WriteByte('%')
+		case '?':
+			b.WriteByte('_')
+		default:
+			b.WriteByte(pattern[i])
+		}
+	}
+	return b.String()
 }

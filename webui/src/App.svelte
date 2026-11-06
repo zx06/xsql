@@ -56,6 +56,7 @@
     schemaLoading={ui.schemaLoading}
     onProfileChange={(profileName) => ui.selectProfile(profileName)}
     onThemeChange={(mode) => ui.setThemeMode(mode)}
+    onTokenChange={(token) => ui.setAuthToken(token)}
     onOpenConfig={() => ui.openConfigModal()}
     onOpenShortcuts={() => ui.openShortcutsModal()}
   />
@@ -156,6 +157,9 @@
                 columns={ui.columns}
                 rows={ui.processedRows}
                 rowCount={ui.rowCount}
+                truncated={ui.queryTruncated}
+                maxRows={ui.queryMaxRows}
+                truncationHint={ui.queryTruncationHint}
                 sortColumn={ui.sortColumn}
                 sortDirection={ui.sortDirection}
                 resultFilter={ui.resultFilter}

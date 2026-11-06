@@ -131,6 +131,7 @@ xsql schema dump -p dev --include-system
 | `--include-system` | false | 包含系统表 |
 | `--allow-plaintext` | false | 允许配置中使用明文密码 |
 | `--ssh-skip-known-hosts-check` | false | 跳过 SSH 主机密钥验证（危险） |
+| `--schema-timeout` | 60 | Schema 导出超时（秒）；profile 可用 `schema_timeout` 覆盖 |
 
 **输出示例（JSON）：**
 ```json
@@ -492,8 +493,9 @@ xsql config set ssh_proxy.bastion.user admin
 | Flag | 说明 |
 |------|------|
 | `--config <path>` | 指定 YAML 配置文件路径 |
-| `--profile <name>` | 选择 profile（等价 ENV：`XSQL_PROFILE`） |
-| `--format <fmt>` | 输出格式（等价 ENV：`XSQL_FORMAT`） |
+| `-p, --profile <name>` | 选择 profile（等价 ENV：`XSQL_PROFILE`） |
+| `-f, --format <fmt>` | 输出格式（等价 ENV：`XSQL_FORMAT`） |
+| `--attr <key=value>` | 标记会话属性（可重复，等价 ENV：`XSQL_ATTR`） |
 
 ## 格式说明
 

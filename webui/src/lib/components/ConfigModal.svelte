@@ -58,6 +58,7 @@
     if (key && fullConfig?.profiles?.[key]) {
       const p = fullConfig.profiles[key];
       profileForm = {
+        ...p,
         db: p.db ?? p.DB ?? 'mysql',
         host: p.host ?? p.Host ?? '127.0.0.1',
         port: p.port ?? p.Port ?? ((p.db ?? p.DB) === 'pg' ? 5432 : 3306),
@@ -92,6 +93,7 @@
     if (key && fullConfig?.ssh_proxies?.[key]) {
       const sp = fullConfig.ssh_proxies[key];
       proxyForm = {
+        ...sp,
         host: sp.host ?? sp.Host ?? '',
         port: sp.port ?? sp.Port ?? 22,
         user: sp.user ?? sp.User ?? '',
@@ -136,6 +138,11 @@
     const key = selectedProfileKey.trim();
     if (!key) {
       formError = 'Profile name is required';
+      return;
+    }
+    const isExisting = Boolean(fullConfig?.profiles?.[key]);
+    if (!isExisting && profileForm.password === '***') {
+      formError = 'Please enter the password for the new profile (cannot copy masked "***")';
       return;
     }
     isSubmitting = true;
@@ -190,6 +197,11 @@
     const key = selectedProxyKey.trim();
     if (!key) {
       formError = 'SSH Proxy name is required';
+      return;
+    }
+    const isExisting = Boolean(fullConfig?.ssh_proxies?.[key]);
+    if (!isExisting && proxyForm.passphrase === '***') {
+      formError = 'Please enter the passphrase for the new SSH proxy (cannot copy masked "***")';
       return;
     }
     isSubmitting = true;

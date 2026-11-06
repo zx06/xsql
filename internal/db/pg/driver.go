@@ -63,22 +63,31 @@ func (d *Driver) Open(ctx context.Context, opts db.ConnOptions) (*sql.DB, *error
 func buildDSN(opts db.ConnOptions) string {
 	parts := []string{}
 	if opts.Host != "" {
-		parts = append(parts, fmt.Sprintf("host=%s", opts.Host))
+		parts = append(parts, formatPGParam("host", opts.Host))
 	}
 	if opts.Port != 0 {
 		parts = append(parts, fmt.Sprintf("port=%d", opts.Port))
 	}
 	if opts.User != "" {
-		parts = append(parts, fmt.Sprintf("user=%s", opts.User))
+		parts = append(parts, formatPGParam("user", opts.User))
 	}
 	if opts.Password != "" {
-		parts = append(parts, fmt.Sprintf("password=%s", opts.Password))
+		parts = append(parts, formatPGParam("password", opts.Password))
 	}
 	if opts.Database != "" {
-		parts = append(parts, fmt.Sprintf("dbname=%s", opts.Database))
+		parts = append(parts, formatPGParam("dbname", opts.Database))
 	}
 	for k, v := range opts.Params {
-		parts = append(parts, fmt.Sprintf("%s=%s", k, v))
+		parts = append(parts, formatPGParam(k, v))
 	}
 	return strings.Join(parts, " ")
+}
+
+func formatPGParam(key, val string) string {
+	if strings.ContainsAny(val, " \t\n\r'\\=") {
+		escaped := strings.ReplaceAll(val, `\`, `\\`)
+		escaped = strings.ReplaceAll(escaped, `'`, `\'`)
+		return fmt.Sprintf("%s='%s'", key, escaped)
+	}
+	return fmt.Sprintf("%s=%s", key, val)
 }

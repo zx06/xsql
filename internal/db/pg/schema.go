@@ -38,7 +38,12 @@ func (d *Driver) ListTables(ctx context.Context, conn *sql.DB, opts db.SchemaOpt
 
 // DescribeTable returns the schema details for a single PostgreSQL table.
 func (d *Driver) DescribeTable(ctx context.Context, conn *sql.DB, opts db.TableDescribeOptions) (*db.Table, *errors.XError) {
-	table, xe := d.loadTableSummary(ctx, conn, opts.Schema, opts.Name)
+	schemaName := strings.TrimSpace(opts.Schema)
+	if schemaName == "" {
+		schemaName = "public"
+	}
+
+	table, xe := d.loadTableSummary(ctx, conn, schemaName, opts.Name)
 	if xe != nil {
 		return nil, xe
 	}
@@ -51,7 +56,7 @@ func (d *Driver) DescribeTable(ctx context.Context, conn *sql.DB, opts db.TableD
 
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
-		result, xe := d.getColumns(gctx, conn, opts.Schema, opts.Name)
+		result, xe := d.getColumns(gctx, conn, schemaName, opts.Name)
 		if xe != nil {
 			return xe
 		}
@@ -59,7 +64,7 @@ func (d *Driver) DescribeTable(ctx context.Context, conn *sql.DB, opts db.TableD
 		return nil
 	})
 	g.Go(func() error {
-		result, xe := d.getIndexes(gctx, conn, opts.Schema, opts.Name)
+		result, xe := d.getIndexes(gctx, conn, schemaName, opts.Name)
 		if xe != nil {
 			return xe
 		}
@@ -67,7 +72,7 @@ func (d *Driver) DescribeTable(ctx context.Context, conn *sql.DB, opts db.TableD
 		return nil
 	})
 	g.Go(func() error {
-		result, xe := d.getForeignKeys(gctx, conn, opts.Schema, opts.Name)
+		result, xe := d.getForeignKeys(gctx, conn, schemaName, opts.Name)
 		if xe != nil {
 			return xe
 		}
@@ -329,22 +334,22 @@ func (d *Driver) getIndexes(ctx context.Context, conn *sql.DB, schemaName, table
 func (d *Driver) getForeignKeys(ctx context.Context, conn *sql.DB, schemaName, tableName string) ([]db.ForeignKey, *errors.XError) {
 	const query = `
 		SELECT
-			tc.constraint_name,
-			kcu.column_name,
-			ccu.table_name AS referenced_table,
-			ccu.column_name AS referenced_column,
-			kcu.ordinal_position
-		FROM information_schema.table_constraints tc
-		JOIN information_schema.key_column_usage kcu
-			ON tc.constraint_name = kcu.constraint_name
-			AND tc.table_schema = kcu.table_schema
-		JOIN information_schema.constraint_column_usage ccu
-			ON tc.constraint_name = ccu.constraint_name
-			AND tc.table_schema = ccu.table_schema
-		WHERE tc.constraint_type = 'FOREIGN KEY'
-			AND tc.table_schema = $1
-			AND tc.table_name = $2
-		ORDER BY tc.constraint_name, kcu.ordinal_position
+			con.conname AS constraint_name,
+			att.attname AS column_name,
+			ref_cls.relname AS referenced_table,
+			ref_att.attname AS referenced_column,
+			u.ord AS ordinal_position
+		FROM pg_constraint con
+		JOIN pg_class cls ON cls.oid = con.conrelid
+		JOIN pg_namespace nsp ON nsp.oid = cls.relnamespace
+		JOIN pg_class ref_cls ON ref_cls.oid = con.confrelid
+		CROSS JOIN LATERAL unnest(con.conkey, con.confkey) WITH ORDINALITY AS u(attnum, ref_attnum, ord)
+		JOIN pg_attribute att ON att.attrelid = con.conrelid AND att.attnum = u.attnum
+		JOIN pg_attribute ref_att ON ref_att.attrelid = con.confrelid AND ref_att.attnum = u.ref_attnum
+		WHERE con.contype = 'f'
+			AND nsp.nspname = $1
+			AND cls.relname = $2
+		ORDER BY con.conname, u.ord
 	`
 
 	rows, err := conn.QueryContext(ctx, query, schemaName, tableName)
@@ -391,6 +396,20 @@ func (d *Driver) getForeignKeys(ctx context.Context, conn *sql.DB, schemaName, t
 }
 
 func toLikePattern(pattern string) string {
-	pattern = strings.ReplaceAll(pattern, "*", "%")
-	return strings.ReplaceAll(pattern, "?", "_")
+	var b strings.Builder
+	b.Grow(len(pattern))
+	for i := 0; i < len(pattern); i++ {
+		switch pattern[i] {
+		case '\\', '%', '_':
+			b.WriteByte('\\')
+			b.WriteByte(pattern[i])
+		case '*':
+			b.WriteByte('%')
+		case '?':
+			b.WriteByte('_')
+		default:
+			b.WriteByte(pattern[i])
+		}
+	}
+	return b.String()
 }

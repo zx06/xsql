@@ -21,8 +21,8 @@
 | [0013](0013-ai-multi-tool-calls-sequential-execution.md) | AI Multi Tool Call Sequential Execution (AI TUI) | Removed |
 | [0014](0014-mcp-write-dual-authorization.md) | MCP 写入双重授权 | Implemented |
 | [0015](0015-mcp-app-layer-schema-tools.md) | MCP 复用 app 层与 Schema Tools | Implemented |
-| [0016](0016-error-guidance-for-agents.md) | AI Agent 错误指引（Error Guidance） | Accepted |
-| [0017](0017-query-result-size-limits.md) | Query 结果行数/体积上限 | Accepted |
+| [0016](0016-error-guidance-for-agents.md) | AI Agent 错误指引（Error Guidance） | Implemented |
+| [0017](0017-query-result-size-limits.md) | Query 结果行数/体积上限 | Implemented |
 
 ## 何时需要 RFC
 当变更会影响以下任一项时，必须先提交/更新 RFC（并同步更新对应 `docs/*`）：

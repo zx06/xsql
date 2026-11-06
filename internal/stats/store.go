@@ -79,7 +79,10 @@ func (s *Store) Append(r *Record) error {
 func (s *Store) Load() ([]*Record, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.loadLocked()
+}
 
+func (s *Store) loadLocked() ([]*Record, error) {
 	f, err := os.Open(s.path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -126,7 +129,10 @@ func (s *Store) Cleanup(retentionDays int) (int, error) {
 		return 0, nil
 	}
 
-	records, err := s.Load()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	records, err := s.loadLocked()
 	if err != nil {
 		return 0, err
 	}
@@ -146,15 +152,11 @@ func (s *Store) Cleanup(retentionDays int) (int, error) {
 		return 0, nil
 	}
 
-	// Rewrite file with kept records
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
 		return 0, err
 	}
 
-	f, err := os.Create(s.path)
+	f, err := os.OpenFile(s.path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return 0, err
 	}
@@ -169,3 +171,4 @@ func (s *Store) Cleanup(retentionDays int) (int, error) {
 
 	return removed, f.Close()
 }
+

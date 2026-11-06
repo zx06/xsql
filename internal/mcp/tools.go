@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"time"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -30,13 +31,16 @@ type ProfileShowInput struct {
 
 // ServerOptions configures MCP server behavior passed from the CLI entrypoint.
 type ServerOptions struct {
-	UnsafeAllowWrite bool // server-level write opt-in (dual auth with profile)
+	UnsafeAllowWrite bool              // server-level write opt-in (dual auth with profile)
+	Attrs            map[string]string // session attributes recorded in stats
 }
 
 // ToolHandler manages MCP tools
 type ToolHandler struct {
 	config            *config.File
 	stats             stats.StatsConfig
+	statsStore        *stats.Store
+	attrs             map[string]string
 	serverAllowsWrite bool
 }
 
@@ -48,19 +52,26 @@ func NewToolHandler(cfg *config.File, st stats.StatsConfig, opts ServerOptions) 
 			SSHProxies: map[string]config.SSHProxy{},
 		}
 	}
+	var store *stats.Store
+	if st.Enabled {
+		store = stats.NewStore(st.FilePath)
+	}
 	return &ToolHandler{
 		config:            cfg,
 		stats:             st,
+		statsStore:        store,
+		attrs:             opts.Attrs,
 		serverAllowsWrite: opts.UnsafeAllowWrite,
 	}
 }
 
-// getProfileNames returns a list of available profile names
+// getProfileNames returns a sorted list of available profile names
 func (h *ToolHandler) getProfileNames() []string {
 	names := make([]string, 0, len(h.config.Profiles))
 	for name := range h.config.Profiles {
 		names = append(names, name)
 	}
+	sort.Strings(names)
 	return names
 }
 
@@ -203,11 +214,12 @@ func (h *ToolHandler) Query(ctx context.Context, req *mcp.CallToolRequest, input
 	return h.successResult(result)
 }
 
-// ProfileList lists all profiles
+// ProfileList lists all profiles in deterministic order
 func (h *ToolHandler) ProfileList(ctx context.Context, req *mcp.CallToolRequest, input struct{}) (*mcp.CallToolResult, any, error) {
-	profiles := make([]config.ProfileInfo, 0, len(h.config.Profiles))
-	for name, p := range h.config.Profiles {
-		profiles = append(profiles, config.ProfileToInfo(name, p))
+	names := h.getProfileNames()
+	profiles := make([]config.ProfileInfo, 0, len(names))
+	for _, name := range names {
+		profiles = append(profiles, config.ProfileToInfo(name, h.config.Profiles[name]))
 	}
 	return h.successResult(map[string]any{"profiles": profiles})
 }
@@ -232,10 +244,10 @@ func (h *ToolHandler) ProfileShow(ctx context.Context, req *mcp.CallToolRequest,
 		"allow_plaintext":    profile.AllowPlaintext,
 	}
 	if p.DSN != "" {
-		result["dsn"] = "***"
+		result["dsn"] = config.MaskSecretForDisplay(p.DSN)
 	}
 	if p.Password != "" {
-		result["password"] = "***"
+		result["password"] = config.MaskSecretForDisplay(p.Password)
 	}
 	if profile.SSHProxy != "" {
 		result["ssh_proxy"] = profile.SSHProxy
@@ -293,13 +305,17 @@ func (h *ToolHandler) recordMCPStats(cmd, profile string, ok bool, duration time
 	if !h.stats.Enabled {
 		return
 	}
-	store := stats.NewStore(h.stats.FilePath)
+	store := h.statsStore
+	if store == nil {
+		store = stats.NewStore(h.stats.FilePath)
+	}
 	r := &stats.Record{
 		Timestamp:  time.Now(),
 		Cmd:        cmd,
 		Profile:    profile,
 		OK:         ok,
 		DurationMs: duration.Milliseconds(),
+		Attrs:      h.attrs,
 	}
 	if xe != nil {
 		r.ErrorCode = string(xe.Code)
@@ -308,4 +324,8 @@ func (h *ToolHandler) recordMCPStats(cmd, profile string, ok bool, duration time
 		r.SQL = sql
 	}
 	_ = store.Append(r)
+	if h.stats.RetentionDays > 0 {
+		_, _ = store.Cleanup(h.stats.RetentionDays)
+	}
 }
+

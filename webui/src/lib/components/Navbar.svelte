@@ -10,6 +10,7 @@
     schemaLoading = false,
     onProfileChange,
     onThemeChange,
+    onTokenChange,
     onOpenConfig,
     onOpenShortcuts
   } = $props();
@@ -96,6 +97,17 @@
 
   <!-- Right Actions -->
   <div class="flex items-center gap-1.5 shrink-0">
+    {#if authRequired}
+      <input
+        type="password"
+        placeholder="Bearer token…"
+        aria-label="Bearer auth token"
+        class="xsql-input h-7 w-32 sm:w-40 px-2 text-xs font-mono"
+        value={authToken}
+        onchange={(e) => onTokenChange?.(e.currentTarget.value)}
+      />
+    {/if}
+
     <button
       class="xsql-button px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
       onclick={onOpenShortcuts}

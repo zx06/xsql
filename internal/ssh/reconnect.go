@@ -240,6 +240,15 @@ func (rd *ReconnectDialer) finishReconnect(newClient *Client) {
 	rd.mu.Lock()
 	defer rd.mu.Unlock()
 
+	if rd.closed {
+		if newClient != nil {
+			_ = newClient.Close()
+		}
+		rd.reconnecting = false
+		close(rd.reconnectCh)
+		return
+	}
+
 	if newClient != nil {
 		rd.client = newClient
 		rd.emitStatus(StatusReconnected, "ssh reconnected successfully", nil)
@@ -248,9 +257,7 @@ func (rd *ReconnectDialer) finishReconnect(newClient *Client) {
 	// Always restart keepalive so health monitoring continues even after failure.
 	// On success, it monitors the new connection; on failure, it will detect
 	// the nil/dead client and trigger another reconnect attempt.
-	if !rd.closed {
-		rd.startKeepaliveLocked()
-	}
+	rd.startKeepaliveLocked()
 
 	rd.reconnecting = false
 	close(rd.reconnectCh)
@@ -299,7 +306,15 @@ func (rd *ReconnectDialer) keepaliveLoop(ctx context.Context, interval time.Dura
 			closed := rd.closed
 			rd.mu.Unlock()
 
-			if closed || client == nil {
+			if closed {
+				return
+			}
+			if client == nil {
+				go func() {
+					if _, reconnErr := rd.reconnect(); reconnErr != nil {
+						log.Printf("[ssh] keepalive-triggered reconnect failed: %v", reconnErr)
+					}
+				}()
 				return
 			}
 

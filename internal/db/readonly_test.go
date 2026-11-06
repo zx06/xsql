@@ -177,6 +177,14 @@ func TestIsReadOnlySQL_MultipleStatements(t *testing.T) {
 		// 注释中的分号不应被误认为多语句
 		{"SELECT 1 /* ; comment */ FROM t", true},
 		{"-- select 2;\nSELECT 1", true},
+		{"# mysql comment;\nSELECT 1", true},
+		{"SELECT 1 # update comment", true},
+
+		// 反斜杠与注释多语句逃逸拦截
+		{`SELECT 'abc\\'; DROP TABLE users; -- '`, false},
+		{"SELECT 1 # '\n; DROP TABLE users; -- '", false},
+		{"SELECT 'unclosed string", false},
+		{"SELECT 1 /* unclosed comment", false},
 	}
 
 	for _, tc := range cases {

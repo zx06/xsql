@@ -93,6 +93,16 @@ func TestBuildDSN(t *testing.T) {
 			},
 			expected: []string{"sslmode=disable", "pool_max_conns=10"},
 		},
+		{
+			name: "with special characters and injection attempt",
+			opts: db.ConnOptions{
+				Host:     "localhost",
+				User:     "user",
+				Password: `my'secret\pw`,
+				Database: "mydb sslmode=disable",
+			},
+			expected: []string{`password='my\'secret\\pw'`, `dbname='mydb sslmode=disable'`},
+		},
 	}
 
 	for _, tt := range tests {
@@ -104,6 +114,15 @@ func TestBuildDSN(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestToLikePattern(t *testing.T) {
+	if got := toLikePattern("user_roles*"); got != `user\_roles%` {
+		t.Fatalf("toLikePattern(user_roles*) = %q, want %q", got, `user\_roles%`)
+	}
+	if got := toLikePattern("a?b%c"); got != `a_b\%c` {
+		t.Fatalf("toLikePattern(a?b%%c) = %q, want %q", got, `a_b\%c`)
 	}
 }
 

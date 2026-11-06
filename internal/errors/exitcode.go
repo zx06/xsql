@@ -24,7 +24,7 @@ const (
 
 func ExitCodeFor(code Code) ExitCode {
 	switch code {
-	case CodeCfgNotFound, CodeCfgInvalid, CodeSecretNotFound:
+	case CodeCfgNotFound, CodeCfgInvalid, CodeSecretNotFound, CodeAuthRequired, CodeAuthInvalid:
 		return ExitConfig
 	case CodeSSHAuthFailed, CodeSSHHostKeyMismatch, CodeSSHDialFailed,
 		CodeDBDriverUnsupported, CodeDBConnectFailed, CodeDBAuthFailed:

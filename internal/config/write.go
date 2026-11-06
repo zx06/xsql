@@ -144,6 +144,24 @@ func setProfileField(cfg *File, name, field, value string) *errors.XError {
 		p.UnsafeAllowWrite = parseBool(value)
 	case "allow_plaintext":
 		p.AllowPlaintext = parseBool(value)
+	case "query_timeout":
+		v, err := strconv.Atoi(value)
+		if err != nil || v < 0 {
+			return errors.New(errors.CodeCfgInvalid, "query_timeout must be a non-negative integer", map[string]any{"value": value})
+		}
+		p.QueryTimeout = v
+	case "schema_timeout":
+		v, err := strconv.Atoi(value)
+		if err != nil || v < 0 {
+			return errors.New(errors.CodeCfgInvalid, "schema_timeout must be a non-negative integer", map[string]any{"value": value})
+		}
+		p.SchemaTimeout = v
+	case "max_rows":
+		v, err := strconv.Atoi(value)
+		if err != nil || v < 0 {
+			return errors.New(errors.CodeCfgInvalid, "max_rows must be a non-negative integer", map[string]any{"value": value})
+		}
+		p.MaxRows = v
 	default:
 		return errors.New(errors.CodeCfgInvalid, fmt.Sprintf("unknown profile field: %s", field),
 			map[string]any{"field": field})
@@ -186,7 +204,7 @@ func setSSHProxyField(cfg *File, name, field, value string) *errors.XError {
 
 func writeFile(path string, cfg File) *errors.XError {
 	if dir := filepath.Dir(path); dir != "" {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0700); err != nil {
 			return errors.Wrap(errors.CodeInternal, "failed to create config directory", map[string]any{"path": path}, err)
 		}
 	}
