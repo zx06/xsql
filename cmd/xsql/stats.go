@@ -200,4 +200,3 @@ func recordCmdStats(cmd string, profile string, ok bool, start time.Duration, er
 		_, _ = store.Cleanup(GlobalConfig.Stats.RetentionDays)
 	}
 }
-

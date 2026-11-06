@@ -1118,3 +1118,13 @@ func TestTestSSHProxyConnection_Branches(t *testing.T) {
 		t.Fatal("expected error connecting to closed port")
 	}
 }
+
+func TestQuery_ReadOnlyBlockedBeforeConnect(t *testing.T) {
+	_, xe := Query(context.Background(), QueryRequest{
+		Profile: config.Profile{DB: "mysql", Host: "127.0.0.1", Port: 1},
+		SQL:     "DROP TABLE users",
+	})
+	if xe == nil || xe.Code != errors.CodeROBlocked {
+		t.Fatalf("expected CodeROBlocked before connecting, got %v", xe)
+	}
+}

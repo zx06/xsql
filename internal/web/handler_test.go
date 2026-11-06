@@ -843,4 +843,14 @@ func TestHandler_CrossOriginBlocked(t *testing.T) {
 	if recSame.Code != http.StatusOK {
 		t.Fatalf("expected 200 for same-origin request, got %d", recSame.Code)
 	}
+
+	for _, badOrigin := range []string{"null", "://invalid-url", "https://"} {
+		reqBad := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8788/api/v1/config", nil)
+		reqBad.Header.Set("Origin", badOrigin)
+		recBad := httptest.NewRecorder()
+		handler.ServeHTTP(recBad, reqBad)
+		if recBad.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for Origin=%q, got %d", badOrigin, recBad.Code)
+		}
+	}
 }

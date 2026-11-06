@@ -328,4 +328,3 @@ func (h *ToolHandler) recordMCPStats(cmd, profile string, ok bool, duration time
 		_, _ = store.Cleanup(h.stats.RetentionDays)
 	}
 }
-

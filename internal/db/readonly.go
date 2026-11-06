@@ -523,12 +523,7 @@ func tokenize(sql string) ([]SQLToken, error) {
 	return tokens, nil
 }
 
-// parseString parses a quoted string, handling escape sequences
-func parseString(sql string, start int, quote rune) (string, int) {
-	str, idx, _ := parseStringWithState(sql, start, quote)
-	return str, idx
-}
-
+// parseStringWithState parses a quoted string, handling escape sequences and reporting closure state.
 func parseStringWithState(sql string, start int, quote rune) (string, int, bool) {
 	i := start + 1 // skip opening quote
 	sqlLen := len(sql)

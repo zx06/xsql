@@ -6,8 +6,6 @@ import (
 	"sort"
 	"strings"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/zx06/xsql/internal/db"
 	"github.com/zx06/xsql/internal/errors"
 )
@@ -48,45 +46,19 @@ func (d *Driver) DescribeTable(ctx context.Context, conn *sql.DB, opts db.TableD
 		return nil, xe
 	}
 
-	var (
-		columns []db.Column
-		indexes []db.Index
-		fks     []db.ForeignKey
+	return db.PopulateTableDetails(
+		ctx,
+		table,
+		func(gctx context.Context) ([]db.Column, *errors.XError) {
+			return d.getColumns(gctx, conn, schemaName, opts.Name)
+		},
+		func(gctx context.Context) ([]db.Index, *errors.XError) {
+			return d.getIndexes(gctx, conn, schemaName, opts.Name)
+		},
+		func(gctx context.Context) ([]db.ForeignKey, *errors.XError) {
+			return d.getForeignKeys(gctx, conn, schemaName, opts.Name)
+		},
 	)
-
-	g, gctx := errgroup.WithContext(ctx)
-	g.Go(func() error {
-		result, xe := d.getColumns(gctx, conn, schemaName, opts.Name)
-		if xe != nil {
-			return xe
-		}
-		columns = result
-		return nil
-	})
-	g.Go(func() error {
-		result, xe := d.getIndexes(gctx, conn, schemaName, opts.Name)
-		if xe != nil {
-			return xe
-		}
-		indexes = result
-		return nil
-	})
-	g.Go(func() error {
-		result, xe := d.getForeignKeys(gctx, conn, schemaName, opts.Name)
-		if xe != nil {
-			return xe
-		}
-		fks = result
-		return nil
-	})
-	if err := g.Wait(); err != nil {
-		return nil, errors.AsOrWrap(err)
-	}
-
-	table.Columns = columns
-	table.Indexes = indexes
-	table.ForeignKeys = fks
-	return table, nil
 }
 
 func currentDatabase(ctx context.Context, conn *sql.DB) (string, *errors.XError) {
@@ -358,58 +330,9 @@ func (d *Driver) getForeignKeys(ctx context.Context, conn *sql.DB, schemaName, t
 	}
 	defer rows.Close()
 
-	fkMap := make(map[string]*db.ForeignKey)
-	for rows.Next() {
-		var constraintName, columnName, refTable, refColumn string
-		var ordinalPosition int
-		if err := rows.Scan(&constraintName, &columnName, &refTable, &refColumn, &ordinalPosition); err != nil {
-			return nil, errors.Wrap(errors.CodeDBExecFailed, "failed to scan foreign key row", nil, err)
-		}
-
-		if fk, exists := fkMap[constraintName]; exists {
-			fk.Columns = append(fk.Columns, columnName)
-			fk.ReferencedColumns = append(fk.ReferencedColumns, refColumn)
-		} else {
-			fkMap[constraintName] = &db.ForeignKey{
-				Name:              constraintName,
-				Columns:           []string{columnName},
-				ReferencedTable:   refTable,
-				ReferencedColumns: []string{refColumn},
-			}
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, errors.Wrap(errors.CodeDBExecFailed, "rows iteration error", nil, err)
-	}
-
-	names := make([]string, 0, len(fkMap))
-	for name := range fkMap {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	fks := make([]db.ForeignKey, 0, len(names))
-	for _, name := range names {
-		fks = append(fks, *fkMap[name])
-	}
-	return fks, nil
+	return db.ScanForeignKeyRows(rows)
 }
 
 func toLikePattern(pattern string) string {
-	var b strings.Builder
-	b.Grow(len(pattern))
-	for i := 0; i < len(pattern); i++ {
-		switch pattern[i] {
-		case '\\', '%', '_':
-			b.WriteByte('\\')
-			b.WriteByte(pattern[i])
-		case '*':
-			b.WriteByte('%')
-		case '?':
-			b.WriteByte('_')
-		default:
-			b.WriteByte(pattern[i])
-		}
-	}
-	return b.String()
+	return db.ToLikePattern(pattern)
 }

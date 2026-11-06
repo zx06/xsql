@@ -415,3 +415,49 @@ func (d *mockSchemaExplorerDriver) DescribeTable(ctx context.Context, db *sql.DB
 	table := d.tables[key]
 	return &table, nil
 }
+
+func TestToLikePattern(t *testing.T) {
+	cases := map[string]string{
+		"users":      "users",
+		"user*":      "user%",
+		"user_?":     `user\_` + "_",
+		`100%\test*`: `100\%\\test%`,
+	}
+	for in, want := range cases {
+		if got := ToLikePattern(in); got != want {
+			t.Fatalf("ToLikePattern(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestPopulateTableDetails(t *testing.T) {
+	ctx := context.Background()
+	okCols := func(context.Context) ([]Column, *errors.XError) {
+		return []Column{{Name: "id", Type: "int"}}, nil
+	}
+	okIdxs := func(context.Context) ([]Index, *errors.XError) {
+		return []Index{{Name: "idx_id", Columns: []string{"id"}}}, nil
+	}
+	okFKs := func(context.Context) ([]ForeignKey, *errors.XError) {
+		return []ForeignKey{{Name: "fk_id", Columns: []string{"id"}}}, nil
+	}
+
+	tbl, xe := PopulateTableDetails(ctx, &Table{Schema: "public", Name: "users"}, okCols, okIdxs, okFKs)
+	if xe != nil {
+		t.Fatalf("PopulateTableDetails failed: %v", xe)
+	}
+	if len(tbl.Columns) != 1 || len(tbl.Indexes) != 1 || len(tbl.ForeignKeys) != 1 {
+		t.Fatalf("unexpected populated table: %+v", tbl)
+	}
+
+	errFn := errors.New(errors.CodeDBExecFailed, "mock failure", nil)
+	if _, xe := PopulateTableDetails(ctx, &Table{}, func(context.Context) ([]Column, *errors.XError) { return nil, errFn }, okIdxs, okFKs); xe == nil {
+		t.Fatal("expected error from getCols")
+	}
+	if _, xe := PopulateTableDetails(ctx, &Table{}, okCols, func(context.Context) ([]Index, *errors.XError) { return nil, errFn }, okFKs); xe == nil {
+		t.Fatal("expected error from getIdxs")
+	}
+	if _, xe := PopulateTableDetails(ctx, &Table{}, okCols, okIdxs, func(context.Context) ([]ForeignKey, *errors.XError) { return nil, errFn }); xe == nil {
+		t.Fatal("expected error from getFKs")
+	}
+}

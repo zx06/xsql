@@ -584,15 +584,22 @@ func (h *handler) parseConfigDeleteName(w http.ResponseWriter, r *http.Request, 
 	return name, true
 }
 
-func (h *handler) handleConfigSaveProfile(w http.ResponseWriter, r *http.Request) {
+func decodeConfigSaveBody(w http.ResponseWriter, r *http.Request, dst any) bool {
 	if r.Method != http.MethodPost && r.Method != http.MethodPut {
 		writeMethodNotAllowed(w)
-		return
+		return false
 	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(dst); err != nil {
+		writeError(w, http.StatusBadRequest, errors.Wrap(errors.CodeCfgInvalid, "invalid JSON payload", nil, err))
+		return false
+	}
+	return true
+}
+
+func (h *handler) handleConfigSaveProfile(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	var req configProfileRequest
-	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, errors.Wrap(errors.CodeCfgInvalid, "invalid JSON payload", nil, err))
+	if !decodeConfigSaveBody(w, r, &req) {
 		return
 	}
 	name := strings.TrimSpace(req.Name)
@@ -631,14 +638,9 @@ type configSSHProxyRequest struct {
 }
 
 func (h *handler) handleConfigSaveSSHProxy(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost && r.Method != http.MethodPut {
-		writeMethodNotAllowed(w)
-		return
-	}
 	defer r.Body.Close()
 	var req configSSHProxyRequest
-	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, errors.Wrap(errors.CodeCfgInvalid, "invalid JSON payload", nil, err))
+	if !decodeConfigSaveBody(w, r, &req) {
 		return
 	}
 	name := strings.TrimSpace(req.Name)

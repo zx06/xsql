@@ -113,4 +113,3 @@ func loadStatsConfig(configPath string) stats.StatsConfig {
 	}
 	return st
 }
-

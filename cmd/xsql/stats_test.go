@@ -347,3 +347,52 @@ func TestNewStatsResetCommand(t *testing.T) {
 		t.Error("expected stats file to be removed")
 	}
 }
+
+func TestStatsFormatAndRetentionCleanup(t *testing.T) {
+	dir := t.TempDir()
+	statsPath := filepath.Join(dir, "stats.jsonl")
+	GlobalConfig.Stats.FilePath = statsPath
+	GlobalConfig.Stats.RetentionDays = 7
+	defer func() {
+		GlobalConfig.Stats.RetentionDays = 0
+		GlobalConfig.FormatStr = "auto"
+	}()
+
+	store := stats.NewStore(statsPath)
+	_ = store.Append(&stats.Record{
+		Timestamp:  time.Now(),
+		Cmd:        "query",
+		Profile:    "dev",
+		OK:         true,
+		DurationMs: 12,
+	})
+
+	for _, fmtStr := range []string{"json", "yaml"} {
+		GlobalConfig.FormatStr = fmtStr
+		var buf bytes.Buffer
+		w := output.New(&buf, &buf)
+		if err := runStats(&StatsFlags{}, &w); err != nil {
+			t.Fatalf("runStats(%s): %v", fmtStr, err)
+		}
+		if err := runStatsLog(&StatsLogFlags{Limit: 10}, &w); err != nil {
+			t.Fatalf("runStatsLog(%s): %v", fmtStr, err)
+		}
+	}
+}
+
+func TestLoadStatsConfigEnvVars(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XSQL_WORKDIR", dir)
+	t.Setenv("XSQL_HOMEDIR", dir)
+	t.Setenv("XSQL_STATS_ENABLED", "1")
+	t.Setenv("XSQL_STATS_LOG_SQL", "true")
+	st := loadStatsConfig("")
+	if !st.Enabled || !st.LogSQL {
+		t.Fatalf("expected stats enabled and log_sql true from env, got %+v", st)
+	}
+	GlobalConfig.Stats = st
+	GlobalConfig.Stats.FilePath = filepath.Join(dir, "stats.jsonl")
+	GlobalConfig.Stats.RetentionDays = 7
+	recordCmdStats("query", "dev", true, 5*time.Millisecond, "", "SELECT 1")
+	GlobalConfig.Stats.RetentionDays = 0
+}

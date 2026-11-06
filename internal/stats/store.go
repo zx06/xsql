@@ -171,4 +171,3 @@ func (s *Store) Cleanup(retentionDays int) (int, error) {
 
 	return removed, f.Close()
 }
-
