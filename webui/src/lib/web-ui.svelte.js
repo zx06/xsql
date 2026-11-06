@@ -154,6 +154,9 @@ export class WebUIController {
   resultFilter = $state('');
   sortColumn = $state('');
   sortDirection = $state('asc'); // 'asc' | 'desc'
+  queryTruncated = $state(false);
+  queryMaxRows = $state(null);
+  queryTruncationHint = $state('');
 
   rowCount = $derived(this.rows.length);
   tableCount = $derived(this.schemaTables.length);
@@ -255,6 +258,9 @@ export class WebUIController {
   setAuthToken(token) {
     this.authToken = token;
     sessionStorage.setItem('xsql-web-auth-token', token.trim());
+    if (this.authRequired && token.trim() && this.profiles.length === 0) {
+      void this.initialize();
+    }
   }
 
   setSidebarWidth(width) {
@@ -667,15 +673,18 @@ export class WebUIController {
     this.pageLoading = true;
     this.errorMessage = '';
     try {
-      const [health, profileData] = await Promise.all([
-        this.api('/api/v1/health'),
-        this.api('/api/v1/profiles')
-      ]);
+      const health = await this.api('/api/v1/health');
       this.authRequired = Boolean(health.auth_required);
       if (!this.selectedProfile && typeof health.initial_profile === 'string') {
         this.selectedProfile = health.initial_profile;
       }
 
+      if (this.authRequired && !this.authToken.trim()) {
+        this.showToast('Authentication required: enter Bearer token in the top bar', 'info', 4000);
+        return;
+      }
+
+      const profileData = await this.api('/api/v1/profiles');
       this.profiles = profileData.profiles || [];
       this.configPath = profileData.config_path || '';
       if (!this.selectedProfile && this.profiles.length > 0) {
@@ -688,7 +697,9 @@ export class WebUIController {
       this.pageLoading = false;
     }
 
-    await this.loadTables();
+    if (!this.authRequired || this.authToken.trim()) {
+      await this.loadTables();
+    }
   }
 
   async loadTables() {
@@ -769,6 +780,9 @@ export class WebUIController {
     this.resultFilter = '';
     this.sortColumn = '';
     this.sortDirection = 'asc';
+    this.queryTruncated = false;
+    this.queryMaxRows = null;
+    this.queryTruncationHint = '';
     const startTime = performance.now();
 
     let queryError = null;
@@ -784,6 +798,9 @@ export class WebUIController {
       returnedRows = data.rows || [];
       this.columns = returnedColumns;
       this.rows = returnedRows;
+      this.queryTruncated = Boolean(data.truncated);
+      this.queryMaxRows = data.max_rows ?? null;
+      this.queryTruncationHint = data.hint || '';
       this.activeTab = 'results';
     } catch (error) {
       queryError = error.message;

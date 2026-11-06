@@ -147,12 +147,12 @@ func scanRows(rows *sql.Rows, maxRows int) (*QueryResult, *errors.XError) {
 	}
 
 	result := &QueryResult{Columns: cols, Rows: make([]map[string]any, 0)}
+	vals := make([]any, len(cols))
+	ptrs := make([]any, len(cols))
+	for i := range vals {
+		ptrs[i] = &vals[i]
+	}
 	for rows.Next() {
-		vals := make([]any, len(cols))
-		ptrs := make([]any, len(cols))
-		for i := range vals {
-			ptrs[i] = &vals[i]
-		}
 		if err := rows.Scan(ptrs...); err != nil {
 			return nil, errors.Wrap(errors.CodeDBExecFailed, "failed to scan row", nil, err)
 		}

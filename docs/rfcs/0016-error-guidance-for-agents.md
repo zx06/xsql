@@ -1,6 +1,6 @@
 # RFC 0016: AI Agent 错误指引（Error Guidance）
 
-Status: Accepted
+Status: Implemented
 
 ## 摘要
 为 xsql 的 JSON/YAML 错误 `details` 增加面向 AI/agent 的稳定指引字段（`hint`、`retryable`、`category`、方言与原生 DB 错误码），在不改变顶层 `error.code`、退出码与 `schema_version` 的前提下，减少 agent 对 DB/连接/只读类错误的无效重试。

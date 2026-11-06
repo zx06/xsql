@@ -108,7 +108,7 @@ func (c *Client) DialContext(ctx context.Context, network, addr string) (net.Con
 	if c.client == nil {
 		return nil, fmt.Errorf("ssh client is not connected")
 	}
-	return c.client.Dial(network, addr)
+	return c.client.DialContext(ctx, network, addr)
 }
 
 // Close closes the SSH connection.

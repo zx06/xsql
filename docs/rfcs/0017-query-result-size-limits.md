@@ -1,6 +1,6 @@
 # RFC 0017: Query result size limits
 
-Status: Accepted
+Status: Implemented
 
 ## 摘要
 

@@ -15,6 +15,9 @@
     columns = [],
     rows = [],
     rowCount = 0,
+    truncated = false,
+    maxRows = null,
+    truncationHint = '',
     sortColumn = '',
     sortDirection = 'asc',
     resultFilter = '',
@@ -221,6 +224,14 @@
       {#if resultFilter && rowCount !== rows.length}
         <span class="text-[10px] text-[var(--muted)]">
           (filtered from {rowCount})
+        </span>
+      {/if}
+      {#if truncated}
+        <span
+          class="rounded bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 font-mono text-[10px] font-medium text-amber-600 dark:text-amber-400"
+          title={truncationHint || `Results truncated at ${maxRows || rowCount} rows`}
+        >
+          ⚠ Truncated ({maxRows || rowCount} max)
         </span>
       {/if}
     </div>

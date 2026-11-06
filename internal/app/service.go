@@ -171,6 +171,12 @@ func Query(ctx context.Context, req QueryRequest) (*db.QueryResult, *errors.XErr
 	if req.Profile.DB == "" {
 		return nil, errors.New(errors.CodeCfgInvalid, "db type is required (mysql|pg)", nil)
 	}
+	if _, ok := db.Get(req.Profile.DB); !ok {
+		return nil, errors.New(errors.CodeDBDriverUnsupported, "unsupported database driver", map[string]any{"db": req.Profile.DB})
+	}
+	if xe := db.EnforceReadOnly(req.SQL, req.UnsafeAllowWrite); xe != nil {
+		return nil, xe
+	}
 
 	conn, xe := ResolveConnection(ctx, ConnectionOptions{
 		Profile:          req.Profile,

@@ -177,6 +177,14 @@ func TestIsReadOnlySQL_MultipleStatements(t *testing.T) {
 		// 注释中的分号不应被误认为多语句
 		{"SELECT 1 /* ; comment */ FROM t", true},
 		{"-- select 2;\nSELECT 1", true},
+		{"# mysql comment;\nSELECT 1", true},
+		{"SELECT 1 # update comment", true},
+
+		// 反斜杠与注释多语句逃逸拦截
+		{`SELECT 'abc\\'; DROP TABLE users; -- '`, false},
+		{"SELECT 1 # '\n; DROP TABLE users; -- '", false},
+		{"SELECT 'unclosed string", false},
+		{"SELECT 1 /* unclosed comment", false},
 	}
 
 	for _, tc := range cases {
@@ -355,9 +363,9 @@ func BenchmarkIsReadOnlySQL_ComplexCTE(b *testing.B) {
 
 func TestUnwrapOuterParenthesizedSQL(t *testing.T) {
 	cases := []struct {
-		input   string
-		want    string
-		wantOK  bool
+		input  string
+		want   string
+		wantOK bool
 	}{
 		{"(SELECT 1)", "SELECT 1", true},
 		{"( SELECT 1 )", "SELECT 1", true},
@@ -406,23 +414,6 @@ func TestAdvanceStringOrComment(t *testing.T) {
 		if ok && i != tc.want {
 			t.Errorf("advance(%q) end=%d want %d", tc.input, i, tc.want)
 		}
-	}
-}
-
-func TestParseString_Escapes(t *testing.T) {
-	got, idx := parseString(`'a''b'`, 0, '\'')
-	if got != "a'b" || idx != 6 {
-		t.Fatalf("doubled quote: got %q idx=%d", got, idx)
-	}
-
-	got, idx = parseString(`'a\'b'`, 0, '\'')
-	if got != "a'b" || idx != 6 {
-		t.Fatalf("backslash escape: got %q idx=%d", got, idx)
-	}
-
-	got, idx = parseString(`"x""y"`, 0, '"')
-	if got != `x"y` || idx != 6 {
-		t.Fatalf("double-quote escape: got %q idx=%d", got, idx)
 	}
 }
 
@@ -590,4 +581,14 @@ func assertIsReadOnlySQL(t *testing.T, cases []readOnlySQLCase) {
 			t.Errorf("sql=%q got=%v want=%v reason=%s", tc.sql, got, tc.want, reason)
 		}
 	}
+}
+
+func TestReadOnlyEdgeCases_BOMAndQuotes(t *testing.T) {
+	assertIsReadOnlySQL(t, []readOnlySQLCase{
+		{"\ufeffSELECT 1", true},
+		{"SELECT 1 # comment at eof", true},
+		{`SELECT "col\"name", "col\\2" FROM t`, true},
+		{`SELECT "unclosed_ident`, false},
+		{"SELECT `unclosed_backtick", false},
+	})
 }

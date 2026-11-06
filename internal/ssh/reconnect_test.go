@@ -820,3 +820,20 @@ func TestReconnectDialer_RealSSH_DialThroughTunnel(t *testing.T) {
 		t.Errorf("echo mismatch: got %q, want %q", buf, msg)
 	}
 }
+
+func TestReconnectDialer_FinishReconnectWhenClosed(t *testing.T) {
+	rd := &ReconnectDialer{
+		closed:       true,
+		reconnecting: true,
+		reconnectCh:  make(chan struct{}),
+	}
+	c := &Client{}
+	c.alive.Store(true)
+	rd.finishReconnect(c)
+	if c.alive.Load() {
+		t.Error("expected newClient to be closed when dialer was already closed")
+	}
+	if rd.reconnecting {
+		t.Error("expected reconnecting to be false")
+	}
+}

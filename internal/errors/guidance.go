@@ -52,10 +52,28 @@ func guidanceFor(xe *XError) map[string]any {
 		return dbExecGuidance(xe)
 	case CodeDBConnectFailed, CodeDBAuthFailed:
 		return connectGuidance(xe)
+	case CodeDBDriverUnsupported:
+		return map[string]any{
+			detailCategory:  "config",
+			detailRetryable: false,
+			detailHint:      "Unsupported database driver; set profile `db` to `mysql` or `pg`.",
+		}
 	case CodeSSHDialFailed, CodeSSHAuthFailed, CodeSSHHostKeyMismatch:
 		return sshGuidance(xe)
 	case CodeCfgNotFound, CodeCfgInvalid, CodeSecretNotFound:
 		return configGuidance(xe)
+	case CodePortInUse:
+		return map[string]any{
+			detailCategory:  string(CategoryConnection),
+			detailRetryable: false,
+			detailHint:      "Local port is already in use; specify a different port or `--local-port 0` for auto-assignment.",
+		}
+	case CodeAuthRequired, CodeAuthInvalid:
+		return map[string]any{
+			detailCategory:  string(CategoryAuthFailed),
+			detailRetryable: false,
+			detailHint:      "Provide a valid `Authorization: Bearer <token>` header matching the configured auth token.",
+		}
 	default:
 		return nil
 	}

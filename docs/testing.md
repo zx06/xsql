@@ -257,7 +257,6 @@ export XSQL_TEST_PG_DSN="..."
 ### 目录结构
 ```
 tests/e2e/
-  ├── ai_test.go                 # AI TUI 命令测试
   ├── config_test.go             # config 命令测试
   ├── e2e_test.go                # 共享 helper 和基础设施
   ├── mcp_test.go                # MCP Server 测试

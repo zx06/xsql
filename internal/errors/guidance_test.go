@@ -183,6 +183,29 @@ func TestMergeDetails_NilBase(t *testing.T) {
 	}
 }
 
+func TestAdditionalGuidanceAndExitCodes(t *testing.T) {
+	cases := []struct {
+		code       Code
+		expectSub  string
+		expectExit ExitCode
+	}{
+		{CodeDBDriverUnsupported, "mysql", ExitCode(3)},
+		{CodePortInUse, "port", ExitInternal},
+		{CodeAuthRequired, "Bearer", ExitConfig},
+		{CodeAuthInvalid, "Bearer", ExitConfig},
+	}
+	for _, tc := range cases {
+		xe := New(tc.code, "test error", nil)
+		hint, _ := xe.Details["hint"].(string)
+		if !containsFold(hint, tc.expectSub) {
+			t.Errorf("code %s hint = %q, want substring %q", tc.code, hint, tc.expectSub)
+		}
+		if got := ExitCodeFor(tc.code); got != tc.expectExit {
+			t.Errorf("ExitCodeFor(%s) = %v, want %v", tc.code, got, tc.expectExit)
+		}
+	}
+}
+
 func containsFold(s, sub string) bool {
 	return strings.Contains(strings.ToLower(s), strings.ToLower(sub))
 }

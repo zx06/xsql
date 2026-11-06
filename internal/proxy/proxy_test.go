@@ -877,5 +877,3 @@ func TestProxy_AcceptConnections_ContextDoneDuringBackoff(t *testing.T) {
 		t.Fatal("acceptConnections should terminate upon context cancellation during backoff")
 	}
 }
-
-

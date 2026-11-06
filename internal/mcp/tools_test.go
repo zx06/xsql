@@ -880,3 +880,15 @@ func TestProfileList_EmptyProfiles(t *testing.T) {
 		t.Fatalf("expected empty profiles list, got: %s", text)
 	}
 }
+
+func TestRecordStats_WithRetentionAndLogSQL(t *testing.T) {
+	cfg := &config.File{Profiles: map[string]config.Profile{"dev": {DB: "mysql"}}}
+	statsCfg := stats.StatsConfig{
+		Enabled:       true,
+		FilePath:      t.TempDir() + "/mcp_stats.jsonl",
+		LogSQL:        true,
+		RetentionDays: 7,
+	}
+	handler := NewToolHandler(cfg, statsCfg, ServerOptions{})
+	handler.recordMCPStats("query", "dev", false, 0, errors.New(errors.CodeROBlocked, "blocked", nil), "DROP TABLE x")
+}

@@ -264,6 +264,9 @@ func TestSetConfigValue(t *testing.T) {
 			"ssh_proxy":          "bastion",
 			"unsafe_allow_write": "true",
 			"allow_plaintext":    "true",
+			"query_timeout":      "25",
+			"schema_timeout":     "75",
+			"max_rows":           "500",
 		}
 
 		for field, value := range fields {
@@ -286,6 +289,14 @@ func TestSetConfigValue(t *testing.T) {
 		}
 		if !p.AllowPlaintext {
 			t.Error("allow_plaintext should be true")
+		}
+		if p.QueryTimeout != 25 || p.SchemaTimeout != 75 || p.MaxRows != 500 {
+			t.Errorf("unexpected numeric fields: query_timeout=%d schema_timeout=%d max_rows=%d", p.QueryTimeout, p.SchemaTimeout, p.MaxRows)
+		}
+		for _, badField := range []string{"query_timeout", "schema_timeout", "max_rows"} {
+			if xe := SetConfigValue(path, "profile.test."+badField, "notanint"); xe == nil {
+				t.Errorf("expected error for invalid %s", badField)
+			}
 		}
 	})
 

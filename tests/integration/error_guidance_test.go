@@ -18,13 +18,13 @@ import (
 )
 
 type errorGuidanceEngine struct {
-	label        string
-	driver       string
-	dsnEnv       string
-	dbType       string
-	dsn          string
-	badDSN       func(string) string
-	authHintSub  string
+	label       string
+	driver      string
+	dsnEnv      string
+	dbType      string
+	dsn         string
+	badDSN      func(string) string
+	authHintSub string
 }
 
 type errorGuidanceScenario struct {

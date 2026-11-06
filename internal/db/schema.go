@@ -3,6 +3,8 @@ package db
 import (
 	"context"
 	"database/sql"
+	"sort"
+	"strings"
 
 	"golang.org/x/sync/errgroup"
 
@@ -186,4 +188,141 @@ func DumpSchema(ctx context.Context, driverName string, db *sql.DB, opts SchemaO
 	}
 
 	return info, nil
+}
+
+// PopulateTableDetails concurrently loads columns, indexes, and foreign keys for a table.
+func PopulateTableDetails(
+	ctx context.Context,
+	table *Table,
+	getCols func(context.Context) ([]Column, *errors.XError),
+	getIdxs func(context.Context) ([]Index, *errors.XError),
+	getFKs func(context.Context) ([]ForeignKey, *errors.XError),
+) (*Table, *errors.XError) {
+	var (
+		columns []Column
+		indexes []Index
+		fks     []ForeignKey
+	)
+
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		res, xe := getCols(gctx)
+		if xe != nil {
+			return xe
+		}
+		columns = res
+		return nil
+	})
+	g.Go(func() error {
+		res, xe := getIdxs(gctx)
+		if xe != nil {
+			return xe
+		}
+		indexes = res
+		return nil
+	})
+	g.Go(func() error {
+		res, xe := getFKs(gctx)
+		if xe != nil {
+			return xe
+		}
+		fks = res
+		return nil
+	})
+	if err := g.Wait(); err != nil {
+		return nil, errors.AsOrWrap(err)
+	}
+
+	table.Columns = columns
+	table.Indexes = indexes
+	table.ForeignKeys = fks
+	return table, nil
+}
+
+// DescribeTableWithDetails loads a table summary and concurrently populates its columns, indexes, and foreign keys.
+func DescribeTableWithDetails(
+	ctx context.Context,
+	conn *sql.DB,
+	schemaName, tableName string,
+	loadSummary func(context.Context, *sql.DB, string, string) (*Table, *errors.XError),
+	getCols func(context.Context, *sql.DB, string, string) ([]Column, *errors.XError),
+	getIdxs func(context.Context, *sql.DB, string, string) ([]Index, *errors.XError),
+	getFKs func(context.Context, *sql.DB, string, string) ([]ForeignKey, *errors.XError),
+) (*Table, *errors.XError) {
+	table, xe := loadSummary(ctx, conn, schemaName, tableName)
+	if xe != nil {
+		return nil, xe
+	}
+	return PopulateTableDetails(
+		ctx,
+		table,
+		func(gctx context.Context) ([]Column, *errors.XError) {
+			return getCols(gctx, conn, schemaName, tableName)
+		},
+		func(gctx context.Context) ([]Index, *errors.XError) {
+			return getIdxs(gctx, conn, schemaName, tableName)
+		},
+		func(gctx context.Context) ([]ForeignKey, *errors.XError) {
+			return getFKs(gctx, conn, schemaName, tableName)
+		},
+	)
+}
+
+// ScanForeignKeyRows scans ordered foreign key rows into sorted ForeignKey structs.
+func ScanForeignKeyRows(rows *sql.Rows) ([]ForeignKey, *errors.XError) {
+	fkMap := make(map[string]*ForeignKey)
+	for rows.Next() {
+		var constraintName, columnName, refTable, refColumn string
+		var ordinalPosition int
+		if err := rows.Scan(&constraintName, &columnName, &refTable, &refColumn, &ordinalPosition); err != nil {
+			return nil, errors.Wrap(errors.CodeDBExecFailed, "failed to scan foreign key row", nil, err)
+		}
+
+		if fk, exists := fkMap[constraintName]; exists {
+			fk.Columns = append(fk.Columns, columnName)
+			fk.ReferencedColumns = append(fk.ReferencedColumns, refColumn)
+		} else {
+			fkMap[constraintName] = &ForeignKey{
+				Name:              constraintName,
+				Columns:           []string{columnName},
+				ReferencedTable:   refTable,
+				ReferencedColumns: []string{refColumn},
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(errors.CodeDBExecFailed, "rows iteration error", nil, err)
+	}
+
+	names := make([]string, 0, len(fkMap))
+	for name := range fkMap {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	fks := make([]ForeignKey, 0, len(names))
+	for _, name := range names {
+		fks = append(fks, *fkMap[name])
+	}
+	return fks, nil
+}
+
+// ToLikePattern converts wildcard patterns (* and ?) into SQL LIKE patterns while escaping literal \, %, and _.
+func ToLikePattern(pattern string) string {
+	var b strings.Builder
+	b.Grow(len(pattern))
+	for i := 0; i < len(pattern); i++ {
+		switch pattern[i] {
+		case '\\', '%', '_':
+			b.WriteByte('\\')
+			b.WriteByte(pattern[i])
+		case '*':
+			b.WriteByte('%')
+		case '?':
+			b.WriteByte('_')
+		default:
+			b.WriteByte(pattern[i])
+		}
+	}
+	return b.String()
 }

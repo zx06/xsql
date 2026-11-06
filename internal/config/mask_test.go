@@ -77,7 +77,15 @@ func TestFileForAPI_ShowsKeyringReferences(t *testing.T) {
 }
 
 func TestMergeProfileSecrets_PreservesOnMask(t *testing.T) {
-	existing := Profile{Password: "stored-pass", DSN: "stored-dsn"}
+	existing := Profile{
+		Password:      "stored-pass",
+		DSN:           "stored-dsn",
+		Format:        "json",
+		LocalPort:     13306,
+		QueryTimeout:  45,
+		SchemaTimeout: 90,
+		MaxRows:       500,
+	}
 	incoming := Profile{Password: MaskedSecret, DSN: MaskedSecret, Host: "new-host"}
 	merged := MergeProfileSecrets(incoming, existing)
 	if merged.Password != "stored-pass" || merged.DSN != "stored-dsn" {
@@ -85,5 +93,8 @@ func TestMergeProfileSecrets_PreservesOnMask(t *testing.T) {
 	}
 	if merged.Host != "new-host" {
 		t.Fatalf("non-secret fields should copy through")
+	}
+	if merged.Format != "json" || merged.LocalPort != 13306 || merged.QueryTimeout != 45 || merged.SchemaTimeout != 90 || merged.MaxRows != 500 {
+		t.Fatalf("advanced profile fields not preserved: %+v", merged)
 	}
 }

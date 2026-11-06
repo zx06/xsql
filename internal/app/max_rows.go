@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	// DefaultQueryMaxRows is the default row cap for CLI, Web, and TUI queries.
+	// DefaultQueryMaxRows is the default row cap for CLI and Web queries.
 	DefaultQueryMaxRows = 1000
 	// DefaultMCPQueryMaxRows is a lower default for MCP tool responses (smaller agent payloads).
 	DefaultMCPQueryMaxRows = 500
@@ -32,7 +32,7 @@ type MCPMaxRowsMeta struct {
 	Limit     int
 }
 
-// ResolveQueryMaxRows returns the effective row limit for CLI/Web/TUI.
+// ResolveQueryMaxRows returns the effective row limit for CLI and Web.
 // limit 0 means unlimited. Negative values are invalid.
 func ResolveQueryMaxRows(profile config.Profile, envMaxRows string, cliValue int, cliSet bool) (limit int, xe *errors.XError) {
 	if cliSet {

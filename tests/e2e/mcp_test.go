@@ -17,8 +17,8 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // TestMCPServer_Startup tests that MCP server starts correctly and returns tools list

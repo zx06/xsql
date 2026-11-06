@@ -85,11 +85,26 @@ func FileForAPI(f File) File {
 	return out
 }
 
-// MergeProfileSecrets copies stored secrets from existing when incoming values are omitted or masked.
+// MergeProfileSecrets copies stored secrets and unexposed advanced fields from existing when incoming values are omitted or masked.
 func MergeProfileSecrets(incoming, existing Profile) Profile {
 	out := incoming
 	out.Password = CoalesceSecret(incoming.Password, existing.Password)
 	out.DSN = CoalesceSecret(incoming.DSN, existing.DSN)
+	if out.Format == "" {
+		out.Format = existing.Format
+	}
+	if out.LocalPort == 0 {
+		out.LocalPort = existing.LocalPort
+	}
+	if out.QueryTimeout == 0 {
+		out.QueryTimeout = existing.QueryTimeout
+	}
+	if out.SchemaTimeout == 0 {
+		out.SchemaTimeout = existing.SchemaTimeout
+	}
+	if out.MaxRows == 0 {
+		out.MaxRows = existing.MaxRows
+	}
 	return out
 }
 

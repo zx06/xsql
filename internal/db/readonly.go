@@ -1,6 +1,7 @@
 package db
 
 import (
+	"fmt"
 	"strings"
 	"unicode"
 
@@ -269,7 +270,7 @@ func advanceStringOrComment(s string, i *int) bool {
 }
 
 func hasLineCommentPrefix(s string, i int) bool {
-	return s[i] == '-' && i+1 < len(s) && s[i+1] == '-'
+	return s[i] == '#' || (s[i] == '-' && i+1 < len(s) && s[i+1] == '-')
 }
 
 func hasBlockCommentPrefix(s string, i int) bool {
@@ -297,6 +298,10 @@ func skipBlockCommentBody(s string, i *int) bool {
 func skipDoubledQuoteLiteral(s string, i *int, quote byte) bool {
 	*i++
 	for *i < len(s) {
+		if s[*i] == '\\' && *i+1 < len(s) {
+			*i += 2
+			continue
+		}
 		if s[*i] != quote {
 			*i++
 			continue
@@ -345,7 +350,7 @@ func stripLeadingCommentsAndSpace(s string) string {
 	for {
 		s = strings.TrimLeftFunc(s, unicode.IsSpace)
 		s = strings.TrimPrefix(s, "\ufeff")
-		if strings.HasPrefix(s, "--") {
+		if strings.HasPrefix(s, "--") || strings.HasPrefix(s, "#") {
 			if i := strings.IndexByte(s, '\n'); i >= 0 {
 				s = s[i+1:]
 				continue
@@ -381,6 +386,12 @@ func tokenize(sql string) ([]SQLToken, error) {
 	sqlLen := len(sql)
 
 	for i < sqlLen {
+		// UTF-8 BOM header
+		if strings.HasPrefix(sql[i:], "\ufeff") {
+			i += len("\ufeff")
+			continue
+		}
+
 		r := rune(sql[i])
 
 		// Skip whitespace
@@ -389,14 +400,8 @@ func tokenize(sql string) ([]SQLToken, error) {
 			continue
 		}
 
-		// BOM header
-		if r == '\ufeff' {
-			i++
-			continue
-		}
-
-		// Line comment --
-		if r == '-' && i+1 < sqlLen && sql[i+1] == '-' {
+		// Line comment -- or # (MySQL)
+		if r == '#' || (r == '-' && i+1 < sqlLen && sql[i+1] == '-') {
 			// Skip to end of line
 			for i < sqlLen && sql[i] != '\n' {
 				i++
@@ -408,19 +413,27 @@ func tokenize(sql string) ([]SQLToken, error) {
 		if r == '/' && i+1 < sqlLen && sql[i+1] == '*' {
 			// Skip to */
 			i += 2
+			closed := false
 			for i < sqlLen-1 {
 				if sql[i] == '*' && sql[i+1] == '/' {
 					i += 2
+					closed = true
 					break
 				}
 				i++
+			}
+			if !closed {
+				return nil, fmt.Errorf("unclosed block comment")
 			}
 			continue
 		}
 
 		// String literal '...' (MySQL/PostgreSQL with escape support)
 		if r == '\'' {
-			str, newIdx := parseString(sql, i, '\'')
+			str, newIdx, closed := parseStringWithState(sql, i, '\'')
+			if !closed {
+				return nil, fmt.Errorf("unclosed string literal")
+			}
 			tokens = append(tokens, SQLToken{Type: TokenString, Value: str})
 			i = newIdx
 			continue
@@ -428,7 +441,10 @@ func tokenize(sql string) ([]SQLToken, error) {
 
 		// String literal "..." (PostgreSQL/ANSI standard)
 		if r == '"' {
-			str, newIdx := parseString(sql, i, '"')
+			str, newIdx, closed := parseStringWithState(sql, i, '"')
+			if !closed {
+				return nil, fmt.Errorf("unclosed quoted identifier or string")
+			}
 			tokens = append(tokens, SQLToken{Type: TokenString, Value: str})
 			i = newIdx
 			continue
@@ -436,7 +452,10 @@ func tokenize(sql string) ([]SQLToken, error) {
 
 		// Backtick `...` (MySQL identifier)
 		if r == '`' {
-			str, newIdx := parseString(sql, i, '`')
+			str, newIdx, closed := parseStringWithState(sql, i, '`')
+			if !closed {
+				return nil, fmt.Errorf("unclosed backtick identifier")
+			}
 			tokens = append(tokens, SQLToken{Type: TokenIdentifier, Value: str})
 			i = newIdx
 			continue
@@ -504,8 +523,8 @@ func tokenize(sql string) ([]SQLToken, error) {
 	return tokens, nil
 }
 
-// parseString parses a quoted string, handling escape sequences
-func parseString(sql string, start int, quote rune) (string, int) {
+// parseStringWithState parses a quoted string, handling escape sequences and reporting closure state.
+func parseStringWithState(sql string, start int, quote rune) (string, int, bool) {
 	i := start + 1 // skip opening quote
 	sqlLen := len(sql)
 	var result strings.Builder
@@ -520,20 +539,23 @@ func parseString(sql string, start int, quote rune) (string, int) {
 				continue
 			}
 			// End of string
-			return result.String(), i + 1
+			return result.String(), i + 1, true
 		}
-		// Handle standard escape \' or ''
-		if r == '\\' && i+1 < sqlLen && rune(sql[i+1]) == quote {
-			result.WriteRune(quote)
-			i += 2
-			continue
+		// Handle backslash escape sequences (\', \", \\, etc.) for single/double quotes
+		if quote != '`' && r == '\\' && i+1 < sqlLen {
+			next := rune(sql[i+1])
+			if next == quote || next == '\\' {
+				result.WriteRune(next)
+				i += 2
+				continue
+			}
 		}
 		result.WriteRune(r)
 		i++
 	}
 
 	// Unclosed string
-	return result.String(), i
+	return result.String(), i, false
 }
 
 // parseDollarQuotedString parses PostgreSQL dollar-quoted strings $tag$...$tag$

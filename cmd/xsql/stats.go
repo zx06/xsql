@@ -47,7 +47,22 @@ func NewStatsCommand(w *output.Writer) *cobra.Command {
 	return cmd
 }
 
+func resolveStatsFormat(jsonFlag bool) (output.Format, error) {
+	if jsonFlag {
+		return output.FormatJSON, nil
+	}
+	if GlobalConfig.FormatStr != "" && GlobalConfig.FormatStr != string(output.FormatAuto) {
+		return parseOutputFormat(GlobalConfig.FormatStr)
+	}
+	return output.FormatTable, nil
+}
+
 func runStats(flags *StatsFlags, w *output.Writer) error {
+	format, err := resolveStatsFormat(flags.JSON)
+	if err != nil {
+		return err
+	}
+
 	store := stats.NewStore(GlobalConfig.Stats.FilePath)
 	records, err := store.Load()
 	if err != nil {
@@ -60,11 +75,6 @@ func runStats(flags *StatsFlags, w *output.Writer) error {
 	}
 
 	agg := stats.Query(records, filter)
-
-	format := output.FormatTable
-	if flags.JSON {
-		format = output.FormatJSON
-	}
 
 	return w.WriteOK(format, &stats.StatsResult{Records: agg})
 }
@@ -88,6 +98,11 @@ func newStatsLogCommand(w *output.Writer) *cobra.Command {
 }
 
 func runStatsLog(flags *StatsLogFlags, w *output.Writer) error {
+	format, err := resolveStatsFormat(flags.JSON)
+	if err != nil {
+		return err
+	}
+
 	store := stats.NewStore(GlobalConfig.Stats.FilePath)
 	records, err := store.Load()
 	if err != nil {
@@ -116,11 +131,6 @@ func runStatsLog(flags *StatsLogFlags, w *output.Writer) error {
 		result[i] = *r
 	}
 
-	format := output.FormatTable
-	if flags.JSON {
-		format = output.FormatJSON
-	}
-
 	return w.WriteOK(format, &stats.LogResult{
 		Records: result,
 		Total:   len(records),
@@ -128,13 +138,26 @@ func runStatsLog(flags *StatsLogFlags, w *output.Writer) error {
 }
 
 func newStatsResetCommand(w *output.Writer) *cobra.Command {
-	return &cobra.Command{
+	var jsonFlag bool
+	cmd := &cobra.Command{
 		Use:   "reset",
 		Short: "Reset usage statistics",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if jsonFlag || (GlobalConfig.FormatStr != "" && GlobalConfig.FormatStr != string(output.FormatAuto)) {
+				format, err := resolveStatsFormat(jsonFlag)
+				if err != nil {
+					return err
+				}
+				if err := runStatsReset(w); err != nil {
+					return err
+				}
+				return w.WriteOK(format, map[string]any{"reset": true})
+			}
 			return runStatsReset(w)
 		},
 	}
+	cmd.Flags().BoolVar(&jsonFlag, "json", false, "Output as JSON")
+	return cmd
 }
 
 func runStatsReset(w *output.Writer) error {
@@ -173,4 +196,7 @@ func recordCmdStats(cmd string, profile string, ok bool, start time.Duration, er
 
 	// Best-effort: don't fail the command if stats recording fails
 	_ = store.Append(r)
+	if GlobalConfig.Stats.RetentionDays > 0 {
+		_, _ = store.Cleanup(GlobalConfig.Stats.RetentionDays)
+	}
 }

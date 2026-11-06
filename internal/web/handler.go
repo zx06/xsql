@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -35,6 +36,7 @@ type HandlerOptions struct {
 	AuthToken        string
 	Assets           fs.FS
 	Stats            stats.StatsConfig
+	Attrs            map[string]string
 }
 
 type handler struct {
@@ -46,6 +48,8 @@ type handler struct {
 	authToken        string
 	assets           fs.FS
 	stats            stats.StatsConfig
+	statsStore       *stats.Store
+	attrs            map[string]string
 }
 
 type queryRequest struct {
@@ -70,6 +74,8 @@ func NewHandler(opts HandlerOptions) http.Handler {
 		authToken:        opts.AuthToken,
 		assets:           assets,
 		stats:            opts.Stats,
+		statsStore:       stats.NewStore(opts.Stats.FilePath),
+		attrs:            opts.Attrs,
 	}
 
 	mux := http.NewServeMux()
@@ -91,20 +97,42 @@ func NewHandler(opts HandlerOptions) http.Handler {
 	return mux
 }
 
-func (h *handler) withAuth(next http.Handler) http.Handler {
-	if !h.authRequired {
-		return next
+func isCrossOriginRequest(r *http.Request) bool {
+	if strings.EqualFold(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")), "cross-site") {
+		return true
 	}
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return false
+	}
+	if origin == "null" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		return true
+	}
+	return r.Host != "" && !strings.EqualFold(u.Host, r.Host)
+}
+
+func (h *handler) withAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
-		if authHeader == "" {
-			writeError(w, http.StatusUnauthorized, errors.New(errors.CodeAuthRequired, "authorization token is required", nil))
+		if isCrossOriginRequest(r) {
+			writeError(w, http.StatusForbidden, errors.New(errors.CodeAuthInvalid, "cross-origin request blocked", nil))
 			return
 		}
-		const prefix = "Bearer "
-		if !strings.HasPrefix(authHeader, prefix) || strings.TrimSpace(strings.TrimPrefix(authHeader, prefix)) != h.authToken {
-			writeError(w, http.StatusUnauthorized, errors.New(errors.CodeAuthInvalid, "authorization token is invalid", nil))
-			return
+		if h.authRequired {
+			authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+			if authHeader == "" {
+				writeError(w, http.StatusUnauthorized, errors.New(errors.CodeAuthRequired, "authorization token is required", nil))
+				return
+			}
+			const prefix = "Bearer "
+			token := strings.TrimSpace(strings.TrimPrefix(authHeader, prefix))
+			if !strings.HasPrefix(authHeader, prefix) || subtle.ConstantTimeCompare([]byte(token), []byte(h.authToken)) != 1 {
+				writeError(w, http.StatusUnauthorized, errors.New(errors.CodeAuthInvalid, "authorization token is invalid", nil))
+				return
+			}
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -468,11 +496,15 @@ func (h *handler) recordWebStats(cmd, profile string, ok bool, duration time.Dur
 	if !h.stats.Enabled {
 		return
 	}
-	store := stats.NewStore(h.stats.FilePath)
+	store := h.statsStore
+	if store == nil {
+		store = stats.NewStore(h.stats.FilePath)
+	}
 	r := &stats.Record{
 		Timestamp:  time.Now(),
 		Cmd:        cmd,
 		Profile:    profile,
+		Attrs:      h.attrs,
 		OK:         ok,
 		DurationMs: duration.Milliseconds(),
 	}
@@ -483,6 +515,9 @@ func (h *handler) recordWebStats(cmd, profile string, ok bool, duration time.Dur
 		r.SQL = sql
 	}
 	_ = store.Append(r)
+	if h.stats.RetentionDays > 0 {
+		_, _ = store.Cleanup(h.stats.RetentionDays)
+	}
 }
 
 // IsLoopbackAddr reports whether the listen address is bound only to loopback.
@@ -519,6 +554,7 @@ func (h *handler) handleConfigGet(w http.ResponseWriter, r *http.Request) {
 		"ssh_proxies": safe.SSHProxies,
 		"mcp":         safe.MCP,
 		"web":         safe.Web,
+		"stats":       safe.Stats,
 	})
 }
 
@@ -548,14 +584,22 @@ func (h *handler) parseConfigDeleteName(w http.ResponseWriter, r *http.Request, 
 	return name, true
 }
 
-func (h *handler) handleConfigSaveProfile(w http.ResponseWriter, r *http.Request) {
+func decodeConfigSaveBody(w http.ResponseWriter, r *http.Request, dst any) bool {
 	if r.Method != http.MethodPost && r.Method != http.MethodPut {
 		writeMethodNotAllowed(w)
-		return
+		return false
 	}
-	var req configProfileRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(dst); err != nil {
 		writeError(w, http.StatusBadRequest, errors.Wrap(errors.CodeCfgInvalid, "invalid JSON payload", nil, err))
+		return false
+	}
+	return true
+}
+
+func (h *handler) handleConfigSaveProfile(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	var req configProfileRequest
+	if !decodeConfigSaveBody(w, r, &req) {
 		return
 	}
 	name := strings.TrimSpace(req.Name)
@@ -594,13 +638,9 @@ type configSSHProxyRequest struct {
 }
 
 func (h *handler) handleConfigSaveSSHProxy(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost && r.Method != http.MethodPut {
-		writeMethodNotAllowed(w)
-		return
-	}
+	defer r.Body.Close()
 	var req configSSHProxyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, errors.Wrap(errors.CodeCfgInvalid, "invalid JSON payload", nil, err))
+	if !decodeConfigSaveBody(w, r, &req) {
 		return
 	}
 	name := strings.TrimSpace(req.Name)
@@ -638,11 +678,12 @@ func (h *handler) handleConfigTestProfile(w http.ResponseWriter, r *http.Request
 		writeMethodNotAllowed(w)
 		return
 	}
+	defer r.Body.Close()
 	var req struct {
 		Name    string         `json:"name"`
 		Profile config.Profile `json:"profile"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, errors.Wrap(errors.CodeCfgInvalid, "invalid JSON payload", nil, err))
 		return
 	}
@@ -684,7 +725,9 @@ func (h *handler) handleConfigTestProfile(w http.ResponseWriter, r *http.Request
 		profile.SSHConfig.IdentityFile = filepath.Clean(profile.SSHConfig.IdentityFile)
 	}
 
-	result, xe := app.TestProfileConnection(r.Context(), profile, h.allowPlaintext, h.skipHostKeyCheck)
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	result, xe := app.TestProfileConnection(ctx, profile, h.allowPlaintext, h.skipHostKeyCheck)
 	if xe != nil {
 		writeError(w, statusCodeFor(xe.Code), xe)
 		return
@@ -697,11 +740,12 @@ func (h *handler) handleConfigTestSSHProxy(w http.ResponseWriter, r *http.Reques
 		writeMethodNotAllowed(w)
 		return
 	}
+	defer r.Body.Close()
 	var req struct {
 		Name     string          `json:"name"`
 		SSHProxy config.SSHProxy `json:"ssh_proxy"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, errors.Wrap(errors.CodeCfgInvalid, "invalid JSON payload", nil, err))
 		return
 	}
@@ -725,7 +769,9 @@ func (h *handler) handleConfigTestSSHProxy(w http.ResponseWriter, r *http.Reques
 		proxy.IdentityFile = filepath.Clean(proxy.IdentityFile)
 	}
 
-	result, xe := app.TestSSHProxyConnection(r.Context(), proxy, h.allowPlaintext, h.skipHostKeyCheck)
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	result, xe := app.TestSSHProxyConnection(ctx, proxy, h.allowPlaintext, h.skipHostKeyCheck)
 	if xe != nil {
 		writeError(w, statusCodeFor(xe.Code), xe)
 		return

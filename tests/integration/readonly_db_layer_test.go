@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/zx06/xsql/internal/db"
-	"github.com/zx06/xsql/internal/errors"
 	_ "github.com/zx06/xsql/internal/db/mysql" // register MySQL driver for db.Get("mysql")
 	_ "github.com/zx06/xsql/internal/db/pg"    // register PostgreSQL driver for db.Get("pg")
+	"github.com/zx06/xsql/internal/errors"
 )
 
 type readonlyTxCase struct {

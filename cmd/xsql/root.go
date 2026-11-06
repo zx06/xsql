@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -38,34 +39,6 @@ func NewRootCommand() *cobra.Command {
 		Use:           "xsql",
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			// CLI > ENV > Config
-			formatSet := cmd.Flags().Changed("format")
-			profileSet := cmd.Flags().Changed("profile")
-			configSet := cmd.Flags().Changed("config")
-			if configSet && GlobalConfig.ConfigStr == "" {
-				return errors.New(errors.CodeCfgInvalid, "config path is empty", nil)
-			}
-
-			r, xe := config.Resolve(config.Options{
-				ConfigPath:    GlobalConfig.ConfigStr,
-				CLIProfile:    GlobalConfig.ProfileStr,
-				CLIProfileSet: profileSet,
-				CLIFormat:     GlobalConfig.FormatStr,
-				CLIFormatSet:  formatSet,
-				EnvProfile:    os.Getenv("XSQL_PROFILE"),
-				EnvFormat:     os.Getenv("XSQL_FORMAT"),
-				WorkDir:       os.Getenv("XSQL_WORKDIR"),
-				HomeDir:       os.Getenv("XSQL_HOMEDIR"),
-			})
-			if xe != nil {
-				return xe
-			}
-			GlobalConfig.Resolved = r
-			GlobalConfig.FormatStr = r.Format
-			GlobalConfig.ProfileStr = r.ProfileName
-			return nil
-		},
 	}
 
 	var cliAttrs []string
@@ -104,8 +77,11 @@ func NewRootCommand() *cobra.Command {
 
 		// Parse attributes: CLI > ENV
 		GlobalConfig.Attrs = stats.ParseAttrs(cliAttrs, stats.GetXSQLAttrEnv())
+		if err := stats.ValidateAttrs(GlobalConfig.Attrs); err != nil {
+			return errors.Wrap(errors.CodeCfgInvalid, err.Error(), nil, err)
+		}
 
-		// Load stats config from file
+		// Load stats config from file + ENV overrides
 		GlobalConfig.Stats = loadStatsConfig(GlobalConfig.ConfigStr)
 
 		return nil
@@ -114,11 +90,26 @@ func NewRootCommand() *cobra.Command {
 	return root
 }
 
-// loadStatsConfig loads stats configuration from the config file.
+// loadStatsConfig loads stats configuration from the config file and applies environment overrides.
 func loadStatsConfig(configPath string) stats.StatsConfig {
-	cfg, _, xe := config.LoadConfig(config.Options{ConfigPath: configPath})
-	if xe != nil {
-		return stats.StatsConfig{}
+	var st stats.StatsConfig
+	cfg, _, xe := config.LoadConfig(config.Options{
+		ConfigPath: configPath,
+		WorkDir:    os.Getenv("XSQL_WORKDIR"),
+		HomeDir:    os.Getenv("XSQL_HOMEDIR"),
+	})
+	if xe == nil {
+		st = cfg.Stats
 	}
-	return cfg.Stats
+	if envEnabled := os.Getenv("XSQL_STATS_ENABLED"); envEnabled != "" {
+		if parsed, err := strconv.ParseBool(envEnabled); err == nil {
+			st.Enabled = parsed
+		}
+	}
+	if envLogSQL := os.Getenv("XSQL_STATS_LOG_SQL"); envLogSQL != "" {
+		if parsed, err := strconv.ParseBool(envLogSQL); err == nil {
+			st.LogSQL = parsed
+		}
+	}
+	return st
 }
