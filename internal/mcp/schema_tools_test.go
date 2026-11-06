@@ -406,9 +406,9 @@ func assertToolError(t *testing.T, result *mcp.CallToolResult, code, messageCont
 		t.Fatalf("expected message %q in %s", messageContains, text)
 	}
 	var envelope struct {
-		OK             bool `json:"ok"`
-		SchemaVersion  int  `json:"schema_version"`
-		Error          map[string]any `json:"error"`
+		OK            bool           `json:"ok"`
+		SchemaVersion int            `json:"schema_version"`
+		Error         map[string]any `json:"error"`
 	}
 	if err := json.Unmarshal([]byte(text), &envelope); err != nil {
 		t.Fatalf("invalid error json: %v", err)

@@ -40,25 +40,7 @@ func (d *Driver) DescribeTable(ctx context.Context, conn *sql.DB, opts db.TableD
 	if schemaName == "" {
 		schemaName = "public"
 	}
-
-	table, xe := d.loadTableSummary(ctx, conn, schemaName, opts.Name)
-	if xe != nil {
-		return nil, xe
-	}
-
-	return db.PopulateTableDetails(
-		ctx,
-		table,
-		func(gctx context.Context) ([]db.Column, *errors.XError) {
-			return d.getColumns(gctx, conn, schemaName, opts.Name)
-		},
-		func(gctx context.Context) ([]db.Index, *errors.XError) {
-			return d.getIndexes(gctx, conn, schemaName, opts.Name)
-		},
-		func(gctx context.Context) ([]db.ForeignKey, *errors.XError) {
-			return d.getForeignKeys(gctx, conn, schemaName, opts.Name)
-		},
-	)
+	return db.DescribeTableWithDetails(ctx, conn, schemaName, opts.Name, d.loadTableSummary, d.getColumns, d.getIndexes, d.getForeignKeys)
 }
 
 func currentDatabase(ctx context.Context, conn *sql.DB) (string, *errors.XError) {

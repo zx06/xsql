@@ -460,4 +460,25 @@ func TestPopulateTableDetails(t *testing.T) {
 	if _, xe := PopulateTableDetails(ctx, &Table{}, okCols, okIdxs, func(context.Context) ([]ForeignKey, *errors.XError) { return nil, errFn }); xe == nil {
 		t.Fatal("expected error from getFKs")
 	}
+
+	tbl2, xe := DescribeTableWithDetails(
+		ctx,
+		nil,
+		"public",
+		"users",
+		func(_ context.Context, _ *sql.DB, s, n string) (*Table, *errors.XError) {
+			return &Table{Schema: s, Name: n}, nil
+		},
+		func(context.Context, *sql.DB, string, string) ([]Column, *errors.XError) { return okCols(ctx) },
+		func(context.Context, *sql.DB, string, string) ([]Index, *errors.XError) { return okIdxs(ctx) },
+		func(context.Context, *sql.DB, string, string) ([]ForeignKey, *errors.XError) { return okFKs(ctx) },
+	)
+	if xe != nil || tbl2.Name != "users" || len(tbl2.Columns) != 1 {
+		t.Fatalf("DescribeTableWithDetails failed: %v %+v", xe, tbl2)
+	}
+	if _, xe := DescribeTableWithDetails(ctx, nil, "public", "users", func(context.Context, *sql.DB, string, string) (*Table, *errors.XError) {
+		return nil, errFn
+	}, nil, nil, nil); xe == nil {
+		t.Fatal("expected error from loadSummary")
+	}
 }

@@ -57,17 +57,17 @@ func TestClassifyMySQLError(t *testing.T) {
 		number uint16
 		want   classifyWant
 	}{
-		"unknown_table":   {1146, classifyWant{CategoryUnknownTable, "1146", "mysql_errno", false, "schema_list_tables"}},
-		"unknown_db":      {1049, classifyWant{CategoryUnknownTable, "1049", "mysql_errno", false, "schema dump"}},
-		"unknown_column":  {1054, classifyWant{CategoryUnknownColumn, "1054", "mysql_errno", false, "schema dump"}},
-		"syntax":          {1064, classifyWant{CategorySyntaxError, "1064", "mysql_errno", false, "syntax"}},
-		"auth_failed":     {1045, classifyWant{CategoryAuthFailed, "1045", "mysql_errno", false, "keyring"}},
-		"permission":      {1142, classifyWant{CategoryPermissionDenied, "1142", "mysql_errno", false, "privileges"}},
-		"read_only_tx":    {1792, classifyWant{CategoryReadOnlyViolation, "1792", "mysql_errno", false, "unsafe_allow_write"}},
-		"duplicate_key":   {1062, classifyWant{CategoryDuplicateKey, "1062", "mysql_errno", false, "Duplicate"}},
-		"connection":      {2003, classifyWant{CategoryConnection, "2003", "mysql_errno", true, "MySQL"}},
-		"timeout":         {1205, classifyWant{CategoryTimeout, "1205", "mysql_errno", true, "LIMIT"}},
-		"other":           {9999, classifyWant{CategoryOther, "9999", "mysql_errno", false, "native_code"}},
+		"unknown_table":  {1146, classifyWant{CategoryUnknownTable, "1146", "mysql_errno", false, "schema_list_tables"}},
+		"unknown_db":     {1049, classifyWant{CategoryUnknownTable, "1049", "mysql_errno", false, "schema dump"}},
+		"unknown_column": {1054, classifyWant{CategoryUnknownColumn, "1054", "mysql_errno", false, "schema dump"}},
+		"syntax":         {1064, classifyWant{CategorySyntaxError, "1064", "mysql_errno", false, "syntax"}},
+		"auth_failed":    {1045, classifyWant{CategoryAuthFailed, "1045", "mysql_errno", false, "keyring"}},
+		"permission":     {1142, classifyWant{CategoryPermissionDenied, "1142", "mysql_errno", false, "privileges"}},
+		"read_only_tx":   {1792, classifyWant{CategoryReadOnlyViolation, "1792", "mysql_errno", false, "unsafe_allow_write"}},
+		"duplicate_key":  {1062, classifyWant{CategoryDuplicateKey, "1062", "mysql_errno", false, "Duplicate"}},
+		"connection":     {2003, classifyWant{CategoryConnection, "2003", "mysql_errno", true, "MySQL"}},
+		"timeout":        {1205, classifyWant{CategoryTimeout, "1205", "mysql_errno", true, "LIMIT"}},
+		"other":          {9999, classifyWant{CategoryOther, "9999", "mysql_errno", false, "native_code"}},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

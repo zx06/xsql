@@ -12,14 +12,14 @@ import (
 
 func TestNormalizeDBType(t *testing.T) {
 	cases := map[string]string{
-		"mysql":        "mysql",
-		"MYSQL":        "mysql",
-		"mariadb":      "mysql",
-		"pg":           "pg",
-		"postgres":     "pg",
-		"postgresql":   "pg",
-		"  PG  ":       "pg",
-		"custom":       "custom",
+		"mysql":      "mysql",
+		"MYSQL":      "mysql",
+		"mariadb":    "mysql",
+		"pg":         "pg",
+		"postgres":   "pg",
+		"postgresql": "pg",
+		"  PG  ":     "pg",
+		"custom":     "custom",
 	}
 	for in, want := range cases {
 		if got := normalizeDBType(in); got != want {

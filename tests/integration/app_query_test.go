@@ -25,7 +25,7 @@ func TestAppQuery_TruncationHint_MySQL(t *testing.T) {
 			DB:  "mysql",
 			DSN: dsn,
 		},
-		SQL: `WITH RECURSIVE seq AS (SELECT 1 AS n UNION ALL SELECT n+1 FROM seq WHERE n < 8) SELECT n FROM seq`,
+		SQL:            `WITH RECURSIVE seq AS (SELECT 1 AS n UNION ALL SELECT n+1 FROM seq WHERE n < 8) SELECT n FROM seq`,
 		MaxRows:        3,
 		TruncationHint: app.QueryTruncationHint,
 	})

@@ -239,6 +239,35 @@ func PopulateTableDetails(
 	return table, nil
 }
 
+// DescribeTableWithDetails loads a table summary and concurrently populates its columns, indexes, and foreign keys.
+func DescribeTableWithDetails(
+	ctx context.Context,
+	conn *sql.DB,
+	schemaName, tableName string,
+	loadSummary func(context.Context, *sql.DB, string, string) (*Table, *errors.XError),
+	getCols func(context.Context, *sql.DB, string, string) ([]Column, *errors.XError),
+	getIdxs func(context.Context, *sql.DB, string, string) ([]Index, *errors.XError),
+	getFKs func(context.Context, *sql.DB, string, string) ([]ForeignKey, *errors.XError),
+) (*Table, *errors.XError) {
+	table, xe := loadSummary(ctx, conn, schemaName, tableName)
+	if xe != nil {
+		return nil, xe
+	}
+	return PopulateTableDetails(
+		ctx,
+		table,
+		func(gctx context.Context) ([]Column, *errors.XError) {
+			return getCols(gctx, conn, schemaName, tableName)
+		},
+		func(gctx context.Context) ([]Index, *errors.XError) {
+			return getIdxs(gctx, conn, schemaName, tableName)
+		},
+		func(gctx context.Context) ([]ForeignKey, *errors.XError) {
+			return getFKs(gctx, conn, schemaName, tableName)
+		},
+	)
+}
+
 // ScanForeignKeyRows scans ordered foreign key rows into sorted ForeignKey structs.
 func ScanForeignKeyRows(rows *sql.Rows) ([]ForeignKey, *errors.XError) {
 	fkMap := make(map[string]*ForeignKey)
